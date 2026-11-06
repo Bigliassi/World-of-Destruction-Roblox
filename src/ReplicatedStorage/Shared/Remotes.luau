@@ -3,22 +3,7 @@
 	Remotes.luau
 	Auto-creates (on Server) or fetches (on Client) the `Remotes` folder in
 	`ReplicatedStorage` with all RemoteEvent and RemoteFunction instances needed
-	across World of Destruction.
-
-	All 13 core remotes:
-	  - DamageDealt       (RemoteEvent)
-	  - ComboUpdated      (RemoteEvent)
-	  - WalletUpdated     (RemoteEvent)
-	  - HeatUpdated       (RemoteEvent)
-	  - VehicleEntered    (RemoteEvent)
-	  - VehicleExited     (RemoteEvent)
-	  - PurchaseUpgrade   (RemoteFunction)
-	  - SelectVehicle     (RemoteFunction)
-	  - SpawnVehicle      (RemoteEvent)
-	  - RepairVehicle     (RemoteEvent)
-	  - Notification      (RemoteEvent)
-	  - ExplosionEffect   (RemoteEvent)
-	  - PoliceBusted      (RemoteEvent)
+	across World of Destruction v1.0.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -33,19 +18,67 @@ export type RemoteSpec = {
 }
 
 local REMOTE_SPECS: { RemoteSpec } = {
+	-- Core Combat, Destruction & Combo Remotes
 	{ Name = "DamageDealt", ClassName = "RemoteEvent" },
+	{ Name = "DestructionOccurred", ClassName = "RemoteEvent" },
+	{ Name = "ReportDestruction", ClassName = "RemoteEvent" },
+	{ Name = "ReportStunt", ClassName = "RemoteEvent" },
+	{ Name = "StuntJumpTriggered", ClassName = "RemoteEvent" },
 	{ Name = "ComboUpdated", ClassName = "RemoteEvent" },
+	{ Name = "ComboCompleted", ClassName = "RemoteEvent" },
+	{ Name = "StyleCallout", ClassName = "RemoteEvent" },
 	{ Name = "WalletUpdated", ClassName = "RemoteEvent" },
-	{ Name = "HeatUpdated", ClassName = "RemoteEvent" },
-	{ Name = "VehicleEntered", ClassName = "RemoteEvent" },
-	{ Name = "VehicleExited", ClassName = "RemoteEvent" },
-	{ Name = "PurchaseUpgrade", ClassName = "RemoteFunction" },
-	{ Name = "SelectVehicle", ClassName = "RemoteFunction" },
-	{ Name = "SpawnVehicle", ClassName = "RemoteEvent" },
-	{ Name = "RepairVehicle", ClassName = "RemoteEvent" },
+	{ Name = "MissionUpdate", ClassName = "RemoteEvent" },
+	{ Name = "SkipMission", ClassName = "RemoteEvent" },
 	{ Name = "Notification", ClassName = "RemoteEvent" },
 	{ Name = "ExplosionEffect", ClassName = "RemoteEvent" },
+
+	-- Police & Wanted Heat Remotes
+	{ Name = "HeatUpdated", ClassName = "RemoteEvent" },
+	{ Name = "HeatUpdate", ClassName = "RemoteEvent" },
+	{ Name = "PoliceAlert", ClassName = "RemoteEvent" },
 	{ Name = "PoliceBusted", ClassName = "RemoteEvent" },
+	{ Name = "PlayerBusted", ClassName = "RemoteEvent" },
+	{ Name = "ReportCopImpact", ClassName = "RemoteEvent" },
+
+	-- Vehicle Control, Spawning & VFX Remotes
+	{ Name = "VehicleEntered", ClassName = "RemoteEvent" },
+	{ Name = "VehicleExited", ClassName = "RemoteEvent" },
+	{ Name = "SpawnVehicle", ClassName = "RemoteEvent" },
+	{ Name = "RequestSpawnVehicle", ClassName = "RemoteEvent" },
+	{ Name = "SummonVehicle", ClassName = "RemoteEvent" },
+	{ Name = "EnterNearestVehicle", ClassName = "RemoteEvent" },
+	{ Name = "RepairVehicle", ClassName = "RemoteEvent" },
+	{ Name = "RequestRepair", ClassName = "RemoteEvent" },
+	{ Name = "VehicleRepaired", ClassName = "RemoteEvent" },
+	{ Name = "VehicleDamage", ClassName = "RemoteEvent" },
+	{ Name = "VehicleVFX", ClassName = "RemoteEvent" },
+	{ Name = "ToggleHeadlights", ClassName = "RemoteEvent" },
+
+	-- Speed Shop, Garage & Profile Persistence Remotes
+	{ Name = "OpenSpeedShop", ClassName = "RemoteEvent" },
+	{ Name = "SpeedShopToggle", ClassName = "RemoteEvent" },
+	{ Name = "GarageAction", ClassName = "RemoteEvent" },
+	{ Name = "SpeedShopAction", ClassName = "RemoteEvent" },
+	{ Name = "BuyUpgrade", ClassName = "RemoteEvent" },
+	{ Name = "UpgradeVehicle", ClassName = "RemoteEvent" },
+	{ Name = "UnlockVehicle", ClassName = "RemoteEvent" },
+	{ Name = "PurchaseVehicle", ClassName = "RemoteEvent" },
+	{ Name = "EquipVehicle", ClassName = "RemoteEvent" },
+	{ Name = "SelectVehicle", ClassName = "RemoteEvent" },
+	{ Name = "GarageNotification", ClassName = "RemoteEvent" },
+	{ Name = "ProfileSync", ClassName = "RemoteEvent" },
+	{ Name = "PurchaseUpgrade", ClassName = "RemoteFunction" },
+	{ Name = "GetGarageData", ClassName = "RemoteFunction" },
+	{ Name = "GetPlayerProfile", ClassName = "RemoteFunction" },
+
+	-- Version 1.0 Progression & Monetization Remotes
+	{ Name = "LevelUp", ClassName = "RemoteEvent" },
+	{ Name = "XPGained", ClassName = "RemoteEvent" },
+	{ Name = "GetProgressionTable", ClassName = "RemoteFunction" },
+	{ Name = "RequestMonetizationPurchase", ClassName = "RemoteEvent" },
+	{ Name = "MonetizationNotification", ClassName = "RemoteEvent" },
+	{ Name = "GetMonetizationCatalog", ClassName = "RemoteFunction" },
 }
 
 local SPEC_BY_NAME: { [string]: RemoteSpec } = {}
@@ -54,21 +87,10 @@ for _, spec in ipairs(REMOTE_SPECS) do
 end
 
 local Remotes = {}
-Remotes.Names = {
-	DamageDealt = "DamageDealt",
-	ComboUpdated = "ComboUpdated",
-	WalletUpdated = "WalletUpdated",
-	HeatUpdated = "HeatUpdated",
-	VehicleEntered = "VehicleEntered",
-	VehicleExited = "VehicleExited",
-	PurchaseUpgrade = "PurchaseUpgrade",
-	SelectVehicle = "SelectVehicle",
-	SpawnVehicle = "SpawnVehicle",
-	RepairVehicle = "RepairVehicle",
-	Notification = "Notification",
-	ExplosionEffect = "ExplosionEffect",
-	PoliceBusted = "PoliceBusted",
-}
+Remotes.Names = {} :: { [string]: string }
+for _, spec in ipairs(REMOTE_SPECS) do
+	Remotes.Names[spec.Name] = spec.Name
+end
 
 Remotes.Events = {} :: { [string]: RemoteEvent }
 Remotes.Functions = {} :: { [string]: RemoteFunction }
@@ -124,6 +146,7 @@ local function ensureRemote(name: string, className: ("RemoteEvent" | "RemoteFun
 
 	if IS_SERVER then
 		local inst = Instance.new(targetClass)
+		local _ = inst
 		inst.Name = name
 		inst.Parent = folder
 		return inst
