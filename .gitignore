@@ -1,0 +1,23 @@
+# macOS
+.DS_Store
+._*
+
+# Roblox Studio autosaves & lock files
+*.rbxl.lock
+*.rbxlx.lock
+AutoSaves/
+
+# Rojo / Wally / Aftman / Foremant / Rokit
+sourcemap.json
+Packages/
+ServerPackages/
+DevPackages/
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*.log
+*.tmp
+*.bak
