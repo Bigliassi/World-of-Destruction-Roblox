@@ -47,6 +47,13 @@ if not DestructionRemote then
 	DestructionRemote.Parent = RepEvents
 end
 
+local ExplosionRemote = RepEvents:FindFirstChild("ExplosionEffect") :: RemoteEvent?
+if not ExplosionRemote then
+	ExplosionRemote = Instance.new("RemoteEvent")
+	ExplosionRemote.Name = "ExplosionEffect"
+	ExplosionRemote.Parent = RepEvents
+end
+
 --------------------------------------------------------------------------------
 -- CONSTANTS & STATE
 --------------------------------------------------------------------------------
@@ -193,13 +200,60 @@ end
 
 local destroyProp: (inst: Instance, attacker: Player?, hitVel: Vector3, isFromExplosion: boolean) -> ()
 
-local function triggerChainExplosion(pos: Vector3, attacker: Player?)
+local COMPOSITE_SCATTER_PROPS: { [string]: boolean } = {
+	StreetLight = true,
+	Crate = true,
+	Fence = true,
+	BusStop = true,
+	Bench = true,
+	TrafficLight = true,
+	Billboard = true,
+}
+
+local function breakCompositeSubPartWelds(model: Model, propType: string)
+	local welds: { Instance } = {}
+	for _, desc in ipairs(model:GetDescendants()) do
+		if desc:IsA("WeldConstraint") or desc:IsA("Weld") then
+			table.insert(welds, desc)
+		end
+	end
+	if #welds == 0 then
+		return
+	end
+
+	-- Shuffle welds so random boards/crates/lamps detach on impact
+	for i = #welds, 2, -1 do
+		local j = math.random(1, i)
+		welds[i], welds[j] = welds[j], welds[i]
+	end
+
+	local maxToBreak = if COMPOSITE_SCATTER_PROPS[propType] then math.min(#welds, 3) else math.min(#welds, 2)
+	local minToBreak = math.min(#welds, 2)
+	local breakCount = math.clamp(maxToBreak, minToBreak, 3)
+
+	for i = 1, breakCount do
+		local w = welds[i]
+		if w:IsA("WeldConstraint") then
+			w.Enabled = false
+		end
+		w:Destroy()
+	end
+end
+
+local function triggerChainExplosion(pos: Vector3, attacker: Player?, sourcePropType: string?)
+	local isRealExplosiveProp = (sourcePropType == "ExplosiveBarrel" or sourcePropType == "GasPump")
+
 	local exp = Instance.new("Explosion")
 	exp.BlastRadius = EXPLOSION_BLAST_RADIUS
 	exp.BlastPressure = 0 -- Custom impulse handling for predictable arcade feel
 	exp.DestroyJointRadiusPercent = 0
+	exp.Visible = isRealExplosiveProp
 	exp.Position = pos
 	exp.Parent = Workspace
+
+	if isRealExplosiveProp and ExplosionRemote then
+		ExplosionRemote:FireAllClients(pos, EXPLOSION_BLAST_RADIUS)
+	end
 
 	-- Flash light burst
 	local flashPart = Instance.new("Part")
@@ -217,7 +271,7 @@ local function triggerChainExplosion(pos: Vector3, attacker: Player?)
 	pl.Parent = flashPart
 	Debris:AddItem(flashPart, 0.35)
 
-	-- Blast nearby destructibles and vehicles in radius
+	-- Blast nearby destructibles in radius with proportional shockwave velocity
 	task.delay(0.08, function()
 		for _, prop in ipairs(CollectionService:GetTagged("Destructible")) do
 			if prop:GetAttribute("Destroyed") ~= true then
@@ -232,7 +286,8 @@ local function triggerChainExplosion(pos: Vector3, attacker: Player?)
 					local dist = delta.Magnitude
 					if dist <= EXPLOSION_BLAST_RADIUS then
 						local dir = if dist > 0.1 then delta.Unit else Vector3.new(0, 1, 0)
-						destroyProp(prop, attacker, dir * 85 + Vector3.new(0, 35, 0), true)
+						local falloff = math.clamp(1 - (dist / EXPLOSION_BLAST_RADIUS) * 0.5, 0.45, 1.0)
+						destroyProp(prop, attacker, dir * (58 * falloff) + Vector3.new(0, 14, 0), true)
 					end
 				end
 			end
@@ -259,7 +314,9 @@ destroyProp = function(inst: Instance, attacker: Player?, hitVel: Vector3, isFro
 	local propType = (inst:GetAttribute("PropType") :: string?) or inst.Name
 	local cashValue = (inst:GetAttribute("CashValue") :: number?) or 20
 	local chaosPoints = (inst:GetAttribute("ChaosPoints") :: number?) or 15
-	local isExplosive = (inst:GetAttribute("Explosive") :: boolean?) == true
+	local isExplosive = ((inst:GetAttribute("Explosive") :: boolean?) == true)
+		or (propType == "ExplosiveBarrel")
+		or (propType == "GasPump")
 
 	-- Clone clean template for respawning before unanchoring/modifying (skip AI traffic cars which self-respawn)
 	if inst.Parent and not CollectionService:HasTag(inst, "AITrafficVehicle") then
@@ -276,9 +333,16 @@ destroyProp = function(inst: Instance, attacker: Player?, hitVel: Vector3, isFro
 		end
 	end
 
-	-- Unanchor and apply dramatic impulse + angular spin
+	-- Break/disable 2-3 internal WeldConstraints on composite models so boards/crates/lamps scatter apart
+	if inst:IsA("Model") then
+		breakCompositeSubPartWelds(inst, propType)
+	end
+
+	-- Unanchor and apply proportional physical impulse + realistic angular spin
 	local launchDir = if hitVel.Magnitude > 1 then hitVel.Unit else Vector3.new(0, 1, 0)
-	local launchSpeed = math.clamp(hitVel.Magnitude * 1.15, 32, 110)
+	local launchSpeed = math.clamp(hitVel.Magnitude * 0.85, 18, 65)
+	local upwardLift = math.clamp(launchSpeed * 0.20, 4.5, 13.0)
+	local spreadScale = math.clamp(launchSpeed * 0.18, 4.0, 11.0)
 
 	local parts: { BasePart } = {}
 	if inst:IsA("Model") then
@@ -291,15 +355,20 @@ destroyProp = function(inst: Instance, attacker: Player?, hitVel: Vector3, isFro
 		table.insert(parts, inst)
 	end
 
-	for _, p in ipairs(parts) do
+	for idx, p in ipairs(parts) do
 		p.Anchored = false
 		p.CanCollide = true
-		local spread = Vector3.new(math.random() - 0.5, math.random() * 0.65 + 0.25, math.random() - 0.5) * 18
-		p.AssemblyLinearVelocity = launchDir * launchSpeed + Vector3.new(0, 22, 0) + spread
+		local partSpeedScale = math.clamp(1.0 - (idx - 1) * 0.04, 0.72, 1.08)
+		local spread = Vector3.new(
+			(math.random() - 0.5) * 2,
+			math.random() * 0.45 + 0.1,
+			(math.random() - 0.5) * 2
+		) * spreadScale
+		p.AssemblyLinearVelocity = launchDir * (launchSpeed * partSpeedScale) + Vector3.new(0, upwardLift, 0) + spread
 		p.AssemblyAngularVelocity = Vector3.new(
-			(math.random() - 0.5) * 18,
-			(math.random() - 0.5) * 18,
-			(math.random() - 0.5) * 18
+			(math.random() - 0.5) * 12,
+			(math.random() - 0.5) * 12,
+			(math.random() - 0.5) * 12
 		)
 	end
 
@@ -311,7 +380,8 @@ destroyProp = function(inst: Instance, attacker: Player?, hitVel: Vector3, isFro
 	end
 
 	if isExplosive then
-		triggerChainExplosion(propPos, attacker)
+		local realType = if (propType == "ExplosiveBarrel" or propType == "GasPump") then propType else "ExplosiveBarrel"
+		triggerChainExplosion(propPos, attacker, realType)
 	end
 
 	-- Broadcast DestructionOccurred to Economy/Combo systems and clients
@@ -325,8 +395,9 @@ destroyProp = function(inst: Instance, attacker: Player?, hitVel: Vector3, isFro
 		chaosPoints = chaosPoints,
 		position = propPos,
 		Position = propPos,
-		isExplosion = isExplosive or isFromExplosion,
-		IsExplosion = isExplosive or isFromExplosion,
+		isExplosion = isExplosive,
+		IsExplosion = isExplosive,
+		isFromExplosion = isFromExplosion,
 	}
 	if DestructionBindable then
 		DestructionBindable:Fire(payload)
@@ -374,7 +445,11 @@ local function bindDestructible(inst: Instance)
 		if otherPart.Anchored then
 			return
 		end
-		if CollectionService:HasTag(otherPart, "Destructible") then
+		if CollectionService:HasTag(otherPart, "Destructible") or otherPart:GetAttribute("Destroyed") == true then
+			return
+		end
+		local otherModel = otherPart:FindFirstAncestorOfClass("Model")
+		if otherModel and (CollectionService:HasTag(otherModel, "Destructible") or otherModel:GetAttribute("Destroyed") == true) then
 			return
 		end
 
@@ -390,9 +465,10 @@ local function bindDestructible(inst: Instance)
 	if inst:IsA("BasePart") then
 		inst.Touched:Connect(onTouched)
 	elseif inst:IsA("Model") then
-		local pri = inst.PrimaryPart or inst:FindFirstChildWhichIsA("BasePart")
-		if pri then
-			pri.Touched:Connect(onTouched)
+		for _, desc in ipairs(inst:GetDescendants()) do
+			if desc:IsA("BasePart") then
+				desc.Touched:Connect(onTouched)
+			end
 		end
 	end
 end

@@ -1,11 +1,12 @@
 --!strict
 -- CharacterCreatorAndWardrobeUI.client.luau
--- Full Startup Character Creator ("CREATE YOUR WRECKER") & In-Game Wardrobe UI ([C] key / HUD button / Boutique Kiosk)
+-- In-Game Character Creator ("CREATE YOUR WRECKER") & Wardrobe UI ([C] key / HUD dock button / Boutique Kiosk)
 -- Supports Free Starters, Destruction Cash items, and Paid Robux items + VIP Mega Bundle with 3D Viewport preview.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UserInputService = game:GetService("UserInputService")
+local Workspace = game:GetService("Workspace")
 
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
@@ -24,9 +25,14 @@ local openAvatarEditorRE = Remotes:WaitForChild("OpenAvatarEditor") :: RemoteEve
 local currentLoadout: AvatarCatalog.AvatarLoadout = AvatarCatalog.GetDefaultLoadout()
 local unlockedItems: { [string]: boolean } = {}
 local activeCategory = "Presets"
-local showOnStartup = true
-local previewYaw = 20
+local showOnStartup = false
+local previewYaw = 22
 local previewModel: Model? = nil
+
+local existingGui = playerGui:FindFirstChild("CharacterCreatorAndWardrobeUI")
+if existingGui then
+	existingGui:Destroy()
+end
 
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "CharacterCreatorAndWardrobeUI"
@@ -34,22 +40,6 @@ screenGui.ResetOnSpawn = false
 screenGui.DisplayOrder = 28
 screenGui.IgnoreGuiInset = true
 screenGui.Parent = playerGui
-
--- Floating Quick-Open HUD Button (Top-Right alongside HUD or accessible anytime)
-local quickHudBtn = Instance.new("TextButton")
-quickHudBtn.Name = "OpenCreatorHudButton"
-quickHudBtn.Size = UDim2.fromOffset(154, 38)
-quickHudBtn.Position = UDim2.new(1, -172, 0, 68)
-quickHudBtn.BackgroundColor3 = Color3.fromRGB(236, 72, 153)
-quickHudBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-quickHudBtn.Font = Enum.Font.GothamBlack
-quickHudBtn.TextSize = 13
-quickHudBtn.Text = "CUSTOMIZE [C]"
-quickHudBtn.Parent = screenGui
-Instance.new("UICorner", quickHudBtn).CornerRadius = UDim.new(0, 8)
-local qStroke = Instance.new("UIStroke", quickHudBtn)
-qStroke.Color = Color3.fromRGB(250, 204, 21)
-qStroke.Thickness = 1.5
 
 -- Full Modal Backdrop
 local backdrop = Instance.new("Frame")
@@ -71,6 +61,38 @@ Instance.new("UICorner", panel).CornerRadius = UDim.new(0, 14)
 local panelStroke = Instance.new("UIStroke", panel)
 panelStroke.Color = Color3.fromRGB(56, 189, 248)
 panelStroke.Thickness = 2
+
+-- Dynamic UIScale on MainPanel so the modal never clips off the edges of the Studio window
+local panelScale = Instance.new("UIScale")
+panelScale.Name = "ModalAutoScale"
+panelScale.Scale = 1.0
+panelScale.Parent = panel
+
+local camScaleConn: RBXScriptConnection? = nil
+local function updatePanelScale()
+	local cam = Workspace.CurrentCamera
+	if not cam then
+		return
+	end
+	local vp = cam.ViewportSize
+	if vp.X > 0 and vp.Y > 0 then
+		panelScale.Scale = math.clamp(math.min(vp.X / 980, vp.Y / 620), 0.58, 1.0)
+	end
+end
+
+local function bindCameraViewport()
+	if camScaleConn then
+		camScaleConn:Disconnect()
+		camScaleConn = nil
+	end
+	local cam = Workspace.CurrentCamera
+	if cam then
+		camScaleConn = cam:GetPropertyChangedSignal("ViewportSize"):Connect(updatePanelScale)
+		updatePanelScale()
+	end
+end
+Workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(bindCameraViewport)
+bindCameraViewport()
 
 -- Header Bar
 local headerTitle = Instance.new("TextLabel")
@@ -133,7 +155,7 @@ viewport.Position = UDim2.fromOffset(8, 8)
 viewport.BackgroundColor3 = Color3.fromRGB(17, 24, 39)
 viewport.Ambient = Color3.fromRGB(190, 200, 220)
 viewport.LightColor = Color3.fromRGB(255, 250, 235)
-viewport.LightDirection = Vector3.new(-1, -1, -1)
+viewport.LightDirection = Vector3.new(-1, -1, 1)
 viewport.Parent = previewCard
 Instance.new("UICorner", viewport).CornerRadius = UDim.new(0, 10)
 
@@ -195,7 +217,7 @@ startupToggleBtn.BackgroundColor3 = Color3.fromRGB(30, 41, 59)
 startupToggleBtn.TextColor3 = Color3.fromRGB(203, 213, 225)
 startupToggleBtn.Font = Enum.Font.GothamBold
 startupToggleBtn.TextSize = 12
-startupToggleBtn.Text = "[✓] Show Creator on Startup"
+startupToggleBtn.Text = "[ ] Show Creator on Startup"
 startupToggleBtn.Parent = previewCard
 Instance.new("UICorner", startupToggleBtn).CornerRadius = UDim.new(0, 6)
 
@@ -242,53 +264,143 @@ gridLayout.CellSize = UDim2.fromOffset(176, 178)
 gridLayout.CellPadding = UDim2.fromOffset(10, 10)
 
 local function updateViewportCamera()
-	local focusPos = Vector3.new(0, 2.7, 0)
+	local focusPos = Vector3.new(0, 0.25, 0)
+	if previewModel then
+		local torso = (previewModel:FindFirstChild("UpperTorso") or previewModel:FindFirstChild("Torso") or previewModel:FindFirstChild("HumanoidRootPart")) :: BasePart?
+		if torso then
+			focusPos = torso.Position + Vector3.new(0, 0.1, 0)
+		end
+	end
 	local rad = math.rad(previewYaw)
-	local camPos = focusPos + Vector3.new(math.sin(rad) * 6.8, 1.1, math.cos(rad) * 6.8)
+	-- Character faces -Z at CFrame.new(0, 0, 0), so position camera on the -Z side facing the front
+	local camPos = focusPos + Vector3.new(math.sin(rad) * 6.2, 0.7, -math.cos(rad) * 6.2)
 	vpCam.CFrame = CFrame.lookAt(camPos, focusPos)
 end
 
-local function rebuildPreviewMannequin()
-	if previewModel then
-		previewModel:Destroy()
-	end
+local function buildR15FallbackMannequin(): Model
 	local m = Instance.new("Model")
 	m.Name = "PreviewWrecker"
 
-	local function makeLimb(name: string, size: Vector3, pos: Vector3): Part
+	local function makePart(name: string, size: Vector3, cf: CFrame, meshType: Enum.MeshType?, meshScale: Vector3?): Part
 		local p = Instance.new("Part")
 		p.Name = name
 		p.Size = size
-		p.Position = pos
+		p.CFrame = cf
 		p.Anchored = true
+		p.CanCollide = false
+		p.TopSurface = Enum.SurfaceType.Smooth
+		p.BottomSurface = Enum.SurfaceType.Smooth
 		p.Material = Enum.Material.SmoothPlastic
 		p.Parent = m
+		if meshType then
+			local sm = Instance.new("SpecialMesh")
+			sm.MeshType = meshType
+			if meshScale then
+				sm.Scale = meshScale
+			end
+			sm.Parent = p
+		end
 		return p
 	end
 
-	local torso = makeLimb("UpperTorso", Vector3.new(2, 2, 1), Vector3.new(0, 3.0, 0))
-	makeLimb("Head", Vector3.new(1.2, 1.2, 1.2), Vector3.new(0, 4.6, 0))
-	makeLimb("LeftUpperArm", Vector3.new(0.9, 1.9, 0.9), Vector3.new(-1.5, 3.0, 0))
-	makeLimb("RightHand", Vector3.new(0.9, 1.9, 0.9), Vector3.new(1.5, 3.0, 0))
-	makeLimb("LeftLeg", Vector3.new(0.95, 2.0, 0.95), Vector3.new(-0.52, 1.0, 0))
-	makeLimb("RightLeg", Vector3.new(0.95, 2.0, 0.95), Vector3.new(0.52, 1.0, 0))
-	m.PrimaryPart = torso
+	local hrp = makePart("HumanoidRootPart", Vector3.new(1.6, 1.6, 0.8), CFrame.new(0, 0, 0), nil, nil)
+	hrp.Transparency = 1
+
+	-- Articulated R15 Torso & Rounded Head
+	local upperTorso = makePart("UpperTorso", Vector3.new(1.65, 1.25, 0.85), CFrame.new(0, 0.35, 0), Enum.MeshType.Brick, Vector3.new(0.98, 0.98, 0.96))
+	makePart("LowerTorso", Vector3.new(1.5, 0.65, 0.8), CFrame.new(0, -0.58, 0), Enum.MeshType.Brick, Vector3.new(0.96, 0.96, 0.94))
+
+	local head = makePart("Head", Vector3.new(1.15, 1.15, 1.15), CFrame.new(0, 1.58, 0), Enum.MeshType.Head, Vector3.new(1.25, 1.25, 1.25))
+	-- Subtle facial features on front (-Z) of Head
+	local leftEye = makePart("LeftEye", Vector3.new(0.12, 0.16, 0.06), CFrame.new(-0.2, 1.64, -0.56), Enum.MeshType.Sphere, nil)
+	leftEye.Color = Color3.fromRGB(20, 24, 34)
+	local rightEye = makePart("RightEye", Vector3.new(0.12, 0.16, 0.06), CFrame.new(0.2, 1.64, -0.56), Enum.MeshType.Sphere, nil)
+	rightEye.Color = Color3.fromRGB(20, 24, 34)
+
+	-- Articulated Left Arm (UpperArm, LowerArm, Hand)
+	makePart("LeftUpperArm", Vector3.new(0.62, 0.9, 0.62), CFrame.new(-1.18, 0.42, 0) * CFrame.Angles(0, 0, math.rad(6)), Enum.MeshType.Brick, Vector3.new(0.95, 0.98, 0.95))
+	makePart("LeftLowerArm", Vector3.new(0.56, 0.82, 0.56), CFrame.new(-1.24, -0.38, -0.06) * CFrame.Angles(math.rad(12), 0, math.rad(4)), Enum.MeshType.Brick, Vector3.new(0.94, 0.98, 0.94))
+	makePart("LeftHand", Vector3.new(0.54, 0.4, 0.54), CFrame.new(-1.26, -0.94, -0.14), Enum.MeshType.Head, Vector3.new(1.05, 1.0, 1.05))
+
+	-- Articulated Right Arm (UpperArm, LowerArm, Hand)
+	makePart("RightUpperArm", Vector3.new(0.62, 0.9, 0.62), CFrame.new(1.18, 0.42, 0) * CFrame.Angles(0, 0, math.rad(-6)), Enum.MeshType.Brick, Vector3.new(0.95, 0.98, 0.95))
+	makePart("RightLowerArm", Vector3.new(0.56, 0.82, 0.56), CFrame.new(1.24, -0.38, -0.06) * CFrame.Angles(math.rad(12), 0, math.rad(-4)), Enum.MeshType.Brick, Vector3.new(0.94, 0.98, 0.94))
+	makePart("RightHand", Vector3.new(0.54, 0.4, 0.54), CFrame.new(1.26, -0.94, -0.14) * CFrame.Angles(math.rad(-25), 0, 0), Enum.MeshType.Head, Vector3.new(1.05, 1.0, 1.05))
+
+	-- Articulated Left & Right Legs + Boots
+	makePart("LeftUpperLeg", Vector3.new(0.7, 0.95, 0.7), CFrame.new(-0.44, -1.35, 0), Enum.MeshType.Brick, Vector3.new(0.96, 0.98, 0.96))
+	makePart("LeftLowerLeg", Vector3.new(0.64, 0.92, 0.64), CFrame.new(-0.44, -2.22, 0), Enum.MeshType.Brick, Vector3.new(0.95, 0.98, 0.95))
+	makePart("LeftFoot", Vector3.new(0.68, 0.34, 0.92), CFrame.new(-0.44, -2.8, -0.12), Enum.MeshType.Brick, Vector3.new(0.96, 0.94, 0.96))
+
+	makePart("RightUpperLeg", Vector3.new(0.7, 0.95, 0.7), CFrame.new(0.44, -1.35, 0), Enum.MeshType.Brick, Vector3.new(0.96, 0.98, 0.96))
+	makePart("RightLowerLeg", Vector3.new(0.64, 0.92, 0.64), CFrame.new(0.44, -2.22, 0), Enum.MeshType.Brick, Vector3.new(0.95, 0.98, 0.95))
+	makePart("RightFoot", Vector3.new(0.68, 0.34, 0.92), CFrame.new(0.44, -2.8, -0.12), Enum.MeshType.Brick, Vector3.new(0.96, 0.94, 0.96))
+
+	local hum = Instance.new("Humanoid")
+	hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+	hum.Parent = m
+
+	m.PrimaryPart = hrp or upperTorso or head
+	return m
+end
+
+local function rebuildPreviewModel()
+	if previewModel then
+		previewModel:Destroy()
+		previewModel = nil
+	end
+
+	local m: Model? = nil
+	local liveChar = player.Character
+	if liveChar and (liveChar:FindFirstChild("HumanoidRootPart") or liveChar:FindFirstChild("UpperTorso") or liveChar:FindFirstChild("Torso")) then
+		local ok, cloned = pcall(function()
+			liveChar.Archivable = true
+			return liveChar:Clone()
+		end)
+		if ok and cloned then
+			for _, desc in ipairs(cloned:GetDescendants()) do
+				if desc:IsA("BaseScript") or desc:IsA("ProximityPrompt") or desc:IsA("ForceField") or desc:IsA("BillboardGui") or desc:IsA("Sound") then
+					desc:Destroy()
+				elseif desc:IsA("Humanoid") then
+					desc.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+				end
+			end
+			local root = (cloned:FindFirstChild("HumanoidRootPart") or cloned:FindFirstChild("UpperTorso") or cloned:FindFirstChild("Torso")) :: BasePart?
+			if root then
+				cloned.PrimaryPart = root
+			end
+			cloned:PivotTo(CFrame.new(0, 0, 0))
+			m = cloned
+		end
+	end
+
+	if not m then
+		m = buildR15FallbackMannequin()
+		m:PivotTo(CFrame.new(0, 0, 0))
+	end
+
+	m.Name = "PreviewWrecker"
 	m.Parent = vpWorld
 
 	AvatarCatalog.ApplyLoadoutToCharacter(m, currentLoadout)
-	-- Ensure welded procedural attachments stay anchored in ViewportFrame
+
+	-- Keep all parts anchored inside the ViewportFrame
 	for _, d in ipairs(m:GetDescendants()) do
 		if d:IsA("BasePart") then
 			d.Anchored = true
 		end
 	end
+
 	previewModel = m
 	updateViewportCamera()
 
 	local perks = AvatarCatalog.ComputePerks(currentLoadout)
 	perksLabel.Text = string.format(
 		"Perks: Cash x%.2f | XP x%.2f | Speed x%.2f | Chaos x%.2f",
-		perks.CashMult, perks.XPMult, perks.SprintMult, perks.ChaosMult
+		perks.CashMult,
+		perks.XPMult,
+		perks.SprintMult,
+		perks.ChaosMult
 	)
 end
 
@@ -457,7 +569,8 @@ local function toggleEditor(forceState: boolean?)
 	local nextVisible = if forceState ~= nil then forceState else not backdrop.Visible
 	backdrop.Visible = nextVisible
 	if nextVisible then
-		rebuildPreviewMannequin()
+		updatePanelScale()
+		rebuildPreviewModel()
 		renderCategoryGrid()
 	end
 end
@@ -500,12 +613,10 @@ playBtn.MouseButton1Click:Connect(function()
 	toggleEditor(false)
 end)
 
-quickHudBtn.MouseButton1Click:Connect(function()
-	toggleEditor()
-end)
-
 UserInputService.InputBegan:Connect(function(input, gp)
-	if gp then return end
+	if gp then
+		return
+	end
 	if input.KeyCode == Enum.KeyCode.C then
 		toggleEditor()
 	end
@@ -520,10 +631,22 @@ openAvatarEditorRE.OnClientEvent:Connect(function()
 end)
 
 avatarUpdatedRE.OnClientEvent:Connect(function(payload)
-	if payload.Loadout then currentLoadout = payload.Loadout end
-	if payload.Unlocked then unlockedItems = payload.Unlocked end
-	rebuildPreviewMannequin()
-	renderCategoryGrid()
+	if payload.Loadout then
+		currentLoadout = payload.Loadout
+	end
+	if payload.Unlocked then
+		unlockedItems = payload.Unlocked
+	end
+	if backdrop.Visible then
+		rebuildPreviewModel()
+		renderCategoryGrid()
+	end
+end)
+
+player.CharacterAdded:Connect(function()
+	if backdrop.Visible then
+		task.defer(rebuildPreviewModel)
+	end
 end)
 
 task.spawn(function()
@@ -533,7 +656,6 @@ task.spawn(function()
 	if ok and data then
 		currentLoadout = data.Loadout or currentLoadout
 		unlockedItems = data.Unlocked or unlockedItems
-		rebuildPreviewMannequin()
 		renderCategoryGrid()
 		if showOnStartup and not data.HasCustomized then
 			toggleEditor(true)

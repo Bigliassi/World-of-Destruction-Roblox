@@ -89,6 +89,32 @@ modal.Parent = gui
 addCorner(modal, 14)
 addStroke(modal, Color3.fromRGB(65, 165, 255), 2)
 
+local modalScale = Instance.new("UIScale")
+modalScale.Name = "ResponsiveScale"
+modalScale.Parent = modal
+
+local function updateModalScale()
+	local cam = workspace.CurrentCamera
+	if not cam then
+		return
+	end
+	local vp = cam.ViewportSize
+	if vp.X > 0 and vp.Y > 0 then
+		modalScale.Scale = math.clamp(math.min(vp.X / 860, vp.Y / 560), 0.60, 1.0)
+	end
+end
+
+if workspace.CurrentCamera then
+	workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(updateModalScale)
+	updateModalScale()
+end
+workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(function()
+	if workspace.CurrentCamera then
+		workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(updateModalScale)
+		updateModalScale()
+	end
+end)
+
 -- Header Bar
 local header = Instance.new("Frame")
 header.Name = "Header"

@@ -475,6 +475,28 @@ local function makePart(
 	return p
 end
 
+local function makeWedge(
+	name: string,
+	size: Vector3,
+	color: Color3,
+	material: Enum.Material,
+	parent: Instance,
+	transparency: number?
+): WedgePart
+	local wp = Instance.new("WedgePart")
+	wp.Name = name
+	wp.Size = size
+	wp.Color = color
+	wp.Material = material
+	wp.TopSurface = Enum.SurfaceType.Smooth
+	wp.BottomSurface = Enum.SurfaceType.Smooth
+	wp.CanCollide = false
+	wp.Massless = true
+	wp.Transparency = transparency or 0
+	wp.Parent = parent
+	return wp
+end
+
 local function weldParts(part0: BasePart, part1: BasePart, c0: CFrame?, c1: CFrame?): Weld
 	local w = Instance.new("Weld")
 	w.Name = part1.Name .. "_Weld"
@@ -488,6 +510,7 @@ end
 
 local function placeAndWeld(chassis: BasePart, part: BasePart, offsetCFrame: CFrame): Weld
 	part.CFrame = chassis.CFrame * offsetCFrame
+	part:SetAttribute("BaseC0", offsetCFrame)
 	return weldParts(chassis, part, offsetCFrame, CFrame.identity)
 end
 
@@ -764,7 +787,7 @@ function VehicleCatalog.BuildVehicle(vehicleType: string?, options: BuildOptions
 	local h = chassisSize.Y
 	local len = chassisSize.Z
 
-	-- 1. Main Chassis slab (PrimaryPart, CanCollide = true)
+	-- 1. Main Chassis slab (PrimaryPart, ONLY part with CanCollide = true)
 	local chassis = makePart(
 		"Chassis",
 		chassisSize,
@@ -774,17 +797,17 @@ function VehicleCatalog.BuildVehicle(vehicleType: string?, options: BuildOptions
 		true,
 		false
 	)
-	chassis.CustomPhysicalProperties = PhysicalProperties.new(0.8, 0.15, 0.1, 100, 100)
+	chassis.CustomPhysicalProperties = PhysicalProperties.new(0.85, 0.01, 0.0, 100, 100)
 	model.PrimaryPart = chassis
 
 	local spawnCF = opts.CFrame or CFrame.new(0, cfg.HoverHeight * scale + h * 0.5, 0)
 	chassis.CFrame = spawnCF
 
-	-- 2. DriveSeat (VehicleSeat) inside the cabin
+	-- 2. DriveSeat (VehicleSeat) inside the cabin (MaxSpeed = 0, Torque = 0 so legacy solver never fights custom velocity)
 	local seat = Instance.new("VehicleSeat")
 	seat.Name = "DriveSeat"
-	seat.Size = Vector3.new(2.2, 0.8, 2.2)
-	seat.Color = Color3.fromRGB(30, 32, 38)
+	seat.Size = Vector3.new(2.2, 0.7, 2.2)
+	seat.Color = Color3.fromRGB(26, 28, 34)
 	seat.Material = Enum.Material.Fabric
 	seat.TopSurface = Enum.SurfaceType.Smooth
 	seat.BottomSurface = Enum.SurfaceType.Smooth
@@ -799,13 +822,13 @@ function VehicleCatalog.BuildVehicle(vehicleType: string?, options: BuildOptions
 	local effectiveNitroCap = cfg.NitroCapacity * (1 + nitroLevel * 0.18)
 	local effectiveRamMult = cfg.RamMultiplier + plowLevel * 0.35
 
-	seat.MaxSpeed = effectiveMaxSpeed
-	seat.Torque = effectiveAccel * 25
+	seat.MaxSpeed = 0
+	seat.Torque = 0
 	seat.TurnSpeed = cfg.TurnSpeed
 	seat.Parent = model
 
 	local seatZ = if cfg.HasTruckBed then -len * 0.08 elseif cfg.HasBulldozerBlade then len * 0.06 else -len * 0.02
-	placeAndWeld(chassis, seat, CFrame.new(0, h * 0.25, seatZ))
+	placeAndWeld(chassis, seat, CFrame.new(0, h * 0.22, seatZ))
 
 	-- ProximityPrompt on DriveSeat for quick E enter / hijack on foot
 	local prompt = Instance.new("ProximityPrompt")
@@ -819,22 +842,59 @@ function VehicleCatalog.BuildVehicle(vehicleType: string?, options: BuildOptions
 	prompt.RequiresLineOfSight = false
 	prompt.Parent = seat
 
-	-- 3. Hood & Trunk steps
-	local hoodLen = len * (if cfg.Id == "Sports" or cfg.Id == "Muscle" then 0.34 else 0.27)
+	-- 3. Sculpted Aerodynamic Front Hood Nose (WedgePart) & Hood Deck + Front Splitter/Air Dam
+	local hoodLen = len * (if cfg.Id == "Sports" or cfg.Id == "Muscle" then 0.34 else 0.28)
+	local hoodW = w * 0.94
+	local hoodH = h * 0.36
+	local hoodDeckLen = hoodLen * 0.62
+	local hoodSlopeLen = hoodLen * 0.38
+
 	local hood = makePart(
 		"Hood",
-		Vector3.new(w * 0.94, h * 0.32, hoodLen),
+		Vector3.new(hoodW, hoodH, hoodDeckLen),
 		primaryColor,
 		Enum.Material.SmoothPlastic,
 		model
 	)
-	placeAndWeld(chassis, hood, CFrame.new(0, h * 0.52, -len * 0.5 + hoodLen * 0.5 + 0.35 * scale))
+	placeAndWeld(
+		chassis,
+		hood,
+		CFrame.new(0, h * 0.48, -len * 0.5 + hoodSlopeLen + hoodDeckLen * 0.5 + 0.15 * scale)
+	)
+
+	-- Sloped aerodynamic front hood nose (WedgePart sloping down toward -Z)
+	local hoodNose = makeWedge(
+		"HoodNoseWedge",
+		Vector3.new(hoodW, hoodH, hoodSlopeLen),
+		primaryColor,
+		Enum.Material.SmoothPlastic,
+		model
+	)
+	placeAndWeld(
+		chassis,
+		hoodNose,
+		CFrame.new(0, h * 0.48, -len * 0.5 + hoodSlopeLen * 0.5 + 0.15 * scale)
+	)
+
+	-- Sculpted hood power-dome / center crease
+	local hoodCrease = makePart(
+		"HoodPowerDome",
+		Vector3.new(w * 0.42, 0.14 * scale, hoodDeckLen * 0.88),
+		primaryColor,
+		Enum.Material.SmoothPlastic,
+		model
+	)
+	placeAndWeld(
+		chassis,
+		hoodCrease,
+		CFrame.new(0, h * 0.48 + hoodH * 0.5 + 0.04 * scale, -len * 0.5 + hoodSlopeLen + hoodDeckLen * 0.5 + 0.15 * scale)
+	)
 
 	-- Muscle car racing stripe & supercharger blower on hood
 	if cfg.HasBlower then
 		local stripe = makePart(
 			"RacingStripe",
-			Vector3.new(w * 0.28, 0.08 * scale, len * 0.96),
+			Vector3.new(w * 0.28, 0.08 * scale, len * 0.94),
 			secondaryColor,
 			Enum.Material.SmoothPlastic,
 			model
@@ -871,12 +931,71 @@ function VehicleCatalog.BuildVehicle(vehicleType: string?, options: BuildOptions
 		end
 	end
 
-	-- 4. Cabin / Greenhouse, Tilted Windshield & Rear Window
-	local glassColor = Color3.fromRGB(115, 165, 215)
+	-- 3b. Sculpted Side Body Doors, Lower Rocker Side Skirts, Flared Wheel-Arch Fenders & Side Mirrors
+	local darkTrimColor = Color3.fromRGB(24, 27, 34)
+	for _, sx in ipairs({ -1, 1 }) do
+		local sideTag = if sx < 0 then "L" else "R"
+
+		-- Sculpted side door panel with beltline contour
+		local sideDoor = makePart(
+			"SideDoor" .. sideTag,
+			Vector3.new(0.24 * scale, h * 0.72, len * 0.42),
+			primaryColor,
+			Enum.Material.SmoothPlastic,
+			model
+		)
+		placeAndWeld(chassis, sideDoor, CFrame.new(sx * (w * 0.50), h * 0.14, 0))
+
+		-- Door handle & side character crease
+		local doorHandle = makePart(
+			"DoorHandle" .. sideTag,
+			Vector3.new(0.14 * scale, 0.14 * scale, 0.65 * scale),
+			secondaryColor,
+			Enum.Material.Metal,
+			model
+		)
+		placeAndWeld(chassis, doorHandle, CFrame.new(sx * (w * 0.525), h * 0.32, 0.35 * scale))
+
+		-- Lower aerodynamic carbon/dark-metallic rocker side skirt
+		local sideSkirt = makePart(
+			"SideSkirt" .. sideTag,
+			Vector3.new(0.36 * scale, h * 0.24, len * 0.52),
+			darkTrimColor,
+			Enum.Material.Metal,
+			model
+		)
+		placeAndWeld(chassis, sideSkirt, CFrame.new(sx * (w * 0.51), -h * 0.38, 0))
+
+		-- Flared Wheel-Arch Fenders over front & rear tires
+		for _, fz in ipairs({ -cfg.WheelbaseOffsetZ * scale, cfg.WheelbaseOffsetZ * scale }) do
+			local archTag = if fz < 0 then "Front" else "Rear"
+			local fenderFlare = makePart(
+				"FenderFlare" .. sideTag .. "_" .. archTag,
+				Vector3.new(0.42 * scale, h * 0.34, cfg.WheelRadius * 2.15 * scale),
+				primaryColor,
+				Enum.Material.SmoothPlastic,
+				model
+			)
+			placeAndWeld(chassis, fenderFlare, CFrame.new(sx * (w * 0.515), h * 0.08, fz))
+
+			local archLip = makePart(
+				"FenderArchLip" .. sideTag .. "_" .. archTag,
+				Vector3.new(0.46 * scale, 0.18 * scale, cfg.WheelRadius * 2.05 * scale),
+				darkTrimColor,
+				Enum.Material.Metal,
+				model
+			)
+			placeAndWeld(chassis, archLip, CFrame.new(sx * (w * 0.52), -h * 0.08, fz))
+		end
+	end
+
+	-- 4. Cabin / Greenhouse, Angled Front WedgePart Windshield with A-Pillars, Painted Roof Panel & Sloped Rear WedgePart Fastback
+	local glassColor = Color3.fromRGB(38, 52, 72)
 	local cabW = w * 0.84
-	local cabH = if cfg.Id == "Sports" then h * 0.72 elseif cfg.Id == "Bulldozer" then h * 1.05 else h * 0.88
-	local cabLen = if cfg.HasTruckBed then len * 0.34 elseif cfg.Id == "Compact" or cfg.Id == "SUV" then len * 0.56 else len * 0.44
-	local cabCenterZ = if cfg.HasTruckBed then -len * 0.05 elseif cfg.Id == "Compact" or cfg.Id == "SUV" then len * 0.08 else 0.0
+	local cabH = if cfg.Id == "Sports" then h * 0.72 elseif cfg.Id == "Bulldozer" then h * 1.05 else h * 0.86
+	local cabLen = if cfg.HasTruckBed then len * 0.32 elseif cfg.Id == "Compact" or cfg.Id == "SUV" then len * 0.48 else len * 0.38
+	local cabCenterZ = if cfg.HasTruckBed then -len * 0.06 elseif cfg.Id == "Compact" or cfg.Id == "SUV" then len * 0.06 else 0.0
+	local cabBaseY = h * 0.5 + cabH * 0.5 - 0.08 * scale
 
 	local cabin = makePart(
 		"Cabin",
@@ -886,55 +1005,110 @@ function VehicleCatalog.BuildVehicle(vehicleType: string?, options: BuildOptions
 		model,
 		false,
 		true,
-		0.35
+		0.25
 	)
-	placeAndWeld(chassis, cabin, CFrame.new(0, h * 0.5 + cabH * 0.5 - 0.1 * scale, cabCenterZ))
+	placeAndWeld(chassis, cabin, CFrame.new(0, cabBaseY, cabCenterZ))
 
-	-- Painted roof cap
+	-- Painted roof panel
 	local roofCap = makePart(
 		"RoofCap",
-		Vector3.new(cabW * 1.02, 0.24 * scale, cabLen * 0.96),
+		Vector3.new(cabW * 1.02, 0.24 * scale, cabLen * 0.98),
 		if cfg.Id == "Sports" or cfg.Id == "Muscle" then secondaryColor else primaryColor,
 		Enum.Material.SmoothPlastic,
 		model
 	)
 	placeAndWeld(chassis, roofCap, CFrame.new(0, h * 0.5 + cabH, cabCenterZ))
 
-	-- Sloped front windshield
-	local windshield = makePart(
+	-- Angled front WedgePart windshield with left/right sculpted A-pillars
+	local wsSlopeLen = cabH * 1.05
+	local windshield = makeWedge(
 		"Windshield",
-		Vector3.new(cabW * 0.96, cabH * 1.15, 0.22 * scale),
+		Vector3.new(cabW * 0.96, cabH, wsSlopeLen),
 		glassColor,
 		Enum.Material.Glass,
 		model,
-		false,
-		true,
-		0.25
+		0.22
 	)
 	placeAndWeld(
 		chassis,
 		windshield,
-		CFrame.new(0, h * 0.5 + cabH * 0.48, cabCenterZ - cabLen * 0.5 - 0.35 * scale)
-			* CFrame.Angles(math.rad(34), 0, 0)
+		CFrame.new(0, cabBaseY, cabCenterZ - cabLen * 0.5 - wsSlopeLen * 0.5)
 	)
 
-	-- Sloped rear window
-	local rearWindow = makePart(
+	for _, sx in ipairs({ -1, 1 }) do
+		local pillarTag = if sx < 0 then "L" else "R"
+		local aPillar = makePart(
+			"APillar" .. pillarTag,
+			Vector3.new(0.22 * scale, cabH * 1.28, 0.24 * scale),
+			primaryColor,
+			Enum.Material.SmoothPlastic,
+			model
+		)
+		placeAndWeld(
+			chassis,
+			aPillar,
+			CFrame.new(sx * (cabW * 0.48), cabBaseY, cabCenterZ - cabLen * 0.5 - wsSlopeLen * 0.5)
+				* CFrame.Angles(math.rad(42), 0, 0)
+		)
+
+		-- Left/Right aerodynamic side-view mirrors + mirror glass
+		local mirrorArm = makePart(
+			"SideMirrorArm" .. pillarTag,
+			Vector3.new(0.45 * scale, 0.14 * scale, 0.22 * scale),
+			darkTrimColor,
+			Enum.Material.Metal,
+			model
+		)
+		placeAndWeld(
+			chassis,
+			mirrorArm,
+			CFrame.new(sx * (w * 0.51), h * 0.54, cabCenterZ - cabLen * 0.5 - wsSlopeLen * 0.35)
+		)
+
+		local mirrorCap = makePart(
+			"SideMirror" .. pillarTag,
+			Vector3.new(0.52 * scale, 0.32 * scale, 0.36 * scale),
+			primaryColor,
+			Enum.Material.SmoothPlastic,
+			model
+		)
+		placeAndWeld(
+			chassis,
+			mirrorCap,
+			CFrame.new(sx * (w * 0.56), h * 0.58, cabCenterZ - cabLen * 0.5 - wsSlopeLen * 0.35)
+				* CFrame.Angles(0, math.rad(-sx * 12), 0)
+		)
+	end
+
+	-- Sloped rear WedgePart fastback / rear window (rotated 180 deg around Y so slope faces +Z)
+	local rwSlopeLen = if cfg.Id == "Sports" or cfg.Id == "Muscle" then cabH * 1.35 else cabH * 0.85
+	local rearWindow = makeWedge(
 		"RearWindow",
-		Vector3.new(cabW * 0.94, cabH * 1.05, 0.2 * scale),
+		Vector3.new(cabW * 0.94, cabH * 0.96, rwSlopeLen),
 		glassColor,
 		Enum.Material.Glass,
 		model,
-		false,
-		true,
-		0.3
+		0.25
 	)
 	placeAndWeld(
 		chassis,
 		rearWindow,
-		CFrame.new(0, h * 0.5 + cabH * 0.48, cabCenterZ + cabLen * 0.5 + 0.3 * scale)
-			* CFrame.Angles(math.rad(-30), 0, 0)
+		CFrame.new(0, cabBaseY - 0.02 * scale, cabCenterZ + cabLen * 0.5 + rwSlopeLen * 0.5)
+			* CFrame.Angles(0, math.rad(180), 0)
 	)
+
+	-- Rear trunk deck (for non-truck / non-SUV fastbacks & sedans)
+	if not cfg.HasTruckBed and cfg.Id ~= "Compact" and cfg.Id ~= "SUV" then
+		local trunkLen = math.max(1.2 * scale, (len * 0.5) - (cabCenterZ + cabLen * 0.5 + rwSlopeLen * 0.6))
+		local trunkDeck = makePart(
+			"TrunkDeck",
+			Vector3.new(w * 0.92, h * 0.34, trunkLen),
+			primaryColor,
+			Enum.Material.SmoothPlastic,
+			model
+		)
+		placeAndWeld(chassis, trunkDeck, CFrame.new(0, h * 0.46, len * 0.5 - trunkLen * 0.5 - 0.15 * scale))
+	end
 
 	-- 5. Truck Bed (Pickup & MonsterTruck)
 	if cfg.HasTruckBed then
@@ -1092,65 +1266,189 @@ function VehicleCatalog.BuildVehicle(vehicleType: string?, options: BuildOptions
 		end
 	end
 
-	-- 11. Front & Rear Bumpers, Grille, Headlights, Taillights & Exhaust Pipes
+	-- 11. Front & Rear Bumpers, Splitter/Air Dam, Honeycomb Grille, Projector Headlights, Rear Diffuser, License Plate & Twin Exhaust
 	for _, sz in ipairs({ -1, 1 }) do
 		local bumper = makePart(
 			if sz < 0 then "FrontBumper" else "RearBumper",
-			Vector3.new(w * 1.03, h * 0.32, 0.65 * scale),
+			Vector3.new(w * 1.03, h * 0.34, 0.58 * scale),
 			secondaryColor,
 			Enum.Material.Metal,
 			model
 		)
-		placeAndWeld(chassis, bumper, CFrame.new(0, -h * 0.28, sz * (len * 0.5 + 0.22 * scale)))
+		placeAndWeld(chassis, bumper, CFrame.new(0, -h * 0.24, sz * (len * 0.5 + 0.18 * scale)))
 	end
 
-	local grille = makePart(
-		"FrontGrille",
-		Vector3.new(w * 0.48, h * 0.36, 0.18 * scale),
-		Color3.fromRGB(35, 38, 44),
+	-- Sculpted Front Splitter / Air Dam with carbon/dark-metallic trim
+	local frontSplitter = makePart(
+		"FrontSplitter",
+		Vector3.new(w * 1.06, 0.16 * scale, 0.85 * scale),
+		darkTrimColor,
+		Enum.Material.Metal,
+		model
+	)
+	placeAndWeld(chassis, frontSplitter, CFrame.new(0, -h * 0.44, -len * 0.5 - 0.26 * scale))
+
+	local frontAirDam = makePart(
+		"FrontAirDam",
+		Vector3.new(w * 0.62, h * 0.22, 0.32 * scale),
+		Color3.fromRGB(16, 18, 22),
 		Enum.Material.DiamondPlate,
 		model
 	)
-	placeAndWeld(chassis, grille, CFrame.new(0, 0.05 * scale, -len * 0.5 - 0.08 * scale))
+	placeAndWeld(chassis, frontAirDam, CFrame.new(0, -h * 0.32, -len * 0.5 - 0.22 * scale))
 
-	-- Headlights (Front = -Z) with SpotLights
+	-- Recessed Honeycomb / Mesh Front Grille + Surround Trim
+	local grilleSurround = makePart(
+		"FrontGrilleTrim",
+		Vector3.new(w * 0.52, h * 0.40, 0.16 * scale),
+		secondaryColor,
+		Enum.Material.Metal,
+		model
+	)
+	placeAndWeld(chassis, grilleSurround, CFrame.new(0, 0.06 * scale, -len * 0.5 - 0.06 * scale))
+
+	local grille = makePart(
+		"FrontGrille",
+		Vector3.new(w * 0.48, h * 0.34, 0.18 * scale),
+		Color3.fromRGB(22, 25, 30),
+		Enum.Material.DiamondPlate,
+		model
+	)
+	placeAndWeld(chassis, grille, CFrame.new(0, 0.06 * scale, -len * 0.5 - 0.09 * scale))
+
+	-- Dual Angled Projector Headlights (Front = -Z) with Inner LED Rings & SpotLights
 	for _, sx in ipairs({ -1, 1 }) do
+		local hlSide = if sx < 0 then "L" else "R"
+
+		local hlHousing = makePart(
+			"HeadlightHousing" .. hlSide,
+			Vector3.new(w * 0.21, h * 0.25, 0.20 * scale),
+			Color3.fromRGB(18, 20, 26),
+			Enum.Material.Metal,
+			model
+		)
+		placeAndWeld(
+			chassis,
+			hlHousing,
+			CFrame.new(sx * (w * 0.35), h * 0.12, -len * 0.5 - 0.06 * scale)
+				* CFrame.Angles(0, math.rad(-sx * 8), math.rad(-sx * 4))
+		)
+
 		local headlight = makePart(
-			if sx < 0 then "HeadlightL" else "HeadlightR",
-			Vector3.new(w * 0.18, h * 0.22, 0.2 * scale),
+			"Headlight" .. hlSide,
+			Vector3.new(w * 0.18, h * 0.20, 0.22 * scale),
 			Color3.fromRGB(245, 250, 255),
 			Enum.Material.Neon,
 			model
 		)
-		placeAndWeld(chassis, headlight, CFrame.new(sx * (w * 0.35), h * 0.12, -len * 0.5 - 0.08 * scale))
+		placeAndWeld(
+			chassis,
+			headlight,
+			CFrame.new(sx * (w * 0.35), h * 0.12, -len * 0.5 - 0.09 * scale)
+				* CFrame.Angles(0, math.rad(-sx * 8), math.rad(-sx * 4))
+		)
+
+		local ledRing = makePart(
+			"HeadlightLEDRing" .. hlSide,
+			Vector3.new(w * 0.19, 0.07 * scale, 0.24 * scale),
+			accentColor,
+			Enum.Material.Neon,
+			model
+		)
+		placeAndWeld(
+			chassis,
+			ledRing,
+			CFrame.new(sx * (w * 0.35), h * 0.04, -len * 0.5 - 0.11 * scale)
+				* CFrame.Angles(0, math.rad(-sx * 8), math.rad(-sx * 6))
+		)
 
 		local spot = Instance.new("SpotLight")
 		spot.Name = "HeadlightBeam"
 		spot.Face = Enum.NormalId.Front
 		spot.Brightness = 2.8
-		spot.Range = 55
+		spot.Range = 58
 		spot.Angle = 55
 		spot.Color = Color3.fromRGB(255, 248, 230)
 		spot.Enabled = true
 		spot.Parent = headlight
 	end
 
-	-- Taillight bar (Rear = +Z)
+	-- Detailed Rear Fascia: Distinct Left/Right LED Taillight Clusters + Center Light Bar
 	local taillight = makePart(
 		"TaillightBar",
-		Vector3.new(w * 0.78, h * 0.20, 0.18 * scale),
-		Color3.fromRGB(255, 35, 25),
+		Vector3.new(w * 0.78, h * 0.14, 0.18 * scale),
+		Color3.fromRGB(220, 22, 22),
 		Enum.Material.Neon,
 		model
 	)
-	placeAndWeld(chassis, taillight, CFrame.new(0, h * 0.12, len * 0.5 + 0.08 * scale))
+	placeAndWeld(chassis, taillight, CFrame.new(0, h * 0.14, len * 0.5 + 0.08 * scale))
 
-	-- Twin Exhaust pipes (Rear = +Z)
 	for _, sx in ipairs({ -1, 1 }) do
+		local tlSide = if sx < 0 then "L" else "R"
+		local tlCluster = makePart(
+			"TaillightCluster" .. tlSide,
+			Vector3.new(w * 0.22, h * 0.24, 0.22 * scale),
+			Color3.fromRGB(255, 32, 24),
+			Enum.Material.Neon,
+			model
+		)
+		placeAndWeld(chassis, tlCluster, CFrame.new(sx * (w * 0.35), h * 0.14, len * 0.5 + 0.10 * scale))
+	end
+
+	-- License Plate Badge ("LEO-01")
+	local plateBacking = makePart(
+		"LicensePlate",
+		Vector3.new(1.55 * scale, 0.72 * scale, 0.14 * scale),
+		Color3.fromRGB(240, 200, 45),
+		Enum.Material.SmoothPlastic,
+		model
+	)
+	placeAndWeld(chassis, plateBacking, CFrame.new(0, -h * 0.16, len * 0.5 + 0.24 * scale))
+
+	local plateGui = Instance.new("SurfaceGui")
+	plateGui.Name = "PlateGui"
+	plateGui.Face = Enum.NormalId.Back
+	plateGui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	plateGui.PixelsPerStud = 48
+	plateGui.Parent = plateBacking
+
+	local plateLabel = Instance.new("TextLabel")
+	plateLabel.Size = UDim2.fromScale(1, 1)
+	plateLabel.BackgroundTransparency = 1
+	plateLabel.Text = "LEO-01"
+	plateLabel.TextColor3 = Color3.fromRGB(20, 24, 32)
+	plateLabel.Font = Enum.Font.GothamBlack
+	plateLabel.TextScaled = true
+	plateLabel.Parent = plateGui
+
+	-- Rear Diffuser Fins along the lower rear bumper
+	local diffuserBase = makePart(
+		"RearDiffuser",
+		Vector3.new(w * 0.84, 0.18 * scale, 0.55 * scale),
+		darkTrimColor,
+		Enum.Material.Metal,
+		model
+	)
+	placeAndWeld(chassis, diffuserBase, CFrame.new(0, -h * 0.42, len * 0.5 + 0.18 * scale))
+
+	for finIdx = -2, 2 do
+		local fin = makePart(
+			"DiffuserFin",
+			Vector3.new(0.10 * scale, 0.32 * scale, 0.58 * scale),
+			darkTrimColor,
+			Enum.Material.Metal,
+			model
+		)
+		placeAndWeld(chassis, fin, CFrame.new(finIdx * (w * 0.12), -h * 0.40, len * 0.5 + 0.24 * scale))
+	end
+
+	-- Twin Chrome / Titanium Exhaust Tips (Rear = +Z)
+	for _, sx in ipairs({ -1, 1 }) do
+		local exhaustSide = if sx < 0 then "L" else "R"
 		local exhaust = makePart(
-			if sx < 0 then "ExhaustL" else "ExhaustR",
-			Vector3.new(0.55 * scale, 0.38 * scale, 0.38 * scale),
-			Color3.fromRGB(165, 170, 180),
+			"Exhaust" .. exhaustSide,
+			Vector3.new(0.58 * scale, 0.38 * scale, 0.38 * scale),
+			Color3.fromRGB(190, 198, 210),
 			Enum.Material.Metal,
 			model,
 			false,
@@ -1161,20 +1459,38 @@ function VehicleCatalog.BuildVehicle(vehicleType: string?, options: BuildOptions
 		placeAndWeld(
 			chassis,
 			exhaust,
-			CFrame.new(sx * (w * 0.28), -h * 0.34, len * 0.5 + 0.25 * scale)
+			CFrame.new(sx * (w * 0.30), -h * 0.35, len * 0.5 + 0.26 * scale)
+				* CFrame.Angles(0, math.rad(90), 0)
+		)
+
+		local exhaustInner = makePart(
+			"ExhaustTipInner" .. exhaustSide,
+			Vector3.new(0.60 * scale, 0.26 * scale, 0.26 * scale),
+			Color3.fromRGB(25, 28, 34),
+			Enum.Material.Metal,
+			model,
+			false,
+			true,
+			0,
+			Enum.PartType.Cylinder
+		)
+		placeAndWeld(
+			chassis,
+			exhaustInner,
+			CFrame.new(sx * (w * 0.30), -h * 0.35, len * 0.5 + 0.27 * scale)
 				* CFrame.Angles(0, math.rad(90), 0)
 		)
 	end
 
-	-- 12. 4 Procedural Wheels (FL, FR, RL, RR) with cylinder tires & chrome rims
+	-- 12. 4 Detailed 3D Wheels (FL, FR, RL, RR): dark rubber tire cylinder, metallic alloy rim, inner brake rotor disc, and painted red brake caliper!
 	local wheelDiameter = cfg.WheelRadius * 2 * scale
 	local wheelWidth = cfg.WheelWidth * scale
 	local wheelY = -(cfg.HoverHeight * scale) + cfg.WheelRadius * scale - h * 0.15
 	local wheelSpecs = {
-		{ Name = "WheelFL", X = -cfg.TrackOffsetX * scale, Z = -cfg.WheelbaseOffsetZ * scale, IsFront = true },
-		{ Name = "WheelFR", X = cfg.TrackOffsetX * scale, Z = -cfg.WheelbaseOffsetZ * scale, IsFront = true },
-		{ Name = "WheelRL", X = -cfg.TrackOffsetX * scale, Z = cfg.WheelbaseOffsetZ * scale, IsFront = false },
-		{ Name = "WheelRR", X = cfg.TrackOffsetX * scale, Z = cfg.WheelbaseOffsetZ * scale, IsFront = false },
+		{ Name = "WheelFL", X = -cfg.TrackOffsetX * scale, Z = -cfg.WheelbaseOffsetZ * scale, IsFront = true, Side = -1 },
+		{ Name = "WheelFR", X = cfg.TrackOffsetX * scale, Z = -cfg.WheelbaseOffsetZ * scale, IsFront = true, Side = 1 },
+		{ Name = "WheelRL", X = -cfg.TrackOffsetX * scale, Z = cfg.WheelbaseOffsetZ * scale, IsFront = false, Side = -1 },
+		{ Name = "WheelRR", X = cfg.TrackOffsetX * scale, Z = cfg.WheelbaseOffsetZ * scale, IsFront = false, Side = 1 },
 	}
 
 	for _, ws in ipairs(wheelSpecs) do
@@ -1182,7 +1498,7 @@ function VehicleCatalog.BuildVehicle(vehicleType: string?, options: BuildOptions
 		local tire = makePart(
 			ws.Name,
 			Vector3.new(wheelWidth, wheelDiameter, wheelDiameter),
-			Color3.fromRGB(22, 24, 28),
+			Color3.fromRGB(20, 22, 26),
 			Enum.Material.SmoothPlastic,
 			model,
 			false,
@@ -1198,11 +1514,11 @@ function VehicleCatalog.BuildVehicle(vehicleType: string?, options: BuildOptions
 		tire:SetAttribute("BaseY", wheelY)
 		tire:SetAttribute("BaseZ", ws.Z)
 
-		-- Chrome hubcap rim
+		-- Metallic alloy rim
 		local rim = makePart(
 			ws.Name .. "_Rim",
-			Vector3.new(wheelWidth + 0.12 * scale, wheelDiameter * 0.56, wheelDiameter * 0.56),
-			accentColor,
+			Vector3.new(wheelWidth + 0.10 * scale, wheelDiameter * 0.62, wheelDiameter * 0.62),
+			Color3.fromRGB(195, 202, 214),
 			Enum.Material.Metal,
 			model,
 			false,
@@ -1211,6 +1527,52 @@ function VehicleCatalog.BuildVehicle(vehicleType: string?, options: BuildOptions
 			Enum.PartType.Cylinder
 		)
 		placeAndWeld(tire, rim, CFrame.identity)
+
+		-- Center alloy hub & spoke bar so wheel spin is visually unmistakable
+		local spokeBar = makePart(
+			ws.Name .. "_Spoke",
+			Vector3.new(wheelWidth + 0.14 * scale, wheelDiameter * 0.56, wheelDiameter * 0.14),
+			accentColor,
+			Enum.Material.Metal,
+			model,
+			false,
+			true
+		)
+		placeAndWeld(tire, spokeBar, CFrame.identity)
+
+		-- Inner brake rotor disc
+		local rotor = makePart(
+			ws.Name .. "_BrakeRotor",
+			Vector3.new(wheelWidth * 0.45, wheelDiameter * 0.46, wheelDiameter * 0.46),
+			Color3.fromRGB(130, 136, 146),
+			Enum.Material.Metal,
+			model,
+			false,
+			true,
+			0,
+			Enum.PartType.Cylinder
+		)
+		placeAndWeld(tire, rotor, CFrame.new(-ws.Side * (wheelWidth * 0.18), 0, 0))
+
+		-- Painted red performance brake caliper (welded to chassis inside the wheel hub so it stays stationary while rotor spins!)
+		local caliper = makePart(
+			ws.Name .. "_BrakeCaliper",
+			Vector3.new(wheelWidth * 0.55, wheelDiameter * 0.22, wheelDiameter * 0.16),
+			Color3.fromRGB(225, 32, 32),
+			Enum.Material.Metal,
+			model,
+			false,
+			true
+		)
+		placeAndWeld(
+			chassis,
+			caliper,
+			CFrame.new(
+				ws.X + ws.Side * (wheelWidth * 0.15),
+				wheelY + wheelDiameter * 0.12,
+				ws.Z - (if ws.IsFront then -wheelDiameter * 0.14 else wheelDiameter * 0.14)
+			)
+		)
 	end
 
 	-- 13. Attach VFX Emitters (Nitro, Drift Smoke, Skid Trails, Damage Smoke/Fire)

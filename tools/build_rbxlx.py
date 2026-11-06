@@ -650,6 +650,17 @@ def build_leo_city_edit_preview_xml(ref: RefGen) -> str:
     zones_items: List[str] = []
 
     road_lines = [(i + 0.5) * block_size for i in range(-grid_radius - 1, grid_radius + 1)]
+    roads_items.append(
+        make_part_xml(
+            ref,
+            "GrandCentralAveNS",
+            (road_width, 0.34, grid_extent * 2.0),
+            (0.0, 0.17, 0.0),
+            (26, 28, 35),
+            MAT_ASPHALT,
+            indent=4,
+        )
+    )
     for rx in road_lines:
         roads_items.append(
             make_part_xml(
@@ -731,27 +742,52 @@ def build_leo_city_edit_preview_xml(ref: RefGen) -> str:
     for bx in range(-grid_radius, grid_radius + 1):
         for bz in range(-grid_radius, grid_radius + 1):
             ox, oz = bx * block_size, bz * block_size
-            ground_items.append(
-                make_part_xml(
-                    ref,
-                    "SidewalkBlock",
-                    (usable, 0.6, usable),
-                    (ox, 0.3, oz),
-                    (68, 74, 86),
-                    MAT_CONCRETE,
-                    indent=4,
+            if bx != 0:
+                ground_items.append(
+                    make_part_xml(
+                        ref,
+                        "SidewalkBlock",
+                        (usable, 0.26, usable),
+                        (ox, 0.13, oz),
+                        (78, 84, 96),
+                        MAT_CONCRETE,
+                        indent=4,
+                    )
                 )
-            )
+            else:
+                side_w = (usable - road_width) * 0.5
+                ground_items.append(
+                    make_part_xml(
+                        ref,
+                        "SidewalkBlockW",
+                        (side_w, 0.26, usable),
+                        (ox - (road_width * 0.5 + side_w * 0.5), 0.13, oz),
+                        (78, 84, 96),
+                        MAT_CONCRETE,
+                        indent=4,
+                    )
+                )
+                ground_items.append(
+                    make_part_xml(
+                        ref,
+                        "SidewalkBlockE",
+                        (side_w, 0.26, usable),
+                        (ox + (road_width * 0.5 + side_w * 0.5), 0.13, oz),
+                        (78, 84, 96),
+                        MAT_CONCRETE,
+                        indent=4,
+                    )
+                )
 
             if bx == 0 and bz == 0:
-                # Leo Plaza Fountain & Spire centerpiece
+                # Ornamental Marble Fountain in West Courtyard (-42, 0, 12) so Grand Central Ave stays wide open
                 landmarks_items.append(
                     make_part_xml(
                         ref,
                         "LeoPlazaFountain",
-                        (26.0, 6.0, 26.0),
-                        (ox, 3.3, oz - 18.0),
-                        (85, 175, 245),
+                        (18.0, 3.2, 18.0),
+                        (ox - 42.0, 1.8, oz + 12.0),
+                        (215, 222, 232),
                         MAT_MARBLE,
                         indent=4,
                     )
@@ -760,9 +796,9 @@ def build_leo_city_edit_preview_xml(ref: RefGen) -> str:
                     make_part_xml(
                         ref,
                         "FountainWaterTier",
-                        (18.0, 1.4, 18.0),
-                        (ox, 6.8, oz - 18.0),
-                        (65, 210, 255),
+                        (14.0, 1.4, 14.0),
+                        (ox - 42.0, 3.6, oz + 12.0),
+                        (65, 195, 245),
                         MAT_GLASS,
                         transparency=0.25,
                         indent=4,
@@ -772,22 +808,22 @@ def build_leo_city_edit_preview_xml(ref: RefGen) -> str:
                     make_part_xml(
                         ref,
                         "FountainWaterSpire",
-                        (4.2, 9.5, 4.2),
-                        (ox, 11.5, oz - 18.0),
-                        (140, 235, 255),
-                        MAT_NEON,
+                        (2.8, 7.5, 2.8),
+                        (ox - 42.0, 7.2, oz + 12.0),
+                        (185, 235, 255),
+                        MAT_MARBLE,
                         can_collide=False,
                         indent=4,
                     )
                 )
-                # Crate stacks & hydrants on Leo Plaza
-                for cx_off, cz_off in ((0.0, -38.0), (-20.0, -12.0), (20.0, -12.0)):
+                # Crate stacks & hydrants on Leo Plaza flanks
+                for cx_off, cz_off in ((-28.0, -10.0), (28.0, -10.0)):
                     landmarks_items.append(
                         make_part_xml(
                             ref,
                             "PlazaCrateStack",
                             (6.4, 6.4, 3.2),
-                            (ox + cx_off, 3.8, oz + cz_off),
+                            (ox + cx_off, 3.5, oz + cz_off),
                             (145, 98, 56),
                             MAT_WOOD_PLANKS,
                             indent=4,
@@ -799,7 +835,7 @@ def build_leo_city_edit_preview_xml(ref: RefGen) -> str:
                             ref,
                             "FireHydrant",
                             (1.6, 3.2, 1.6),
-                            (ox + hx, 2.2, oz),
+                            (ox + hx, 1.9, oz),
                             (220, 35, 35),
                             MAT_METAL,
                             indent=4,
@@ -807,13 +843,13 @@ def build_leo_city_edit_preview_xml(ref: RefGen) -> str:
                     )
                 # Leo Plaza Stunt Mega-Ramp, Plaza Speed Shop & Plaza Mechanic Repair Bay
                 zones_items.append(
-                    build_stunt_ramp_preview(ref, (ox, 0.6, oz - 58.0), 0.0, 18.0, 8.0, 24.0, "LeoPlazaRamp", indent=4)
+                    build_stunt_ramp_preview(ref, (ox, 0.3, oz - 68.0), 0.0, 16.0, 7.5, 24.0, "LeoPlazaRamp", indent=4)
                 )
                 zones_items.append(
-                    build_speed_shop_preview(ref, (ox + 48.0, 0.6, oz - 24.0), 180.0, "PlazaSpeedShop", indent=4)
+                    build_speed_shop_preview(ref, (ox + 54.0, 0.3, oz - 24.0), -90.0, "PlazaSpeedShop", indent=4)
                 )
                 zones_items.append(
-                    build_mechanic_bay_preview(ref, (ox - 48.0, 0.6, oz - 24.0), 180.0, "PlazaMechanicRepairBay", indent=4)
+                    build_mechanic_bay_preview(ref, (ox - 54.0, 0.3, oz - 24.0), 90.0, "PlazaMechanicRepairBay", indent=4)
                 )
             elif bx == 1 and bz == 0:
                 zones_items.append(build_speed_shop_preview(ref, (ox, 0.6, oz), -90.0, "SpeedShop", indent=4))

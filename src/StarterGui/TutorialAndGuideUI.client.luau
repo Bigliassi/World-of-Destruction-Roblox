@@ -1,20 +1,12 @@
 --!strict
 --[[
 	TutorialAndGuideUI.client.luau
-	World of Destruction (Roblox) — Version 1.0
+	World of Destruction (Roblox) — Version 1.1
 	
-	Interactive Onboarding Tutorial + How to Play / 50-Level Progression / VIP Store Modal:
-	- Step-by-Step Interactive Onboarding Tutorial on first join:
-	  * Step 1: Enter or Summon [V] your vehicle
-	  * Step 2: Smash 5 objects to start a Chaos Combo
-	  * Step 3: Trigger Nitro [LeftShift] & Drift [Space]
-	  * Step 4: Visit or open the Speed Shop [B] to upgrade your ride
-	  * Step 5: Survive or evade Police Heat!
-	- Renders a glowing 3D Waypoint Beam & Floating Target Arrow from the player to
-	  their nearest vehicle, destructible cluster, or Speed Shop showroom during onboarding.
-	- Provides an interactive [H] How to Play / 50-Level Ranks / [M] VIP Store modal
-	  accessible anytime from the top-right utility bar or the H and M keys, including
-	  instant Studio Sandbox GamePass & DevProduct test-grant buttons!
+	Non-Intrusive Onboarding Tutorial + Auto-Scaled How to Play / 50-Level Progression / VIP Store Modal:
+	- Compact Bottom-Left Onboarding Card (230x68 at (0, 14, 1, -60)) with 1-click [Skip ×] button.
+	- Subtle 3D ground ribbon beam (Width0 = 0.6, Width1 = 0.9, Transparency = 0.65) guiding the player.
+	- Auto-scaled [H] Guide & [M] VIP Store modal accessible via keys or the Bottom-Center HUD dock.
 ]]
 
 local Players = game:GetService("Players")
@@ -53,21 +45,6 @@ local function findRemoteEvent(name: string): RemoteEvent?
 	return nil
 end
 
-local function findRemoteFunction(name: string): RemoteFunction?
-	local folder = getRemotesFolder()
-	if folder then
-		local rf = folder:FindFirstChild(name)
-		if rf and rf:IsA("RemoteFunction") then
-			return rf
-		end
-	end
-	local rootRf = ReplicatedStorage:FindFirstChild(name)
-	if rootRf and rootRf:IsA("RemoteFunction") then
-		return rootRf
-	end
-	return nil
-end
-
 --------------------------------------------------------------------------------
 -- Tutorial Steps Specification
 --------------------------------------------------------------------------------
@@ -83,48 +60,48 @@ type TutorialStepSpec = {
 local TUTORIAL_STEPS: { TutorialStepSpec } = {
 	{
 		StepNumber = 1,
-		Title = "STEP 1/5 • ENTER OR SUMMON YOUR RIDE",
-		Instruction = "Walk up to any car or press [V] to summon your personal vehicle right in front of you!",
-		KeyHint = "Press [V] to Summon Vehicle",
+		Title = "STEP 1/5 • SUMMON RIDE [V]",
+		Instruction = "Walk up to any car or press [V] to summon your vehicle!",
+		KeyHint = "Press [V] for Car",
 		AccentColor = Color3.fromRGB(0, 225, 255),
 		TargetKind = "Vehicle",
 	},
 	{
 		StepNumber = 2,
-		Title = "STEP 2/5 • SMASH 5 OBJECTS & START A COMBO",
-		Instruction = "Plow through cones, crates, hydrants, fences, or parked cars to build your Chaos Combo!",
-		KeyHint = "Drive with [WASD] into breakable props",
+		Title = "STEP 2/5 • SMASH 5 PROPS",
+		Instruction = "Drive with [WASD] through cones, hydrants & crates for combos!",
+		KeyHint = "Smash 5 street props",
 		AccentColor = Color3.fromRGB(255, 185, 35),
 		TargetKind = "Destructibles",
 	},
 	{
 		StepNumber = 3,
-		Title = "STEP 3/5 • TRIGGER NITRO [SHIFT] & DRIFT [SPACE]",
-		Instruction = "Hold [LeftShift] for a blazing Nitro burst or tap [Space] while turning to Drift around corners!",
-		KeyHint = "Hold [LeftShift] Nitro or [Space] Drift",
+		Title = "STEP 3/5 • NITRO & DRIFT",
+		Instruction = "Hold [LeftShift] for Nitro boost or tap [Space] to Drift!",
+		KeyHint = "[Shift] Nitro / [Space] Drift",
 		AccentColor = Color3.fromRGB(55, 245, 155),
 		TargetKind = "Stunt",
 	},
 	{
 		StepNumber = 4,
-		Title = "STEP 4/5 • VISIT THE SPEED SHOP [B]",
-		Instruction = "Drive onto the glowing cyan Speed Shop pad or press [B] to upgrade Engine, Armor, Nitro, Plow & Magnet!",
-		KeyHint = "Press [B] or follow the Cyan Beam to Speed Shop",
+		Title = "STEP 4/5 • SPEED SHOP [B]",
+		Instruction = "Press [B] or visit the Cyan Speed Shop pad to upgrade your car!",
+		KeyHint = "Press [B] for Garage",
 		AccentColor = Color3.fromRGB(185, 95, 255),
 		TargetKind = "SpeedShop",
 	},
 	{
 		StepNumber = 5,
-		Title = "STEP 5/5 • SURVIVE OR EVADE POLICE HEAT!",
-		Instruction = "Higher Wanted Stars multiply your Cash up to 3.0x! Wreck pursuing cruisers or outrun them to bank your haul!",
-		KeyHint = "Cause Chaos to raise Heat or press [Complete]",
+		Title = "STEP 5/5 • POLICE HEAT!",
+		Instruction = "Wanted Stars multiply Cash up to 3.0x! Ram or outrun cruisers!",
+		KeyHint = "Raise Heat or Finish",
 		AccentColor = Color3.fromRGB(255, 80, 95),
 		TargetKind = "Heat",
 	},
 }
 
 --------------------------------------------------------------------------------
--- 3D Waypoint Beam & Floating Target Marker
+-- Subtle 3D Ground Ribbon Beam & Target Marker
 --------------------------------------------------------------------------------
 local waypointFolder: Folder? = nil
 local waypointStartPart: Part? = nil
@@ -144,7 +121,7 @@ local function ensure3DWaypoint()
 
 	local startPart = Instance.new("Part")
 	startPart.Name = "WaypointPlayerAnchor"
-	startPart.Size = Vector3.new(0.5, 0.5, 0.5)
+	startPart.Size = Vector3.new(0.4, 0.4, 0.4)
 	startPart.Transparency = 1
 	startPart.Anchored = true
 	startPart.CanCollide = false
@@ -161,8 +138,8 @@ local function ensure3DWaypoint()
 	endPart.Shape = Enum.PartType.Cylinder
 	endPart.Material = Enum.Material.Neon
 	endPart.Color = Color3.fromRGB(0, 225, 255)
-	endPart.Size = Vector3.new(0.4, 8, 8)
-	endPart.Transparency = 0.25
+	endPart.Size = Vector3.new(0.25, 4.5, 4.5)
+	endPart.Transparency = 0.55
 	endPart.Anchored = true
 	endPart.CanCollide = false
 	endPart.CanQuery = false
@@ -177,62 +154,59 @@ local function ensure3DWaypoint()
 	beam.Name = "GuidanceBeam"
 	beam.Attachment0 = startAtt
 	beam.Attachment1 = endAtt
-	beam.Width0 = 1.6
-	beam.Width1 = 2.4
+	beam.Width0 = 0.6
+	beam.Width1 = 0.9
 	beam.FaceCamera = true
-	beam.LightEmission = 1
+	beam.LightEmission = 0.8
 	beam.LightInfluence = 0
-	beam.Segments = 24
+	beam.Segments = 18
 	beam.Color = ColorSequence.new(Color3.fromRGB(0, 225, 255), Color3.fromRGB(255, 215, 55))
-	beam.Transparency = NumberSequence.new({
-		NumberSequenceKeypoint.new(0, 0.45),
-		NumberSequenceKeypoint.new(0.5, 0.15),
-		NumberSequenceKeypoint.new(1, 0.05),
-	})
+	beam.Transparency = NumberSequence.new(0.65)
 	beam.Parent = folder
 
 	local bb = Instance.new("BillboardGui")
 	bb.Name = "TargetFloatingBadge"
-	bb.Size = UDim2.fromOffset(180, 48)
-	bb.StudsOffset = Vector3.new(0, 6.5, 0)
+	bb.Size = UDim2.fromOffset(130, 34)
+	bb.StudsOffset = Vector3.new(0, 4.5, 0)
 	bb.AlwaysOnTop = true
-	bb.MaxDistance = 800
+	bb.MaxDistance = 600
 	bb.Parent = endPart
 
 	local badgeFrame = Instance.new("Frame")
 	badgeFrame.Size = UDim2.fromScale(1, 1)
 	badgeFrame.BackgroundColor3 = Color3.fromRGB(12, 17, 28)
-	badgeFrame.BackgroundTransparency = 0.12
+	badgeFrame.BackgroundTransparency = 0.2
 	badgeFrame.BorderSizePixel = 0
 	badgeFrame.Parent = bb
 
 	local badgeCorner = Instance.new("UICorner")
-	badgeCorner.CornerRadius = UDim.new(0, 8)
+	badgeCorner.CornerRadius = UDim.new(0, 6)
 	badgeCorner.Parent = badgeFrame
 
 	local badgeStroke = Instance.new("UIStroke")
 	badgeStroke.Color = Color3.fromRGB(0, 225, 255)
-	badgeStroke.Thickness = 2
+	badgeStroke.Thickness = 1.2
+	badgeStroke.Transparency = 0.25
 	badgeStroke.Parent = badgeFrame
 
 	local titleLbl = Instance.new("TextLabel")
-	titleLbl.Size = UDim2.new(1, -10, 0, 22)
-	titleLbl.Position = UDim2.fromOffset(5, 4)
+	titleLbl.Size = UDim2.new(1, -8, 0, 16)
+	titleLbl.Position = UDim2.fromOffset(4, 2)
 	titleLbl.BackgroundTransparency = 1
 	titleLbl.Font = Enum.Font.GothamBlack
 	titleLbl.Text = "▼ TARGET"
 	titleLbl.TextColor3 = Color3.fromRGB(0, 235, 255)
-	titleLbl.TextSize = 13
+	titleLbl.TextSize = 10
 	titleLbl.Parent = badgeFrame
 
 	local distLbl = Instance.new("TextLabel")
-	distLbl.Size = UDim2.new(1, -10, 0, 18)
-	distLbl.Position = UDim2.fromOffset(5, 25)
+	distLbl.Size = UDim2.new(1, -8, 0, 14)
+	distLbl.Position = UDim2.fromOffset(4, 17)
 	distLbl.BackgroundTransparency = 1
 	distLbl.Font = Enum.Font.GothamBold
 	distLbl.Text = "0m"
 	distLbl.TextColor3 = Color3.fromRGB(230, 238, 250)
-	distLbl.TextSize = 12
+	distLbl.TextSize = 10
 	distLbl.Parent = badgeFrame
 
 	waypointFolder = folder
@@ -251,7 +225,7 @@ local function setWaypointVisible(visible: boolean)
 		waypointBeam.Enabled = visible
 	end
 	if waypointEndPart then
-		waypointEndPart.Transparency = if visible then 0.25 else 1
+		waypointEndPart.Transparency = if visible then 0.55 else 1
 		local bb = waypointEndPart:FindFirstChild("TargetFloatingBadge") :: BillboardGui?
 		if bb then
 			bb.Enabled = visible
@@ -300,7 +274,7 @@ local function findNearestSpeedShopPosition(origin: Vector3): Vector3
 end
 
 --------------------------------------------------------------------------------
--- UI Construction: Onboarding Banner + Top Buttons + Modal Window
+-- UI Construction: Compact Bottom-Left Onboarding Card + Scaled Modal Window
 --------------------------------------------------------------------------------
 local existingGui = playerGui:FindFirstChild("TutorialAndGuideGui")
 if existingGui then
@@ -310,7 +284,7 @@ end
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "TutorialAndGuideGui"
 screenGui.ResetOnSpawn = false
-screenGui.IgnoreGuiInset = false
+screenGui.IgnoreGuiInset = true
 screenGui.DisplayOrder = 18
 screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 screenGui.Parent = playerGui
@@ -329,127 +303,60 @@ local function addStroke(parent: Instance, color: Color3, thickness: number): UI
 	return s
 end
 
--- 1. Top-Right Quick Access Bar ([H] Guide & Ranks | [M] VIP Store | Level Pill)
-local topAccessBar = Instance.new("Frame")
-topAccessBar.Name = "TopAccessBar"
-topAccessBar.AnchorPoint = Vector2.new(1, 0)
-topAccessBar.Position = UDim2.new(1, -16, 0, 12)
-topAccessBar.Size = UDim2.fromOffset(390, 38)
-topAccessBar.BackgroundTransparency = 1
-topAccessBar.Parent = screenGui
-
-local topLayout = Instance.new("UIListLayout")
-topLayout.FillDirection = Enum.FillDirection.Horizontal
-topLayout.HorizontalAlignment = Enum.HorizontalAlignment.Right
-topLayout.VerticalAlignment = Enum.VerticalAlignment.Center
-topLayout.Padding = UDim.new(0, 8)
-topLayout.Parent = topAccessBar
-
--- Level & XP Pill Badge
-local levelPill = Instance.new("Frame")
-levelPill.Name = "LevelBadgePill"
-levelPill.Size = UDim2.fromOffset(148, 36)
-levelPill.BackgroundColor3 = Color3.fromRGB(15, 20, 32)
-levelPill.BackgroundTransparency = 0.12
-levelPill.BorderSizePixel = 0
-levelPill.LayoutOrder = 1
-levelPill.Parent = topAccessBar
-addCorner(levelPill, 8)
-addStroke(levelPill, Color3.fromRGB(255, 200, 50), 1.5)
-
-local levelTitleText = Instance.new("TextLabel")
-levelTitleText.Name = "LevelTitle"
-levelTitleText.Size = UDim2.new(1, -12, 0, 18)
-levelTitleText.Position = UDim2.fromOffset(6, 3)
-levelTitleText.BackgroundTransparency = 1
-levelTitleText.Font = Enum.Font.GothamBlack
-levelTitleText.Text = "LV.1 • STREET ROOKIE"
-levelTitleText.TextColor3 = Color3.fromRGB(255, 215, 65)
-levelTitleText.TextSize = 11
-levelTitleText.TextXAlignment = Enum.TextXAlignment.Left
-levelTitleText.TextTruncate = Enum.TextTruncate.AtEnd
-levelTitleText.Parent = levelPill
-
-local xpBarBg = Instance.new("Frame")
-xpBarBg.Name = "XPBarBg"
-xpBarBg.Size = UDim2.new(1, -12, 0, 7)
-xpBarBg.Position = UDim2.fromOffset(6, 23)
-xpBarBg.BackgroundColor3 = Color3.fromRGB(32, 40, 58)
-xpBarBg.BorderSizePixel = 0
-xpBarBg.Parent = levelPill
-addCorner(xpBarBg, 4)
-
-local xpBarFill = Instance.new("Frame")
-xpBarFill.Name = "XPBarFill"
-xpBarFill.Size = UDim2.fromScale(0.15, 1)
-xpBarFill.BackgroundColor3 = Color3.fromRGB(0, 225, 255)
-xpBarFill.BorderSizePixel = 0
-xpBarFill.Parent = xpBarBg
-addCorner(xpBarFill, 4)
-
-local guideToggleBtn = Instance.new("TextButton")
-guideToggleBtn.Name = "GuideButton"
-guideToggleBtn.Size = UDim2.fromOffset(112, 36)
-guideToggleBtn.BackgroundColor3 = Color3.fromRGB(16, 24, 38)
-guideToggleBtn.BackgroundTransparency = 0.1
-guideToggleBtn.Font = Enum.Font.GothamBold
-guideToggleBtn.Text = "[H] GUIDE & RANKS"
-guideToggleBtn.TextColor3 = Color3.fromRGB(0, 225, 255)
-guideToggleBtn.TextSize = 11
-guideToggleBtn.LayoutOrder = 2
-guideToggleBtn.Parent = topAccessBar
-addCorner(guideToggleBtn, 8)
-addStroke(guideToggleBtn, Color3.fromRGB(0, 210, 255), 1.5)
-
-local storeToggleBtn = Instance.new("TextButton")
-storeToggleBtn.Name = "VIPStoreButton"
-storeToggleBtn.Size = UDim2.fromOffset(112, 36)
-storeToggleBtn.BackgroundColor3 = Color3.fromRGB(32, 22, 42)
-storeToggleBtn.BackgroundTransparency = 0.1
-storeToggleBtn.Font = Enum.Font.GothamBlack
-storeToggleBtn.Text = "[M] VIP STORE"
-storeToggleBtn.TextColor3 = Color3.fromRGB(255, 210, 55)
-storeToggleBtn.TextSize = 11
-storeToggleBtn.LayoutOrder = 3
-storeToggleBtn.Parent = topAccessBar
-addCorner(storeToggleBtn, 8)
-addStroke(storeToggleBtn, Color3.fromRGB(255, 195, 45), 1.5)
-
 --------------------------------------------------------------------------------
--- 2. Interactive Onboarding Tutorial Tracker Card (Top-Left / Below Mini-Stats)
+-- 1. Compact Onboarding Tutorial Card (230x68 at Bottom-Left (0, 14, 1, -60))
 --------------------------------------------------------------------------------
 local tutorialCard = Instance.new("Frame")
 tutorialCard.Name = "OnboardingTutorialCard"
-tutorialCard.Position = UDim2.fromOffset(16, 130)
-tutorialCard.Size = UDim2.fromOffset(335, 128)
+tutorialCard.AnchorPoint = Vector2.new(0, 1)
+tutorialCard.Position = UDim2.new(0, 14, 1, -60)
+tutorialCard.Size = UDim2.fromOffset(230, 68)
 tutorialCard.BackgroundColor3 = Color3.fromRGB(12, 16, 26)
-tutorialCard.BackgroundTransparency = 0.12
+tutorialCard.BackgroundTransparency = 0.14
 tutorialCard.BorderSizePixel = 0
 tutorialCard.Parent = screenGui
-addCorner(tutorialCard, 12)
-local tutorialCardStroke = addStroke(tutorialCard, Color3.fromRGB(0, 225, 255), 2)
+addCorner(tutorialCard, 10)
+local tutorialCardStroke = addStroke(tutorialCard, Color3.fromRGB(0, 225, 255), 1.5)
+
+local tutCardScale = Instance.new("UIScale")
+tutCardScale.Name = "CardAutoScale"
+tutCardScale.Scale = 1.0
+tutCardScale.Parent = tutorialCard
 
 local tutHeader = Instance.new("TextLabel")
 tutHeader.Name = "StepHeader"
-tutHeader.Size = UDim2.new(1, -24, 0, 22)
-tutHeader.Position = UDim2.fromOffset(12, 8)
+tutHeader.Size = UDim2.new(1, -66, 0, 15)
+tutHeader.Position = UDim2.fromOffset(8, 4)
 tutHeader.BackgroundTransparency = 1
 tutHeader.Font = Enum.Font.GothamBlack
 tutHeader.Text = TUTORIAL_STEPS[1].Title
 tutHeader.TextColor3 = Color3.fromRGB(0, 225, 255)
-tutHeader.TextSize = 13
+tutHeader.TextSize = 10
 tutHeader.TextXAlignment = Enum.TextXAlignment.Left
+tutHeader.TextTruncate = Enum.TextTruncate.AtEnd
 tutHeader.Parent = tutorialCard
+
+local tutSkipBtn = Instance.new("TextButton")
+tutSkipBtn.Name = "SkipTutorialBtn"
+tutSkipBtn.Size = UDim2.fromOffset(48, 16)
+tutSkipBtn.Position = UDim2.new(1, -54, 0, 4)
+tutSkipBtn.BackgroundColor3 = Color3.fromRGB(38, 46, 64)
+tutSkipBtn.Font = Enum.Font.GothamBold
+tutSkipBtn.Text = "Skip ×"
+tutSkipBtn.TextColor3 = Color3.fromRGB(200, 210, 230)
+tutSkipBtn.TextSize = 10
+tutSkipBtn.Parent = tutorialCard
+addCorner(tutSkipBtn, 5)
 
 local tutBody = Instance.new("TextLabel")
 tutBody.Name = "StepBody"
-tutBody.Size = UDim2.new(1, -24, 0, 42)
-tutBody.Position = UDim2.fromOffset(12, 30)
+tutBody.Size = UDim2.new(1, -16, 0, 26)
+tutBody.Position = UDim2.fromOffset(8, 20)
 tutBody.BackgroundTransparency = 1
 tutBody.Font = Enum.Font.GothamMedium
 tutBody.Text = TUTORIAL_STEPS[1].Instruction
 tutBody.TextColor3 = Color3.fromRGB(230, 236, 248)
-tutBody.TextSize = 12
+tutBody.TextSize = 10
 tutBody.TextWrapped = true
 tutBody.TextXAlignment = Enum.TextXAlignment.Left
 tutBody.TextYAlignment = Enum.TextYAlignment.Top
@@ -457,12 +364,12 @@ tutBody.Parent = tutorialCard
 
 local tutProgressBg = Instance.new("Frame")
 tutProgressBg.Name = "StepProgressBg"
-tutProgressBg.Size = UDim2.new(1, -24, 0, 8)
-tutProgressBg.Position = UDim2.fromOffset(12, 76)
+tutProgressBg.Size = UDim2.new(1, -66, 0, 5)
+tutProgressBg.Position = UDim2.fromOffset(8, 54)
 tutProgressBg.BackgroundColor3 = Color3.fromRGB(28, 36, 52)
 tutProgressBg.BorderSizePixel = 0
 tutProgressBg.Parent = tutorialCard
-addCorner(tutProgressBg, 4)
+addCorner(tutProgressBg, 3)
 
 local tutProgressFill = Instance.new("Frame")
 tutProgressFill.Name = "StepProgressFill"
@@ -470,46 +377,22 @@ tutProgressFill.Size = UDim2.fromScale(0.2, 1)
 tutProgressFill.BackgroundColor3 = Color3.fromRGB(0, 225, 255)
 tutProgressFill.BorderSizePixel = 0
 tutProgressFill.Parent = tutProgressBg
-addCorner(tutProgressFill, 4)
-
-local tutHintLabel = Instance.new("TextLabel")
-tutHintLabel.Name = "KeyHint"
-tutHintLabel.Size = UDim2.new(1, -135, 0, 26)
-tutHintLabel.Position = UDim2.fromOffset(12, 92)
-tutHintLabel.BackgroundTransparency = 1
-tutHintLabel.Font = Enum.Font.GothamBold
-tutHintLabel.Text = TUTORIAL_STEPS[1].KeyHint
-tutHintLabel.TextColor3 = Color3.fromRGB(165, 210, 255)
-tutHintLabel.TextSize = 11
-tutHintLabel.TextXAlignment = Enum.TextXAlignment.Left
-tutHintLabel.Parent = tutorialCard
+addCorner(tutProgressFill, 3)
 
 local tutNextBtn = Instance.new("TextButton")
 tutNextBtn.Name = "NextStepBtn"
-tutNextBtn.Size = UDim2.fromOffset(58, 24)
-tutNextBtn.Position = UDim2.new(1, -124, 0, 93)
+tutNextBtn.Size = UDim2.fromOffset(48, 16)
+tutNextBtn.Position = UDim2.new(1, -54, 0, 48)
 tutNextBtn.BackgroundColor3 = Color3.fromRGB(25, 110, 175)
 tutNextBtn.Font = Enum.Font.GothamBold
 tutNextBtn.Text = "Next ▸"
 tutNextBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-tutNextBtn.TextSize = 11
+tutNextBtn.TextSize = 10
 tutNextBtn.Parent = tutorialCard
-addCorner(tutNextBtn, 6)
-
-local tutSkipBtn = Instance.new("TextButton")
-tutSkipBtn.Name = "SkipTutorialBtn"
-tutSkipBtn.Size = UDim2.fromOffset(52, 24)
-tutSkipBtn.Position = UDim2.new(1, -62, 0, 93)
-tutSkipBtn.BackgroundColor3 = Color3.fromRGB(38, 46, 64)
-tutSkipBtn.Font = Enum.Font.GothamBold
-tutSkipBtn.Text = "Hide"
-tutSkipBtn.TextColor3 = Color3.fromRGB(185, 195, 215)
-tutSkipBtn.TextSize = 11
-tutSkipBtn.Parent = tutorialCard
-addCorner(tutSkipBtn, 6)
+addCorner(tutNextBtn, 5)
 
 --------------------------------------------------------------------------------
--- 3. Center Modal Window: [H] How to Play / 50-Level Ranks / [M] VIP Store
+-- 2. Center Modal Window: [H] How to Play / 50-Level Ranks / [M] VIP Store
 --------------------------------------------------------------------------------
 local modalBackdrop = Instance.new("Frame")
 modalBackdrop.Name = "ModalBackdrop"
@@ -530,6 +413,38 @@ modalWindow.Parent = modalBackdrop
 addCorner(modalWindow, 14)
 addStroke(modalWindow, Color3.fromRGB(0, 215, 255), 2)
 
+local modalScale = Instance.new("UIScale")
+modalScale.Name = "ModalAutoScale"
+modalScale.Scale = 1.0
+modalScale.Parent = modalWindow
+
+local camScaleConn: RBXScriptConnection? = nil
+local function updateViewportScales()
+	local cam = Workspace.CurrentCamera
+	if not cam then
+		return
+	end
+	local vp = cam.ViewportSize
+	if vp.X > 0 and vp.Y > 0 then
+		tutCardScale.Scale = math.clamp(math.min(vp.X / 1366, vp.Y / 768), 0.65, 1.0)
+		modalScale.Scale = math.clamp(math.min(vp.X / 840, vp.Y / 540), 0.60, 1.0)
+	end
+end
+
+local function bindCameraViewport()
+	if camScaleConn then
+		camScaleConn:Disconnect()
+		camScaleConn = nil
+	end
+	local cam = Workspace.CurrentCamera
+	if cam then
+		camScaleConn = cam:GetPropertyChangedSignal("ViewportSize"):Connect(updateViewportScales)
+		updateViewportScales()
+	end
+end
+Workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(bindCameraViewport)
+bindCameraViewport()
+
 -- Header Bar
 local modalHeader = Instance.new("Frame")
 modalHeader.Name = "Header"
@@ -545,7 +460,7 @@ modalTitle.Size = UDim2.new(1, -120, 1, 0)
 modalTitle.Position = UDim2.fromOffset(18, 0)
 modalTitle.BackgroundTransparency = 1
 modalTitle.Font = Enum.Font.GothamBlack
-modalTitle.Text = "WORLD OF DESTRUCTION v1.0 • HANDBOOK & VIP STORE"
+modalTitle.Text = "WORLD OF DESTRUCTION • HANDBOOK & VIP STORE"
 modalTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
 modalTitle.TextSize = 16
 modalTitle.TextXAlignment = Enum.TextXAlignment.Left
@@ -650,7 +565,7 @@ local GUIDE_SECTIONS = {
 			.. "• [F] or Walk into Seat — Enter / Exit Vehicle\n"
 			.. "• [LeftShift] — Trigger Blazing Nitro Boost (regenerates automatically)\n"
 			.. "• [Space] — Handbrake Drift around corners for DRIFT KING combos\n"
-			.. "• [C] — Cycle Camera View | [R] — Flip / Unstuck Vehicle",
+			.. "• [C] — Open Avatar Wardrobe | [R] — Repair / Flip Vehicle",
 	},
 	{
 		Header = "CHAOS COMBO MULTIPLIER & OVERDRIVE (UP TO 10X)",
@@ -664,7 +579,7 @@ local GUIDE_SECTIONS = {
 		Color = Color3.fromRGB(185, 95, 255),
 		Lines = "• Press [B] or drive onto the glowing Cyan Speed Shop pads in Leo City.\n"
 			.. "• Upgrade 5 core tracks (Engine, Armor, Nitro, Wrecking Plow, Cash Magnet) up to Level 5.\n"
-			.. "• Unlock 8 unique vehicles from the Street Bolt Motorcycle up to the Goliath Rig!\n"
+			.. "• Unlock 8 unique vehicles from the Spark Compact up to the DoomDozer Mk.IV!\n"
 			.. "• Drive through green Mechanic Repair Bays for an instant 100% repair.",
 	},
 	{
@@ -951,6 +866,7 @@ local function openModalWithTab(tabName: "Controls" | "Levels" | "Store")
 		modalBackdrop.Visible = false
 		return
 	end
+	updateViewportScales()
 	modalBackdrop.Visible = true
 	switchModalTab(tabName)
 end
@@ -966,12 +882,6 @@ tabStoreBtn.Activated:Connect(function()
 end)
 closeBtn.Activated:Connect(function()
 	modalBackdrop.Visible = false
-end)
-guideToggleBtn.Activated:Connect(function()
-	openModalWithTab("Controls")
-end)
-storeToggleBtn.Activated:Connect(function()
-	openModalWithTab("Store")
 end)
 
 --------------------------------------------------------------------------------
@@ -1000,7 +910,6 @@ local function updateTutorialUI()
 	tutHeader.Text = spec.Title
 	tutHeader.TextColor3 = spec.AccentColor
 	tutBody.Text = spec.Instruction
-	tutHintLabel.Text = spec.KeyHint
 	tutorialCardStroke.Color = spec.AccentColor
 	tutProgressFill.BackgroundColor3 = spec.AccentColor
 
@@ -1011,7 +920,7 @@ local function updateTutorialUI()
 	):Play()
 
 	if currentStepIndex == #TUTORIAL_STEPS then
-		tutNextBtn.Text = "Finish ✓"
+		tutNextBtn.Text = "Done ✓"
 	else
 		tutNextBtn.Text = "Next ▸"
 	end
@@ -1036,7 +945,7 @@ tutSkipBtn.Activated:Connect(function()
 	updateTutorialUI()
 end)
 
--- Keyboard shortcuts: [H] Guide & Ranks, [M] VIP Store, plus detecting [V], [LeftShift], [Space], [B]
+-- Keyboard shortcuts: [H] Guide & Ranks, [M] VIP Store, plus detecting [LeftShift], [Space], [B]
 UserInputService.InputBegan:Connect(function(input: InputObject, gameProcessed: boolean)
 	if input.KeyCode == Enum.KeyCode.LeftShift or input.KeyCode == Enum.KeyCode.Space then
 		usedNitroOrDrift = true
@@ -1055,25 +964,12 @@ UserInputService.InputBegan:Connect(function(input: InputObject, gameProcessed: 
 	end
 end)
 
--- Update Top-Right Level & XP Badge
-local function refreshLevelBadge()
-	local lvl = tonumber(localPlayer:GetAttribute("Level")) or 1
-	local rank = tostring(localPlayer:GetAttribute("RankTitle") or "Street Rookie")
-	local ratio = tonumber(localPlayer:GetAttribute("XPProgressRatio")) or 0.1
-	levelTitleText.Text = string.format("LV.%d • %s", lvl, string.upper(rank))
-	xpBarFill.Size = UDim2.fromScale(math.clamp(ratio, 0.06, 1), 1)
-end
-
-localPlayer:GetAttributeChangedSignal("Level"):Connect(refreshLevelBadge)
-localPlayer:GetAttributeChangedSignal("XPProgressRatio"):Connect(refreshLevelBadge)
-localPlayer:GetAttributeChangedSignal("RankTitle"):Connect(refreshLevelBadge)
 localPlayer:GetAttributeChangedSignal("ToggleHelpUI"):Connect(function()
 	openModalWithTab("Controls")
 end)
 localPlayer:GetAttributeChangedSignal("ToggleVIPUI"):Connect(function()
 	openModalWithTab("Store")
 end)
-refreshLevelBadge()
 
 -- Listen for server MonetizationNotifications
 task.spawn(function()
@@ -1091,7 +987,7 @@ task.spawn(function()
 	end
 end)
 
--- Main Onboarding & 3D Waypoint Update Loop
+-- Main Onboarding & 3D Ground Ribbon Waypoint Update Loop
 ensure3DWaypoint()
 updateTutorialUI()
 
@@ -1109,7 +1005,7 @@ RunService.RenderStepped:Connect(function()
 	end
 
 	local playerPos = rootPart.Position
-	local isSeated = (humanoid ~= nil and humanoid.SeatPart ~= nil) or localPlayer:GetAttribute("IsDriving") == true
+	local isSeated = (humanoid ~= nil and (humanoid.Sit == true or humanoid.SeatPart ~= nil)) or localPlayer:GetAttribute("IsDriving") == true or localPlayer:GetAttribute("InVehicle") == true
 
 	-- Auto-check completion conditions for current step
 	if currentStepIndex == 1 then
@@ -1145,7 +1041,7 @@ RunService.RenderStepped:Connect(function()
 		end
 	end
 
-	-- Update 3D Waypoint Beam position toward step objective
+	-- Update subtle 3D Ground Ribbon Beam position toward step objective
 	local spec = TUTORIAL_STEPS[currentStepIndex]
 	if not spec or not waypointStartPart or not waypointEndPart then
 		return
@@ -1158,22 +1054,22 @@ RunService.RenderStepped:Connect(function()
 		targetPos = findNearestVehiclePosition(playerPos)
 		targetLabel = "▼ YOUR VEHICLE [V]"
 	elseif spec.TargetKind == "Destructibles" then
-		targetPos = Vector3.new(0, 1.5, -18)
-		targetLabel = "▼ SMASH PLAZA PROPS"
+		targetPos = Vector3.new(0, 1.0, -18)
+		targetLabel = "▼ SMASH PROPS"
 	elseif spec.TargetKind == "Stunt" then
-		targetPos = Vector3.new(0, 1.5, -58)
-		targetLabel = "▼ MEGA-RAMP STUNT"
+		targetPos = Vector3.new(0, 1.0, -58)
+		targetLabel = "▼ MEGA-RAMP"
 	elseif spec.TargetKind == "SpeedShop" then
 		targetPos = findNearestSpeedShopPosition(playerPos)
 		targetLabel = "▼ SPEED SHOP [B]"
 	elseif spec.TargetKind == "Heat" then
-		targetPos = Vector3.new(-26, 1.5, -206)
-		targetLabel = "▼ LEO TOWER CHAOS"
+		targetPos = Vector3.new(-26, 1.0, -206)
+		targetLabel = "▼ LEO TOWER"
 	end
 
 	setWaypointVisible(true)
-	waypointStartPart.Position = playerPos + Vector3.new(0, 1.5, 0)
-	waypointEndPart.CFrame = CFrame.new(targetPos + Vector3.new(0, 0.3, 0)) * CFrame.Angles(0, 0, math.rad(90))
+	waypointStartPart.Position = Vector3.new(playerPos.X, math.max(0.4, playerPos.Y - 2.2), playerPos.Z)
+	waypointEndPart.CFrame = CFrame.new(targetPos + Vector3.new(0, 0.25, 0)) * CFrame.Angles(0, 0, math.rad(90))
 	waypointEndPart.Color = spec.AccentColor
 
 	if waypointBillboardTitle then

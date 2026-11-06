@@ -403,15 +403,29 @@ function AvatarCatalog.ComputePerks(loadout: AvatarLoadout)
 	}
 end
 
-local function weldPart(parent: Instance, target: BasePart, name: string, size: Vector3, color: Color3, mat: Enum.Material, offset: CFrame): Part
+local function weldPart(
+	parent: Instance,
+	target: BasePart,
+	name: string,
+	size: Vector3,
+	color: Color3,
+	mat: Enum.Material,
+	offset: CFrame,
+	shape: Enum.PartType?
+): Part
 	local p = Instance.new("Part")
 	p.Name = name
 	p.Size = size
 	p.Color = color
 	p.Material = mat
+	p.TopSurface = Enum.SurfaceType.Smooth
+	p.BottomSurface = Enum.SurfaceType.Smooth
 	p.CanCollide = false
 	p.Massless = true
 	p.Anchored = false
+	if shape then
+		p.Shape = shape
+	end
 	p.CFrame = target.CFrame * offset
 	p.Parent = parent
 	local w = Instance.new("WeldConstraint")
@@ -433,7 +447,7 @@ function AvatarCatalog.ApplyLoadoutToCharacter(character: Model, loadout: Avatar
 
 	local torso = (character:FindFirstChild("UpperTorso") or character:FindFirstChild("Torso") or character:FindFirstChild("HumanoidRootPart")) :: BasePart?
 	local head = character:FindFirstChild("Head") :: BasePart?
-	local rightHand = (character:FindFirstChild("RightHand") or character:FindFirstChild("Right Arm")) :: BasePart?
+	local rightHand = (character:FindFirstChild("RightHand") or character:FindFirstChild("RightLowerArm") or character:FindFirstChild("Right Arm")) :: BasePart?
 
 	local skinItem = AvatarCatalog.Items[loadout.SkinTone or "SkinWarmTan"] or AvatarCatalog.Items.SkinWarmTan
 	local outfitItem = AvatarCatalog.Items[loadout.Outfit or "LeoCreatorJacket"] or AvatarCatalog.Items.LeoCreatorJacket
@@ -452,72 +466,372 @@ function AvatarCatalog.ApplyLoadoutToCharacter(character: Model, loadout: Avatar
 		end
 	end
 
-	-- 1. Chest Armor / Jacket Trim
+	-- 1. Sleek Slim Chest Vest, Collar Trim & Tailored Shoulder Epaulets
 	if torso then
-		weldPart(folder, torso, "ChestPlate", Vector3.new(1.85, 1.4, 1.12), outfitItem.PrimaryColor, Enum.Material.SmoothPlastic, CFrame.new(0, 0.1, 0))
-		weldPart(folder, torso, "ChestStripe", Vector3.new(1.9, 0.32, 1.16), outfitItem.AccentColor, Enum.Material.Neon, CFrame.new(0, 0.25, 0))
-		weldPart(folder, torso, "LeftPauldron", Vector3.new(0.7, 0.45, 1.15), outfitItem.AccentColor, Enum.Material.Metal, CFrame.new(-1.15, 0.75, 0))
-		weldPart(folder, torso, "RightPauldron", Vector3.new(0.7, 0.45, 1.15), outfitItem.AccentColor, Enum.Material.Metal, CFrame.new(1.15, 0.75, 0))
+		local tw = math.clamp(torso.Size.X, 1.6, 2.1)
+		local th = math.clamp(torso.Size.Y, 1.4, 2.0)
+		local td = math.clamp(torso.Size.Z, 0.85, 1.15)
+
+		-- Slim contoured front & back vest panels
+		weldPart(
+			folder,
+			torso,
+			"ChestVestFront",
+			Vector3.new(tw * 0.86, th * 0.72, 0.08),
+			outfitItem.PrimaryColor,
+			Enum.Material.SmoothPlastic,
+			CFrame.new(0, 0.04, -(td * 0.5 + 0.03))
+		)
+		weldPart(
+			folder,
+			torso,
+			"ChestStripe",
+			Vector3.new(tw * 0.78, 0.14, 0.10),
+			outfitItem.AccentColor,
+			Enum.Material.Neon,
+			CFrame.new(0, th * 0.16, -(td * 0.5 + 0.04))
+		)
+		-- Sleek raised jacket collar trim around neck
+		for _, sx in ipairs({ -1, 1 }) do
+			weldPart(
+				folder,
+				torso,
+				if sx < 0 then "CollarTrimL" else "CollarTrimR",
+				Vector3.new(0.14, 0.22, td * 0.72),
+				outfitItem.AccentColor,
+				Enum.Material.SmoothPlastic,
+				CFrame.new(sx * (tw * 0.28), th * 0.50, 0) * CFrame.Angles(0, 0, math.rad(-sx * 12))
+			)
+			-- Low-profile shoulder epaulets
+			weldPart(
+				folder,
+				torso,
+				if sx < 0 then "LeftEpaulet" else "RightEpaulet",
+				Vector3.new(0.38, 0.12, td * 0.78),
+				outfitItem.AccentColor,
+				Enum.Material.Metal,
+				CFrame.new(sx * (tw * 0.44), th * 0.48, 0) * CFrame.Angles(0, 0, math.rad(-sx * 8))
+			)
+		end
 	end
 
-	-- 2. Headgear
+	-- 2. Properly Scaled Headgear on Head
 	local headItem = AvatarCatalog.Items[loadout.Headgear or "NoneHeadgear"]
-	if head and headItem and headItem.Id ~= "NoneHeadgear" then
+	if head and headItem and headItem.Id ~= "NoneHeadgear" and headItem.Id ~= "None" then
 		if headItem.Id == "CrownOfDestruction" then
-			weldPart(folder, head, "CrownBase", Vector3.new(1.35, 0.45, 1.35), headItem.PrimaryColor, Enum.Material.Foil, CFrame.new(0, 0.7, 0))
-			weldPart(folder, head, "CrownGem", Vector3.new(0.45, 0.45, 1.42), headItem.AccentColor, Enum.Material.Neon, CFrame.new(0, 0.85, 0))
-		elseif headItem.Id == "CyberKitsuneMask" or headItem.Id == "NeonVisorHelm" or headItem.Id == "StuntCrashHelmet" then
-			weldPart(folder, head, "HelmShell", Vector3.new(1.4, 1.35, 1.4), headItem.PrimaryColor, Enum.Material.SmoothPlastic, CFrame.new(0, 0.1, 0))
-			weldPart(folder, head, "HelmVisor", Vector3.new(1.25, 0.42, 0.2), headItem.AccentColor, Enum.Material.Neon, CFrame.new(0, 0.15, -0.68))
+			weldPart(
+				folder,
+				head,
+				"CrownBand",
+				Vector3.new(1.08, 0.24, 1.08),
+				headItem.PrimaryColor,
+				Enum.Material.Metal,
+				CFrame.new(0, 0.56, 0)
+			)
+			for i = 0, 3 do
+				local angle = math.rad(i * 90)
+				weldPart(
+					folder,
+					head,
+					"CrownSpire_" .. tostring(i),
+					Vector3.new(0.20, 0.30, 0.12),
+					headItem.PrimaryColor,
+					Enum.Material.Metal,
+					CFrame.Angles(0, angle, 0) * CFrame.new(0, 0.72, -0.48)
+				)
+				weldPart(
+					folder,
+					head,
+					"CrownGem_" .. tostring(i),
+					Vector3.new(0.14, 0.14, 0.14),
+					headItem.AccentColor,
+					Enum.Material.Neon,
+					CFrame.Angles(0, angle, 0) * CFrame.new(0, 0.62, -0.53)
+				)
+			end
+		elseif headItem.Id == "CyberKitsuneMask" then
+			weldPart(
+				folder,
+				head,
+				"MaskPlate",
+				Vector3.new(1.06, 0.88, 0.22),
+				headItem.PrimaryColor,
+				Enum.Material.SmoothPlastic,
+				CFrame.new(0, 0.04, -0.52)
+			)
+			weldPart(
+				folder,
+				head,
+				"MaskVisorEyes",
+				Vector3.new(0.88, 0.20, 0.08),
+				headItem.AccentColor,
+				Enum.Material.Neon,
+				CFrame.new(0, 0.12, -0.62)
+			)
+			for _, sx in ipairs({ -1, 1 }) do
+				weldPart(
+					folder,
+					head,
+					if sx < 0 then "KitsuneEarL" else "KitsuneEarR",
+					Vector3.new(0.22, 0.42, 0.16),
+					headItem.AccentColor,
+					Enum.Material.Neon,
+					CFrame.new(sx * 0.38, 0.64, -0.25) * CFrame.Angles(math.rad(-10), 0, math.rad(-sx * 16))
+				)
+			end
+		elseif headItem.Id == "NeonVisorHelm" or headItem.Id == "StuntCrashHelmet" then
+			weldPart(
+				folder,
+				head,
+				"HelmShell",
+				Vector3.new(1.22, 1.16, 1.24),
+				headItem.PrimaryColor,
+				Enum.Material.SmoothPlastic,
+				CFrame.new(0, 0.06, 0)
+			)
+			weldPart(
+				folder,
+				head,
+				"HelmCrest",
+				Vector3.new(0.22, 0.14, 1.12),
+				headItem.AccentColor,
+				Enum.Material.Metal,
+				CFrame.new(0, 0.64, 0)
+			)
+			weldPart(
+				folder,
+				head,
+				"HelmVisor",
+				Vector3.new(1.06, 0.32, 0.14),
+				headItem.AccentColor,
+				Enum.Material.Neon,
+				CFrame.new(0, 0.10, -0.58)
+			)
 		else
-			weldPart(folder, head, "HatDome", Vector3.new(1.32, 0.55, 1.32), headItem.PrimaryColor, Enum.Material.SmoothPlastic, CFrame.new(0, 0.58, 0))
-			weldPart(folder, head, "HatBrim", Vector3.new(1.35, 0.15, 1.75), headItem.AccentColor, Enum.Material.SmoothPlastic, CFrame.new(0, 0.36, -0.22))
+			-- Cap / HardHat
+			weldPart(
+				folder,
+				head,
+				"HatDome",
+				Vector3.new(1.14, 0.42, 1.14),
+				headItem.PrimaryColor,
+				Enum.Material.SmoothPlastic,
+				CFrame.new(0, 0.48, 0)
+			)
+			weldPart(
+				folder,
+				head,
+				"HatBrim",
+				Vector3.new(1.10, 0.10, 0.65),
+				headItem.AccentColor,
+				Enum.Material.SmoothPlastic,
+				CFrame.new(0, 0.32, -0.62) * CFrame.Angles(math.rad(6), 0, 0)
+			)
 		end
 	end
 
-	-- 3. Back Accessory
+	-- 3. Compact Twin-Thruster Jetpack, Angled Cyber Wings & Sleek Backpacks on UpperTorso
 	local backItem = AvatarCatalog.Items[loadout.BackAccessory or "NoneBack"]
-	if torso and backItem and backItem.Id ~= "NoneBack" then
+	if torso and backItem and backItem.Id ~= "NoneBack" and backItem.Id ~= "None" then
+		local td = math.clamp(torso.Size.Z, 0.85, 1.15)
+		local backZ = td * 0.5 + 0.22
+
 		if backItem.Id == "ArchangelChaosWings" then
-			weldPart(folder, torso, "WingCore", Vector3.new(0.8, 1.1, 0.4), backItem.PrimaryColor, Enum.Material.Neon, CFrame.new(0, 0.2, 0.65))
-			weldPart(folder, torso, "LeftWing", Vector3.new(2.8, 1.6, 0.2), backItem.AccentColor, Enum.Material.Neon, CFrame.new(-1.5, 0.5, 0.85) * CFrame.Angles(0, math.rad(20), math.rad(15)))
-			weldPart(folder, torso, "RightWing", Vector3.new(2.8, 1.6, 0.2), backItem.AccentColor, Enum.Material.Neon, CFrame.new(1.5, 0.5, 0.85) * CFrame.Angles(0, math.rad(-20), math.rad(-15)))
+			weldPart(
+				folder,
+				torso,
+				"WingCore",
+				Vector3.new(0.55, 0.78, 0.24),
+				backItem.PrimaryColor,
+				Enum.Material.Metal,
+				CFrame.new(0, 0.15, backZ)
+			)
+			for _, sx in ipairs({ -1, 1 }) do
+				local sideTag = if sx < 0 then "L" else "R"
+				weldPart(
+					folder,
+					torso,
+					"UpperWing_" .. sideTag,
+					Vector3.new(1.65, 0.42, 0.10),
+					backItem.PrimaryColor,
+					Enum.Material.Metal,
+					CFrame.new(sx * 0.95, 0.42, backZ + 0.10)
+						* CFrame.Angles(0, math.rad(sx * 16), math.rad(sx * 22))
+				)
+				weldPart(
+					folder,
+					torso,
+					"WingBladePrimary_" .. sideTag,
+					Vector3.new(1.55, 0.24, 0.08),
+					backItem.AccentColor,
+					Enum.Material.Neon,
+					CFrame.new(sx * 1.05, 0.16, backZ + 0.14)
+						* CFrame.Angles(0, math.rad(sx * 16), math.rad(sx * 8))
+				)
+				weldPart(
+					folder,
+					torso,
+					"WingBladeLower_" .. sideTag,
+					Vector3.new(1.20, 0.20, 0.08),
+					backItem.AccentColor,
+					Enum.Material.Neon,
+					CFrame.new(sx * 0.85, -0.12, backZ + 0.14)
+						* CFrame.Angles(0, math.rad(sx * 16), math.rad(-sx * 8))
+				)
+			end
 		elseif backItem.Id == "NitroThrusterJetpack" then
-			weldPart(folder, torso, "JetCore", Vector3.new(1.3, 1.4, 0.65), backItem.PrimaryColor, Enum.Material.Metal, CFrame.new(0, 0.1, 0.75))
-			local thrusterL = weldPart(folder, torso, "ThrusterL", Vector3.new(0.45, 1.6, 0.45), backItem.AccentColor, Enum.Material.Neon, CFrame.new(-0.5, 0.0, 0.9))
-			local fire = Instance.new("ParticleEmitter")
-			fire.Color = ColorSequence.new(backItem.AccentColor, Color3.fromRGB(255, 255, 255))
-			fire.Rate = 25
-			fire.Speed = NumberRange.new(3, 6)
-			fire.Lifetime = NumberRange.new(0.25, 0.5)
-			fire.Size = NumberSequence.new(0.45, 0)
-			fire.Parent = thrusterL
+			weldPart(
+				folder,
+				torso,
+				"JetCore",
+				Vector3.new(0.95, 1.05, 0.36),
+				backItem.PrimaryColor,
+				Enum.Material.Metal,
+				CFrame.new(0, 0.08, backZ)
+			)
+			weldPart(
+				folder,
+				torso,
+				"JetCoreVents",
+				Vector3.new(0.52, 0.65, 0.40),
+				backItem.AccentColor,
+				Enum.Material.Neon,
+				CFrame.new(0, 0.12, backZ + 0.02)
+			)
+			for _, sx in ipairs({ -1, 1 }) do
+				local sideTag = if sx < 0 then "L" else "R"
+				local thruster = weldPart(
+					folder,
+					torso,
+					"Thruster" .. sideTag,
+					Vector3.new(1.12, 0.34, 0.34),
+					backItem.PrimaryColor,
+					Enum.Material.Metal,
+					CFrame.new(sx * 0.36, 0.04, backZ + 0.12) * CFrame.Angles(0, 0, math.rad(90)),
+					Enum.PartType.Cylinder
+				)
+				local nozzle = weldPart(
+					folder,
+					torso,
+					"ThrusterNozzle" .. sideTag,
+					Vector3.new(0.22, 0.28, 0.28),
+					backItem.AccentColor,
+					Enum.Material.Neon,
+					CFrame.new(sx * 0.36, -0.56, backZ + 0.12) * CFrame.Angles(0, 0, math.rad(90)),
+					Enum.PartType.Cylinder
+				)
+				local fire = Instance.new("ParticleEmitter")
+				fire.Color = ColorSequence.new(backItem.AccentColor, Color3.fromRGB(255, 255, 255))
+				fire.LightEmission = 1
+				fire.Rate = 22
+				fire.Speed = NumberRange.new(2.5, 5)
+				fire.Lifetime = NumberRange.new(0.2, 0.4)
+				fire.Size = NumberSequence.new(0.28, 0)
+				fire.EmissionDirection = Enum.NormalId.Bottom
+				fire.Parent = nozzle
+				local _ = thruster
+			end
 		else
-			weldPart(folder, torso, "BackpackMain", Vector3.new(1.45, 1.55, 0.75), backItem.PrimaryColor, Enum.Material.SmoothPlastic, CFrame.new(0, 0.1, 0.8))
-			weldPart(folder, torso, "BackpackTrim", Vector3.new(1.5, 0.35, 0.8), backItem.AccentColor, Enum.Material.Neon, CFrame.new(0, 0.3, 0.82))
+			-- Compact Tactical Pack / Boombox / Duffel
+			weldPart(
+				folder,
+				torso,
+				"BackpackMain",
+				Vector3.new(1.08, 1.12, 0.42),
+				backItem.PrimaryColor,
+				Enum.Material.SmoothPlastic,
+				CFrame.new(0, 0.06, backZ)
+			)
+			weldPart(
+				folder,
+				torso,
+				"BackpackTrim",
+				Vector3.new(1.12, 0.20, 0.45),
+				backItem.AccentColor,
+				Enum.Material.Neon,
+				CFrame.new(0, 0.22, backZ + 0.02)
+			)
 		end
 	end
 
-	-- 4. Held Gear
+	-- 4. Sleek Proportioned Tools in RightHand
 	local heldItem = AvatarCatalog.Items[loadout.HeldGear or "NoneHeld"]
-	if rightHand and heldItem and heldItem.Id ~= "NoneHeld" then
-		weldPart(folder, rightHand, "GearHandle", Vector3.new(0.28, 0.28, 2.6), heldItem.PrimaryColor, Enum.Material.Metal, CFrame.new(0, -0.5, -0.8))
-		weldPart(folder, rightHand, "GearHead", Vector3.new(0.95, 0.65, 0.65), heldItem.AccentColor, Enum.Material.Neon, CFrame.new(0, -0.5, -2.0))
+	if rightHand and heldItem and heldItem.Id ~= "NoneHeld" and heldItem.Id ~= "None" then
+		-- Grip handle aligned cleanly in the hand extending forward (-Z)
+		weldPart(
+			folder,
+			rightHand,
+			"GearHandle",
+			Vector3.new(0.14, 0.14, 1.55),
+			heldItem.PrimaryColor,
+			Enum.Material.Metal,
+			CFrame.new(0, -0.12, -0.55)
+		)
+		weldPart(
+			folder,
+			rightHand,
+			"GearPommel",
+			Vector3.new(0.20, 0.20, 0.18),
+			heldItem.AccentColor,
+			Enum.Material.Metal,
+			CFrame.new(0, -0.12, 0.24)
+		)
+		if heldItem.Id == "PlasmaFlareTorch" then
+			weldPart(
+				folder,
+				rightHand,
+				"GearBlade",
+				Vector3.new(0.10, 0.24, 1.15),
+				heldItem.AccentColor,
+				Enum.Material.Neon,
+				CFrame.new(0, -0.12, -1.55)
+			)
+		elseif heldItem.Id == "NeonWrench" then
+			weldPart(
+				folder,
+				rightHand,
+				"GearHead",
+				Vector3.new(0.38, 0.16, 0.42),
+				heldItem.AccentColor,
+				Enum.Material.Neon,
+				CFrame.new(0, -0.12, -1.35)
+			)
+		else
+			-- DemolitionSledge or GoldenWreckingHammer
+			weldPart(
+				folder,
+				rightHand,
+				"GearHead",
+				Vector3.new(0.58, 0.34, 0.36),
+				heldItem.AccentColor,
+				Enum.Material.Metal,
+				CFrame.new(0, -0.12, -1.35)
+			)
+			weldPart(
+				folder,
+				rightHand,
+				"GearHeadTrim",
+				Vector3.new(0.62, 0.14, 0.16),
+				heldItem.PrimaryColor,
+				Enum.Material.Neon,
+				CFrame.new(0, -0.12, -1.35)
+			)
+		end
 	end
 
-	-- 5. Aura Trail
+	-- 5. Subtle Aura Trail
 	local auraItem = AvatarCatalog.Items[loadout.AuraTrail or "NoneAura"]
-	if torso and auraItem and auraItem.Id ~= "NoneAura" then
+	if torso and auraItem and auraItem.Id ~= "NoneAura" and auraItem.Id ~= "None" then
 		local emitter = Instance.new("ParticleEmitter")
 		emitter.Name = "WODAuraEmitter"
 		emitter.Color = ColorSequence.new(auraItem.PrimaryColor, auraItem.AccentColor)
 		emitter.LightEmission = 0.85
-		emitter.Rate = 32
-		emitter.Lifetime = NumberRange.new(0.6, 1.2)
-		emitter.Speed = NumberRange.new(2, 5)
+		emitter.Rate = 24
+		emitter.Lifetime = NumberRange.new(0.55, 1.0)
+		emitter.Speed = NumberRange.new(1.5, 3.8)
 		emitter.SpreadAngle = Vector2.new(180, 180)
 		emitter.Size = NumberSequence.new({
-			NumberSequenceKeypoint.new(0, 0.65),
+			NumberSequenceKeypoint.new(0, 0.42),
 			NumberSequenceKeypoint.new(1, 0),
 		})
 		emitter.Parent = torso

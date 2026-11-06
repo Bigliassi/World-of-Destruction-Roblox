@@ -125,56 +125,150 @@ local CAR_COLORS = {
 	Color3.fromRGB(65, 72, 88),
 }
 
+local function addCarPart(
+	parentModel: Model,
+	className: string,
+	name: string,
+	size: Vector3,
+	cf: CFrame,
+	color: Color3,
+	material: Enum.Material,
+	transparency: number?,
+	shape: Enum.PartType?
+): BasePart
+	local p = Instance.new(className) :: BasePart
+	p.Name = name
+	p.Size = size
+	p.CFrame = cf
+	p.Color = color
+	p.Material = material
+	p.Transparency = transparency or 0
+	p.CanCollide = false
+	p.Anchored = false
+	p.TopSurface = Enum.SurfaceType.Smooth
+	p.BottomSurface = Enum.SurfaceType.Smooth
+	if shape and p:IsA("Part") then
+		p.Shape = shape
+	end
+	p.Parent = parentModel
+	return p
+end
+
 local function buildTrafficCarModel(color: Color3, isTaxi: boolean): (Model, BasePart)
 	local m = Instance.new("Model")
 	m.Name = if isTaxi then "AITaxiCab" else "AITrafficCar"
 
 	local chassis = Instance.new("Part")
 	chassis.Name = "Chassis"
-	chassis.Size = Vector3.new(6.2, 2.4, 12.5)
+	chassis.Size = Vector3.new(6.0, 1.5, 12.6)
 	chassis.Color = color
 	chassis.Material = Enum.Material.SmoothPlastic
 	chassis.Anchored = true
+	chassis.CanCollide = true
 	chassis.TopSurface = Enum.SurfaceType.Smooth
 	chassis.BottomSurface = Enum.SurfaceType.Smooth
 	chassis.Parent = m
 
-	local cabin = Instance.new("Part")
-	cabin.Name = "Cabin"
-	cabin.Size = Vector3.new(5.4, 2.0, 6.4)
-	cabin.CFrame = chassis.CFrame * CFrame.new(0, 2.1, -0.4)
-	cabin.Color = Color3.fromRGB(30, 38, 52)
-	cabin.Material = Enum.Material.Glass
-	cabin.CanCollide = false
-	cabin.Parent = m
+	local baseCF = chassis.CFrame
+	local trimColor = Color3.fromRGB(30, 34, 42)
+	local glassColor = Color3.fromRGB(32, 44, 62)
 
-	local headlights = Instance.new("Part")
-	headlights.Name = "Headlights"
-	headlights.Size = Vector3.new(5.2, 0.6, 0.2)
-	headlights.CFrame = chassis.CFrame * CFrame.new(0, 0.2, -6.3)
-	headlights.Color = Color3.fromRGB(255, 245, 200)
-	headlights.Material = Enum.Material.Neon
-	headlights.CanCollide = false
-	headlights.Parent = m
+	-- Sculpted Beltline & Trunk Deck
+	addCarPart(m, "Part", "BodyBeltline", Vector3.new(6.1, 0.85, 7.6), baseCF * CFrame.new(0, 0.55, 0.15), color, Enum.Material.SmoothPlastic)
+	addCarPart(m, "Part", "TrunkDeck", Vector3.new(5.8, 0.68, 2.4), baseCF * CFrame.new(0, 0.56, 4.95), color, Enum.Material.SmoothPlastic)
 
-	local taillights = Instance.new("Part")
-	taillights.Name = "Taillights"
-	taillights.Size = Vector3.new(5.2, 0.6, 0.2)
-	taillights.CFrame = chassis.CFrame * CFrame.new(0, 0.2, 6.3)
-	taillights.Color = Color3.fromRGB(255, 40, 40)
-	taillights.Material = Enum.Material.Neon
-	taillights.CanCollide = false
-	taillights.Parent = m
+	-- Sloped Front Hood (WedgePart sloping down toward -Z front)
+	addCarPart(m, "WedgePart", "SlopedHood", Vector3.new(5.8, 0.78, 3.6), baseCF * CFrame.new(0, 0.62, -4.30), color, Enum.Material.SmoothPlastic)
+
+	-- Cabin Greenhouse, Painted Roof Cap, Sloped Front Windshield & Sloped Rear Window
+	addCarPart(m, "Part", "Cabin", Vector3.new(5.3, 1.65, 4.4), baseCF * CFrame.new(0, 1.62, 0.10), glassColor, Enum.Material.Glass, 0.25)
+	addCarPart(m, "Part", "RoofCap", Vector3.new(5.36, 0.22, 4.35), baseCF * CFrame.new(0, 2.50, 0.10), color, Enum.Material.SmoothPlastic)
+	addCarPart(m, "WedgePart", "Windshield", Vector3.new(5.2, 1.58, 1.75), baseCF * CFrame.new(0, 1.60, -2.95), glassColor, Enum.Material.Glass, 0.20)
+	addCarPart(
+		m,
+		"WedgePart",
+		"RearWindow",
+		Vector3.new(5.1, 1.48, 1.45),
+		baseCF * CFrame.new(0, 1.56, 3.00) * CFrame.Angles(0, math.rad(180), 0),
+		glassColor,
+		Enum.Material.Glass,
+		0.25
+	)
+
+	-- Front & Rear Metallic Bumpers + Textured Grille
+	addCarPart(m, "Part", "FrontBumper", Vector3.new(6.22, 0.62, 0.62), baseCF * CFrame.new(0, -0.32, -6.40), trimColor, Enum.Material.Metal)
+	addCarPart(m, "Part", "RearBumper", Vector3.new(6.22, 0.62, 0.62), baseCF * CFrame.new(0, -0.32, 6.40), trimColor, Enum.Material.Metal)
+	addCarPart(m, "Part", "FrontGrille", Vector3.new(3.1, 0.58, 0.18), baseCF * CFrame.new(0, 0.20, -6.32), Color3.fromRGB(24, 26, 32), Enum.Material.DiamondPlate)
+
+	-- Headlights & Taillights + Side Mirrors
+	addCarPart(m, "Part", "Headlights", Vector3.new(5.2, 0.42, 0.18), baseCF * CFrame.new(0, 0.24, -6.34), Color3.fromRGB(255, 245, 200), Enum.Material.Neon)
+	for _, sx in ipairs({ -1, 1 }) do
+		addCarPart(
+			m,
+			"Part",
+			if sx < 0 then "HeadlightL" else "HeadlightR",
+			Vector3.new(1.15, 0.48, 0.22),
+			baseCF * CFrame.new(sx * 2.15, 0.24, -6.36),
+			Color3.fromRGB(255, 248, 215),
+			Enum.Material.Neon
+		)
+		addCarPart(
+			m,
+			"Part",
+			if sx < 0 then "TaillightL" else "TaillightR",
+			Vector3.new(1.25, 0.48, 0.22),
+			baseCF * CFrame.new(sx * 2.10, 0.24, 6.36),
+			Color3.fromRGB(255, 36, 36),
+			Enum.Material.Neon
+		)
+		addCarPart(
+			m,
+			"Part",
+			if sx < 0 then "MirrorL" else "MirrorR",
+			Vector3.new(0.48, 0.30, 0.38),
+			baseCF * CFrame.new(sx * 2.88, 1.22, -1.75),
+			color,
+			Enum.Material.SmoothPlastic
+		)
+	end
+	addCarPart(m, "Part", "Taillights", Vector3.new(5.2, 0.36, 0.18), baseCF * CFrame.new(0, 0.24, 6.34), Color3.fromRGB(255, 40, 40), Enum.Material.Neon)
+
+	-- 4 Cylinder Tires (WheelFL, WheelFR, WheelRL, WheelRR) with Metallic Hubcaps
+	local wheelSpecs = {
+		{ Name = "WheelFL", X = -2.92, Z = -3.85 },
+		{ Name = "WheelFR", X = 2.92, Z = -3.85 },
+		{ Name = "WheelRL", X = -2.92, Z = 3.85 },
+		{ Name = "WheelRR", X = 2.92, Z = 3.85 },
+	}
+	for _, ws in ipairs(wheelSpecs) do
+		local wCF = baseCF * CFrame.new(ws.X, -0.55, ws.Z)
+		addCarPart(
+			m,
+			"Part",
+			ws.Name,
+			Vector3.new(1.10, 2.50, 2.50),
+			wCF,
+			Color3.fromRGB(22, 24, 28),
+			Enum.Material.SmoothPlastic,
+			0,
+			Enum.PartType.Cylinder
+		)
+		addCarPart(
+			m,
+			"Part",
+			ws.Name .. "_Hubcap",
+			Vector3.new(1.22, 1.44, 1.44),
+			wCF,
+			Color3.fromRGB(198, 206, 220),
+			Enum.Material.Metal,
+			0,
+			Enum.PartType.Cylinder
+		)
+	end
 
 	if isTaxi then
-		local sign = Instance.new("Part")
-		sign.Name = "TaxiSign"
-		sign.Size = Vector3.new(2.2, 0.7, 1.0)
-		sign.CFrame = chassis.CFrame * CFrame.new(0, 3.4, -0.4)
-		sign.Color = Color3.fromRGB(255, 225, 75)
-		sign.Material = Enum.Material.Neon
-		sign.CanCollide = false
-		sign.Parent = m
+		addCarPart(m, "Part", "TaxiSign", Vector3.new(2.2, 0.65, 1.0), baseCF * CFrame.new(0, 2.92, -0.2), Color3.fromRGB(255, 225, 75), Enum.Material.Neon)
+		addCarPart(m, "Part", "TaxiSideStripe", Vector3.new(6.16, 0.22, 7.4), baseCF * CFrame.new(0, 0.45, 0.15), Color3.fromRGB(24, 26, 32), Enum.Material.SmoothPlastic)
 	end
 
 	for _, desc in ipairs(m:GetChildren()) do
@@ -250,6 +344,70 @@ local function spawnTrafficCars(count: number)
 
 		table.insert(aiCars, car)
 	end
+end
+
+local trafficRayParams = RaycastParams.new()
+trafficRayParams.FilterType = Enum.RaycastFilterType.Exclude
+trafficRayParams.IgnoreWater = true
+trafficRayParams.RespectCanCollide = true
+
+local FORWARD_CHECK_DIST = 34.0
+local MIN_STOP_GAP = 8.0
+
+local function computeForwardSpacingFactor(car: AICar, playerRoots: { BasePart }): number
+	local cf = car.primary.CFrame
+	local forwardVec = cf.LookVector
+	local rightVec = cf.RightVector
+	local frontBumperPos = cf.Position + forwardVec * 6.5 + Vector3.new(0, 0.35, 0)
+
+	trafficRayParams.FilterDescendantsInstances = { car.model, PedestriansFolder }
+
+	local minGap = FORWARD_CHECK_DIST
+	-- Cast 3 forward spacing rays across the front bumper (center, left, right)
+	for _, lateralOffset in ipairs({ 0, -2.1, 2.1 }) do
+		local rayOrigin = frontBumperPos + rightVec * lateralOffset
+		local hit = Workspace:Raycast(rayOrigin, forwardVec * FORWARD_CHECK_DIST, trafficRayParams)
+		if hit then
+			local d = (hit.Position - rayOrigin).Magnitude
+			if d < minGap then
+				minGap = d
+			end
+		end
+	end
+
+	-- Analytic same-lane spacing check against other AI traffic cars
+	for _, other in ipairs(aiCars) do
+		if other ~= car and not other.smashed and other.axis == car.axis and other.roadLine == car.roadLine and other.dir == car.dir then
+			local centerGap = (other.posAlong - car.posAlong) * car.dir
+			if centerGap > 0 then
+				local bumperGap = math.max(0, centerGap - 13.0)
+				if bumperGap < minGap then
+					minGap = bumperGap
+				end
+			end
+		end
+	end
+
+	-- Analytic spacing check against player vehicles / characters ahead in lane
+	for _, root in ipairs(playerRoots) do
+		local rel = root.Position - frontBumperPos
+		local flatRel = Vector3.new(rel.X, 0, rel.Z)
+		local forwardDist = flatRel:Dot(forwardVec)
+		local lateralDist = math.abs(flatRel:Dot(rightVec))
+		if forwardDist > -3.0 and forwardDist < FORWARD_CHECK_DIST and lateralDist < 5.8 then
+			local effGap = math.max(0, forwardDist - 4.5)
+			if effGap < minGap then
+				minGap = effGap
+			end
+		end
+	end
+
+	if minGap <= MIN_STOP_GAP then
+		return 0
+	elseif minGap < FORWARD_CHECK_DIST then
+		return math.clamp((minGap - MIN_STOP_GAP) / (FORWARD_CHECK_DIST - MIN_STOP_GAP), 0, 1)
+	end
+	return 1.0
 end
 
 local function shouldStopForRedLight(car: AICar): boolean
@@ -450,12 +608,33 @@ spawnPedestrians(28)
 RunService.Heartbeat:Connect(function(dt: number)
 	local clampedDt = math.min(dt, 0.1)
 
-	-- Gather active player positions & velocities for threat detection
+	-- Gather active player vehicle & character positions for threat and spacing detection
 	local playerRoots: { BasePart } = {}
 	for _, plr in ipairs(Players:GetPlayers()) do
-		local hrp = plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") :: BasePart?
-		if hrp then
-			table.insert(playerRoots, hrp)
+		local char = plr.Character
+		if char then
+			local hum = char:FindFirstChildOfClass("Humanoid")
+			if hum and hum.SeatPart then
+				table.insert(playerRoots, hum.SeatPart)
+			else
+				local hrp = char:FindFirstChild("HumanoidRootPart") :: BasePart?
+				if hrp then
+					table.insert(playerRoots, hrp)
+				end
+			end
+		end
+	end
+	for _, folderName in ipairs({ "PlayerVehicles", "Vehicles" }) do
+		local vf = Workspace:FindFirstChild(folderName)
+		if vf then
+			for _, vModel in ipairs(vf:GetChildren()) do
+				if vModel:IsA("Model") then
+					local prim = vModel.PrimaryPart or vModel:FindFirstChildWhichIsA("BasePart")
+					if prim then
+						table.insert(playerRoots, prim)
+					end
+				end
+			end
 		end
 	end
 
@@ -494,8 +673,11 @@ RunService.Heartbeat:Connect(function(dt: number)
 		end
 
 		local stop = shouldStopForRedLight(car)
-		local targetSpeed = if stop then 0 elseif car.panicTimer > 0 then car.baseSpeed * 1.75 else car.baseSpeed
-		car.currentSpeed += (targetSpeed - car.currentSpeed) * math.min(1, clampedDt * 6)
+		local spacingFactor = computeForwardSpacingFactor(car, playerRoots)
+		local desiredCruise = if stop then 0 elseif car.panicTimer > 0 then car.baseSpeed * 1.75 else car.baseSpeed
+		local targetSpeed = desiredCruise * spacingFactor
+		local accelRate = if targetSpeed < car.currentSpeed then 14.0 else 6.0
+		car.currentSpeed += (targetSpeed - car.currentSpeed) * math.min(1, clampedDt * accelRate)
 
 		car.posAlong += car.dir * car.currentSpeed * clampedDt
 		if car.posAlong > CITY_LIMIT then

@@ -62,19 +62,19 @@ local function configureCrispLighting()
 	sky.MoonAngularSize = 11
 	sky.StarCount = 3000
 
-	-- BloomEffect (makes neon signs, police sirens, and plasma nitro pop)
+	-- BloomEffect (subtle, clean glow that never blows out neon into blurry blobs)
 	local bloom: BloomEffect = ensurePostEffect("BloomEffect", "WoDBloom")
 	bloom.Enabled = true
-	bloom.Intensity = 0.65
-	bloom.Size = 26
-	bloom.Threshold = 1.35
+	bloom.Intensity = 0.32
+	bloom.Size = 18
+	bloom.Threshold = 1.65
 
 	-- ColorCorrectionEffect (saturated, warm sunlit arcade palette)
 	local cc: ColorCorrectionEffect = ensurePostEffect("ColorCorrectionEffect", "WoDColorCorrection")
 	cc.Enabled = true
 	cc.Brightness = 0.02
-	cc.Contrast = 0.12
-	cc.Saturation = 0.18
+	cc.Contrast = 0.14
+	cc.Saturation = 0.16
 	cc.TintColor = Color3.fromRGB(255, 252, 246)
 
 	-- SunRaysEffect (volumetric rays between skyscrapers)
@@ -113,74 +113,74 @@ local LANDMARK_BEACONS: { LandmarkBeaconSpec } = {
 	{
 		Id = "SpeedShopPlaza",
 		Title = "SPEED SHOP [B]",
-		Subtitle = "CAR UPGRADES • PAINTS • GARAGE",
-		Position = Vector3.new(48, 0, -46),
-		Color = Color3.fromRGB(0, 235, 255),
-		PillarHeight = 95,
-		RingRadius = 14,
+		Subtitle = "VEHICLE DEALER & GARAGE",
+		Position = Vector3.new(54, 0, -24),
+		Color = Color3.fromRGB(0, 225, 255),
+		PillarHeight = 0,
+		RingRadius = 11,
 	},
 	{
 		Id = "SpeedShopEast",
 		Title = "SPEED SHOP [B]",
-		Subtitle = "CAR UPGRADES • PAINTS • GARAGE",
-		Position = Vector3.new(158, 0, 0),
-		Color = Color3.fromRGB(0, 235, 255),
-		PillarHeight = 95,
-		RingRadius = 18,
+		Subtitle = "VEHICLE DEALER & GARAGE",
+		Position = Vector3.new(180, 0, 0),
+		Color = Color3.fromRGB(0, 225, 255),
+		PillarHeight = 0,
+		RingRadius = 13,
 	},
 	{
 		Id = "MechanicBayPlaza",
-		Title = "MECHANIC REPAIR BAY",
-		Subtitle = "DRIVE THROUGH FOR INSTANT 100% REPAIR",
-		Position = Vector3.new(-48, 0, -24),
-		Color = Color3.fromRGB(60, 255, 130),
-		PillarHeight = 70,
-		RingRadius = 14,
+		Title = "REPAIR BAY [R]",
+		Subtitle = "100% REPAIR & NITRO",
+		Position = Vector3.new(-54, 0, -24),
+		Color = Color3.fromRGB(60, 245, 130),
+		PillarHeight = 0,
+		RingRadius = 11,
 	},
 	{
 		Id = "MechanicBayWest",
-		Title = "MECHANIC REPAIR BAY",
-		Subtitle = "INSTANT REPAIR & NITRO REFILL",
+		Title = "REPAIR BAY [R]",
+		Subtitle = "100% REPAIR & NITRO",
 		Position = Vector3.new(-180, 0, 0),
-		Color = Color3.fromRGB(60, 255, 130),
-		PillarHeight = 70,
-		RingRadius = 16,
+		Color = Color3.fromRGB(60, 245, 130),
+		PillarHeight = 0,
+		RingRadius = 13,
 	},
 	{
 		Id = "LeoPlazaMegaRamp",
-		Title = "PLAZA MEGA-RAMP",
-		Subtitle = "STUNT ZONE • MEGA AIR MULTIPLIER",
-		Position = Vector3.new(0, 0, -58),
-		Color = Color3.fromRGB(255, 145, 35),
-		PillarHeight = 85,
-		RingRadius = 16,
+		Title = "MEGA-RAMP",
+		Subtitle = "2X STUNT AIR BONUS",
+		Position = Vector3.new(0, 0, -68),
+		Color = Color3.fromRGB(255, 155, 40),
+		PillarHeight = 0,
+		RingRadius = 10,
 	},
 	{
 		Id = "BoardwalkMegaRamp",
-		Title = "BOARDWALK MEGA-RAMP",
-		Subtitle = "HIGH-SPEED LAUNCH • 2X STUNT XP",
+		Title = "PIER STUNT JUMP",
+		Subtitle = "BOARDWALK LAUNCH",
 		Position = Vector3.new(550, 0, 0),
-		Color = Color3.fromRGB(255, 145, 35),
-		PillarHeight = 85,
-		RingRadius = 16,
+		Color = Color3.fromRGB(255, 155, 40),
+		PillarHeight = 0,
+		RingRadius = 12,
 	},
 	{
 		Id = "LeoTowerIcon",
 		Title = "LEO TOWER",
-		Subtitle = "DOWNTOWN BOSS LANDMARK • JACKPOT PAYOUT",
-		Position = Vector3.new(-26, 0, -206),
+		Subtitle = "DOWNTOWN SKYLINE",
+		Position = Vector3.new(-32, 0, -206),
 		Color = Color3.fromRGB(255, 215, 55),
-		PillarHeight = 115,
-		RingRadius = 16,
+		PillarHeight = 0,
+		RingRadius = 12,
 	},
 	{
 		Id = "BoomGasStation",
 		Title = "BOOM GAS & NITRO",
-		Subtitle = "EXPLOSIVE CHAIN REACTION COMBO ZONE",
+		Subtitle = "EXPLOSIVE COMBO ZONE",
 		Position = Vector3.new(0, 0, -324),
-		Color = Color3.fromRGB(215, 85, 255),
-		PillarHeight = 95,
-		RingRadius = 20,
+		Color = Color3.fromRGB(255, 95, 70),
+		PillarHeight = 0,
+		RingRadius = 14,
 	},
 }
 
@@ -204,24 +204,7 @@ local function buildLandmarkBeacons()
 		model:SetAttribute("LandmarkTitle", spec.Title)
 		model.Parent = beaconsFolder
 
-		-- 1. Translucent Neon Sky Beam Pillar (visible across the whole city)
-		local beamPart = Instance.new("Part")
-		beamPart.Name = "SkyBeaconBeam"
-		beamPart.Shape = Enum.PartType.Cylinder
-		beamPart.Material = Enum.Material.Neon
-		beamPart.Color = spec.Color
-		beamPart.Anchored = true
-		beamPart.CanCollide = false
-		beamPart.CanQuery = false
-		beamPart.CanTouch = false
-		beamPart.CastShadow = false
-		beamPart.Transparency = 0.78
-		beamPart.Size = Vector3.new(spec.PillarHeight, 3.2, 3.2)
-		beamPart.CFrame = CFrame.new(spec.Position + Vector3.new(0, spec.PillarHeight * 0.5, 0))
-			* CFrame.Angles(0, 0, math.rad(90))
-		beamPart.Parent = model
-
-		-- 2. Ground Pad Halo Ring
+		-- Subtle Ground Pad Halo Ring (no vertical neon sky-beam cylinders cluttering the view!)
 		local groundRing = Instance.new("Part")
 		groundRing.Name = "GroundHaloRing"
 		groundRing.Shape = Enum.PartType.Cylinder
@@ -232,27 +215,27 @@ local function buildLandmarkBeacons()
 		groundRing.CanQuery = false
 		groundRing.CanTouch = false
 		groundRing.CastShadow = false
-		groundRing.Transparency = 0.35
-		groundRing.Size = Vector3.new(0.35, spec.RingRadius * 2, spec.RingRadius * 2)
-		groundRing.CFrame = CFrame.new(spec.Position + Vector3.new(0, 0.25, 0))
+		groundRing.Transparency = 0.58
+		groundRing.Size = Vector3.new(0.22, spec.RingRadius * 2, spec.RingRadius * 2)
+		groundRing.CFrame = CFrame.new(spec.Position + Vector3.new(0, 0.18, 0))
 			* CFrame.Angles(0, 0, math.rad(90))
 		groundRing.Parent = model
 
 		local pointLight = Instance.new("PointLight")
 		pointLight.Color = spec.Color
-		pointLight.Brightness = 2.2
-		pointLight.Range = 36
+		pointLight.Brightness = 1.4
+		pointLight.Range = 26
 		pointLight.Shadows = false
 		pointLight.Parent = groundRing
 
 		table.insert(animatedRings, {
 			Part = groundRing,
-			BasePos = spec.Position + Vector3.new(0, 0.25, 0),
+			BasePos = spec.Position + Vector3.new(0, 0.18, 0),
 			BaseRadius = spec.RingRadius,
 			Phase = idx * 0.85,
 		})
 
-		-- 3. High-Visibility Floating Billboard Sign
+		-- Compact, clean floating destination badge above roof level
 		local signAnchor = Instance.new("Part")
 		signAnchor.Name = "SignAnchor"
 		signAnchor.Size = Vector3.new(1, 1, 1)
@@ -261,15 +244,15 @@ local function buildLandmarkBeacons()
 		signAnchor.CanCollide = false
 		signAnchor.CanQuery = false
 		signAnchor.CanTouch = false
-		signAnchor.Position = spec.Position + Vector3.new(0, 22, 0)
+		signAnchor.Position = spec.Position + Vector3.new(0, 29, 0)
 		signAnchor.Parent = model
 
 		local billboard = Instance.new("BillboardGui")
 		billboard.Name = "LandmarkSignGui"
-		billboard.Size = UDim2.fromOffset(230, 56)
-		billboard.StudsOffset = Vector3.new(0, 2, 0)
+		billboard.Size = UDim2.fromOffset(148, 36)
+		billboard.StudsOffset = Vector3.new(0, 1.5, 0)
 		billboard.AlwaysOnTop = false
-		billboard.MaxDistance = 650
+		billboard.MaxDistance = 290
 		billboard.LightInfluence = 0
 		billboard.Parent = signAnchor
 

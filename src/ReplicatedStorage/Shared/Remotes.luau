@@ -29,6 +29,7 @@ local REMOTE_SPECS: { RemoteSpec } = {
 	{ Name = "StyleCallout", ClassName = "RemoteEvent" },
 	{ Name = "WalletUpdated", ClassName = "RemoteEvent" },
 	{ Name = "MissionUpdate", ClassName = "RemoteEvent" },
+	{ Name = "ChallengeCompleted", ClassName = "RemoteEvent" },
 	{ Name = "SkipMission", ClassName = "RemoteEvent" },
 	{ Name = "Notification", ClassName = "RemoteEvent" },
 	{ Name = "ExplosionEffect", ClassName = "RemoteEvent" },

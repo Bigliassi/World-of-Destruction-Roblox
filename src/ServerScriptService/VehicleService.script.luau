@@ -353,8 +353,9 @@ function ApplyUpgradesToVehicle(player: Player, model: Model)
 
 	local seat = model:FindFirstChild("DriveSeat") :: VehicleSeat?
 	if seat then
-		seat.MaxSpeed = effectiveMaxSpeed
-		seat.Torque = effectiveAccel * 25
+		seat.MaxSpeed = 0
+		seat.Torque = 0
+		seat.TurnSpeed = cfg.TurnSpeed
 	end
 
 	-- Attach or upgrade visual Ramming Plow if Plow level >= 2 (or Bulldozer)
@@ -601,7 +602,7 @@ function SpawnPlayerVehicle(
 	local cfg = VehicleCatalog.GetConfig(archetypeId)
 	local paintColor = getPlayerPaintColor(player, cfg.PrimaryColor)
 
-	-- Compute spawn CFrame near player character or Leo Plaza default
+	-- Compute spawn CFrame near player character or open Grand Central Avenue default
 	local targetCF = spawnCFrame
 	if not targetCF then
 		local char = player.Character
@@ -614,12 +615,18 @@ function SpawnPlayerVehicle(
 			else
 				flatLook = flatLook.Unit
 			end
-			local spawnPos = if autoSit
-				then hrp.Position + Vector3.new(0, cfg.HoverHeight + 1.5, 0)
-				else hrp.Position + flatLook * 14 + Vector3.new(0, cfg.HoverHeight + 1.5, 0)
-			targetCF = CFrame.lookAt(spawnPos, spawnPos + flatLook)
+			-- If player is standing in Leo Plaza near SpawnLocation / fountain, snap onto open Grand Central Avenue
+			local candidatePos = if autoSit
+				then hrp.Position
+				else hrp.Position + flatLook * 14
+			if math.abs(candidatePos.X) < 16 and candidatePos.Z > -28 and candidatePos.Z < 32 and not autoSit then
+				targetCF = CFrame.new(0, cfg.HoverHeight + 1.2, -10)
+			else
+				local spawnPos = Vector3.new(candidatePos.X, math.max(hrp.Position.Y, 1.5) + cfg.HoverHeight + 1.0, candidatePos.Z)
+				targetCF = CFrame.lookAt(spawnPos, spawnPos + flatLook)
+			end
 		else
-			targetCF = CFrame.new(0, cfg.HoverHeight + 3.0, 12)
+			targetCF = CFrame.new(0, cfg.HoverHeight + 1.2, -10)
 		end
 	end
 
@@ -653,6 +660,7 @@ function SpawnPlayerVehicle(
 	playerVehicles[player.UserId] = vehicle
 	hookVehicleModel(vehicle)
 	ApplyUpgradesToVehicle(player, vehicle)
+	setModelNetworkOwner(vehicle, player)
 
 	if autoSit then
 		local char = player.Character
@@ -872,16 +880,26 @@ local function onPlayerAdded(player: Player)
 		end
 		local hrp = character:FindFirstChild("HumanoidRootPart") :: BasePart?
 		if hrp then
-			local look = hrp.CFrame.LookVector
-			local flatLook = Vector3.new(look.X, 0, look.Z)
-			if flatLook.Magnitude < 0.05 then
-				flatLook = Vector3.new(0, 0, -1)
+			-- Spawn the player's personal vehicle on the open Grand Central Avenue in front of them
+			-- (CFrame.new(0, 3.2, -10) facing North -Z, or snapped to clear road space) so it is never wedged against a fountain or pad!
+			local spawnCF: CFrame
+			if math.abs(hrp.Position.X) < 28 and math.abs(hrp.Position.Z - 25) < 32 then
+				spawnCF = CFrame.new(0, 3.2, -10)
 			else
-				flatLook = flatLook.Unit
+				local look = hrp.CFrame.LookVector
+				local flatLook = Vector3.new(look.X, 0, look.Z)
+				if flatLook.Magnitude < 0.05 then
+					flatLook = Vector3.new(0, 0, -1)
+				else
+					flatLook = flatLook.Unit
+				end
+				local spawnPos = Vector3.new(hrp.Position.X, 3.2, hrp.Position.Z) + flatLook * 14
+				spawnCF = CFrame.lookAt(spawnPos, spawnPos + flatLook)
 			end
-			local spawnPos = hrp.Position + flatLook * 12 + Vector3.new(0, 3.0, 0)
-			local spawnCF = CFrame.lookAt(spawnPos, spawnPos + flatLook)
-			SpawnPlayerVehicle(player, nil, spawnCF, false)
+			local veh = SpawnPlayerVehicle(player, nil, spawnCF, false)
+			if veh then
+				setModelNetworkOwner(veh, player)
+			end
 		end
 	end)
 

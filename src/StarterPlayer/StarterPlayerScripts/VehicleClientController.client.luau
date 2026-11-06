@@ -4,12 +4,14 @@
 	High-playability arcade driving controller for World of Destruction (Leo City).
 
 	Features:
-	  - Snappy arcade acceleration, crisp braking, reverse, and speed-sensitive steering
+	  - Instant-response keyboard (W/A/S/D + Arrow keys), gamepad, touch, and VehicleSeat inputs
+	  - Physics velocity & critically-damped hover suspension updated in RunService.Heartbeat
+	  - Smooth curb/sidewalk/ramp climb assist so vehicles never snag on seams
 	  - Handbrake drifting (Space / R1 / Touch) with lateral slip & drift angle scoring
 	  - Regenerating Nitro boost (LeftShift / L1 / Touch) with flame particles & camera FOV surge
 	  - Mid-air pitch/roll stunt control (W/A/S/D) + airtime tracker reporting "MEGA AIR!" to server
 	  - High-speed near-miss detector against traffic & police vehicles ("NEAR MISS!")
-	  - Real-time 4-wheel spin & front-axle steering visual animation + tire skid trails/smoke
+	  - Real-time 4-wheel spin, front-axle steering, and visual body pitch/roll suspension tilt in RenderStepped
 	  - Headlight toggle (L key + automatic night activation based on Lighting.ClockTime)
 ]]
 
@@ -86,6 +88,9 @@ local currentSpeed = 0                -- signed forward speed (studs/s)
 local smoothedSteer = 0               -- filtered steer input [-1, 1]
 local smoothedSlipAngle = 0           -- visual tail-out angle (rad)
 local wheelSpinAngle = 0              -- accumulated wheel rotation (rad)
+local visualBodyPitch = 0             -- nose lift/dip angle (rad)
+local visualBodyRoll = 0              -- body lean angle in turns/drifts (rad)
+local latestThrottleInput = 0         -- latest combined throttle [-1, 1]
 
 local isDrifting = false
 local driftDuration = 0
@@ -113,6 +118,18 @@ local raycastParams = RaycastParams.new()
 raycastParams.FilterType = Enum.RaycastFilterType.Exclude
 raycastParams.IgnoreWater = true
 
+local TILT_BODY_PARTS = {
+	"Cabin",
+	"Hood",
+	"HoodNoseWedge",
+	"HoodPowerDome",
+	"RoofCap",
+	"Windshield",
+	"RearWindow",
+	"TrunkDeck",
+	"SpoilerWing",
+}
+
 --------------------------------------------------------------------------------
 -- Helper Functions
 --------------------------------------------------------------------------------
@@ -122,6 +139,74 @@ local function moveToward(current: number, target: number, maxDelta: number): nu
 		return target
 	end
 	return current + (if diff > 0 then maxDelta else -maxDelta)
+end
+
+local function updateRaycastFilter(model: Model?)
+	local filterList: { Instance } = {}
+	if model then
+		table.insert(filterList, model)
+	end
+	if localPlayer.Character then
+		table.insert(filterList, localPlayer.Character)
+	end
+	local vehiclesFolder = Workspace:FindFirstChild("Vehicles")
+	if vehiclesFolder then
+		table.insert(filterList, vehiclesFolder)
+	end
+	local parkedFolder = Workspace:FindFirstChild("ParkedVehicles")
+	if parkedFolder then
+		table.insert(filterList, parkedFolder)
+	end
+	raycastParams.FilterDescendantsInstances = filterList
+end
+
+local function readCombinedDrivingInput(seat: VehicleSeat): (number, number)
+	local kbThrottle = 0
+	local kbSteer = 0
+
+	if not UserInputService:GetFocusedTextBox() then
+		local forwardDown = UserInputService:IsKeyDown(Enum.KeyCode.W) or UserInputService:IsKeyDown(Enum.KeyCode.Up)
+		local backwardDown = UserInputService:IsKeyDown(Enum.KeyCode.S) or UserInputService:IsKeyDown(Enum.KeyCode.Down)
+		local leftDown = UserInputService:IsKeyDown(Enum.KeyCode.A) or UserInputService:IsKeyDown(Enum.KeyCode.Left)
+		local rightDown = UserInputService:IsKeyDown(Enum.KeyCode.D) or UserInputService:IsKeyDown(Enum.KeyCode.Right)
+
+		if forwardDown then
+			kbThrottle += 1
+		end
+		if backwardDown then
+			kbThrottle -= 1
+		end
+		if leftDown then
+			kbSteer -= 1
+		end
+		if rightDown then
+			kbSteer += 1
+		end
+	end
+
+	local touchThrottle = tonumber(localPlayer:GetAttribute("TouchThrottle")) or 0
+	local touchSteer = tonumber(localPlayer:GetAttribute("TouchSteer")) or 0
+
+	local seatThrottle = seat.ThrottleFloat
+	local seatSteer = seat.SteerFloat
+
+	local finalThrottle = kbThrottle
+	if math.abs(touchThrottle) > math.abs(finalThrottle) then
+		finalThrottle = touchThrottle
+	end
+	if math.abs(seatThrottle) > math.abs(finalThrottle) then
+		finalThrottle = seatThrottle
+	end
+
+	local finalSteer = kbSteer
+	if math.abs(touchSteer) > math.abs(finalSteer) then
+		finalSteer = touchSteer
+	end
+	if math.abs(seatSteer) > math.abs(finalSteer) then
+		finalSteer = seatSteer
+	end
+
+	return math.clamp(finalThrottle, -1, 1), math.clamp(finalSteer, -1, 1)
 end
 
 local function fireStuntToServer(stuntType: string, value: number, pos: Vector3)
@@ -234,9 +319,9 @@ local function unbindDrivingActions()
 end
 
 --------------------------------------------------------------------------------
--- Wheel Spin & Steering Animation
+-- Visual Wheel Spin, Steering & Springy Body Pitch/Roll Suspension Animation
 --------------------------------------------------------------------------------
-local function animateWheels(model: Model, dt: number, forwardSpeed: number, steerAmount: number)
+local function animateWheelsAndSuspension(model: Model, dt: number, forwardSpeed: number, steerAmount: number)
 	local wheelRadius = 1.5
 	local fl = model:FindFirstChild("WheelFL") :: BasePart?
 	if fl then
@@ -247,13 +332,29 @@ local function animateWheels(model: Model, dt: number, forwardSpeed: number, ste
 	local maxSteerAngle = math.rad(28)
 	local steerYaw = -steerAmount * maxSteerAngle
 
+	-- Animate subtle visual body pitch (nose lifts on accel/nitro, dips on braking) and body roll (leans into turns/drifts)
+	local targetPitch = 0
+	if latestThrottleInput > 0.1 then
+		targetPitch = math.rad(if isBoosting then 2.8 else 1.5) * latestThrottleInput
+	elseif latestThrottleInput < -0.1 or (handbrakeHeld and forwardSpeed > 15) then
+		targetPitch = -math.rad(1.8)
+	end
+
+	local speedRatio = math.clamp(math.abs(forwardSpeed) / 75, 0, 1.2)
+	local targetRoll = steerAmount * speedRatio * math.rad(if isDrifting then 5.2 else 2.8)
+
+	visualBodyPitch += (targetPitch - visualBodyPitch) * math.min(1, dt * 10)
+	visualBodyRoll += (targetRoll - visualBodyRoll) * math.min(1, dt * 10)
+
+	local suspBounceY = math.sin(wheelSpinAngle * 2) * 0.03 * math.clamp(math.abs(forwardSpeed) / 60, 0, 1)
+
 	for _, wheelName in ipairs({ "WheelFL", "WheelFR", "WheelRL", "WheelRR" }) do
 		local wheel = model:FindFirstChild(wheelName) :: BasePart?
 		if wheel then
 			local weld = wheel:FindFirstChild("WheelWeld") :: Weld?
 			if weld then
 				local bx = tonumber(wheel:GetAttribute("BaseX")) or weld.C0.Position.X
-				local by = tonumber(wheel:GetAttribute("BaseY")) or weld.C0.Position.Y
+				local by = (tonumber(wheel:GetAttribute("BaseY")) or weld.C0.Position.Y) + suspBounceY
 				local bz = tonumber(wheel:GetAttribute("BaseZ")) or weld.C0.Position.Z
 				local isFront = wheel:GetAttribute("IsFrontWheel") == true
 				if isFront then
@@ -263,6 +364,23 @@ local function animateWheels(model: Model, dt: number, forwardSpeed: number, ste
 				else
 					weld.C0 = CFrame.new(bx, by, bz) * CFrame.Angles(wheelSpinAngle, 0, 0)
 				end
+			end
+		end
+	end
+
+	-- Apply subtle pitch/roll tilt to visual upper-body parts (Cabin, Hood, RoofCap, Windshield, RearWindow)
+	local tiltRotation = CFrame.Angles(visualBodyPitch, 0, visualBodyRoll)
+	for _, partName in ipairs(TILT_BODY_PARTS) do
+		local part = model:FindFirstChild(partName) :: BasePart?
+		if part then
+			local weld = part:FindFirstChild(partName .. "_Weld") :: Weld?
+			if weld then
+				local baseC0 = part:GetAttribute("BaseC0")
+				if typeof(baseC0) ~= "CFrame" then
+					baseC0 = weld.C0
+					part:SetAttribute("BaseC0", baseC0)
+				end
+				weld.C0 = (baseC0 :: CFrame) * tiltRotation
 			end
 		end
 	end
@@ -303,6 +421,9 @@ local function startDrivingSession(seat: VehicleSeat, model: Model, chassis: Bas
 	currentSpeed = chassis.AssemblyLinearVelocity:Dot(forwardDir)
 	smoothedSteer = 0
 	smoothedSlipAngle = 0
+	visualBodyPitch = 0
+	visualBodyRoll = 0
+	latestThrottleInput = 0
 	isDrifting = false
 	driftDuration = 0
 	driftReportTimer = 0
@@ -315,12 +436,7 @@ local function startDrivingSession(seat: VehicleSeat, model: Model, chassis: Bas
 	lastVfxDrift = false
 	lastCollisionCheckSpeed = 0
 
-	local filterList: { Instance } = { model }
-	if localPlayer.Character then
-		table.insert(filterList, localPlayer.Character)
-	end
-	raycastParams.FilterDescendantsInstances = filterList
-
+	updateRaycastFilter(model)
 	bindDrivingActions()
 
 	-- Automatic night-time headlights check
@@ -341,6 +457,7 @@ local function stopDrivingSession()
 	activeModel = nil
 	activeChassis = nil
 	currentSpeed = 0
+	latestThrottleInput = 0
 	isDrifting = false
 	isBoosting = false
 	isAirborne = false
@@ -390,9 +507,9 @@ end
 localPlayer.CharacterAdded:Connect(inspectCharacterSeat)
 
 --------------------------------------------------------------------------------
--- Main Per-Frame Arcade Driving Physics Loop
+-- 1. Heartbeat Physics Loop: Velocity, Steering & Springy Curb-Climb Suspension
 --------------------------------------------------------------------------------
-RunService.RenderStepped:Connect(function(dt: number)
+RunService.Heartbeat:Connect(function(dt: number)
 	if not activeSeat or not activeModel or not activeChassis then
 		return
 	end
@@ -423,21 +540,31 @@ RunService.RenderStepped:Connect(function(dt: number)
 	local hoverHeight = tonumber(model:GetAttribute("HoverHeight")) or 2.2
 	nitroMax = tonumber(model:GetAttribute("NitroCapacity")) or 4.0
 
-	-- Damage penalty only when severely hurt (<30% health)
+	-- Damage penalty only when severely hurt (<25% health)
 	local hp = tonumber(model:GetAttribute("Health")) or 100
 	local maxHp = math.max(1, tonumber(model:GetAttribute("MaxHealth")) or 100)
 	local healthFactor = if (hp / maxHp) < 0.25 then 0.80 else 1.0
 
-	-- 2. Read Throttle & Steer Inputs from VehicleSeat
-	local rawThrottle = seat.ThrottleFloat
-	local rawSteer = seat.SteerFloat
+	-- 2. Read Direct Keyboard + Gamepad + Touch + VehicleSeat Inputs (Instant Zero-Delay Response!)
+	local rawThrottle, rawSteer = readCombinedDrivingInput(seat)
+	latestThrottleInput = rawThrottle
+
+	-- Also check if LeftShift/Space are held directly via keyboard for instant response
+	if not UserInputService:GetFocusedTextBox() then
+		local shiftDown = UserInputService:IsKeyDown(Enum.KeyCode.LeftShift)
+			or UserInputService:IsKeyDown(Enum.KeyCode.RightShift)
+		local spaceDown = UserInputService:IsKeyDown(Enum.KeyCode.Space)
+		boostHeld = shiftDown or (localPlayer:GetAttribute("TouchBoost") == true)
+		handbrakeHeld = spaceDown or (localPlayer:GetAttribute("TouchDrift") == true)
+	end
 
 	-- Smooth steering input
-	smoothedSteer += (rawSteer - smoothedSteer) * math.min(1, dt * 14)
+	smoothedSteer += (rawSteer - smoothedSteer) * math.min(1, dt * 16)
 
-	-- 3. Ground Detection Raycast
-	local rayOrigin = chassis.Position + Vector3.new(0, 2.5, 0)
-	local rayLength = hoverHeight + chassis.Size.Y * 0.5 + 4.2
+	-- 3. Ground Detection Raycast & Springy Curb-Climb Hover Suspension
+	updateRaycastFilter(model)
+	local rayOrigin = chassis.Position + Vector3.new(0, 3, 0)
+	local rayLength = hoverHeight + chassis.Size.Y * 0.5 + 5.0
 	local groundHit = Workspace:Raycast(rayOrigin, Vector3.new(0, -rayLength, 0), raycastParams)
 	local groundedNow = groundHit ~= nil
 
@@ -471,9 +598,9 @@ RunService.RenderStepped:Connect(function(dt: number)
 	local vel = chassis.AssemblyLinearVelocity
 	local measuredForwardSpeed = vel:Dot(flatForward)
 
-	-- Blend our kinematic target speed with physical velocity so wall impacts respond naturally
-	if math.abs(measuredForwardSpeed - currentSpeed) > 22 then
-		currentSpeed = measuredForwardSpeed * 0.65 + currentSpeed * 0.35
+	-- Blend our kinematic target speed with physical velocity only on hard wall impacts
+	if math.abs(measuredForwardSpeed - currentSpeed) > 28 and math.abs(rawThrottle) < 0.1 then
+		currentSpeed = measuredForwardSpeed * 0.6 + currentSpeed * 0.4
 	end
 
 	-- Detect hard wall collision to apply minor vehicle damage
@@ -556,11 +683,11 @@ RunService.RenderStepped:Connect(function(dt: number)
 		end
 	end
 
-	-- 7. Update Steering & Angular Velocity (Ground vs. Mid-Air Control)
+	-- 7. Update Steering, Angular Velocity & Critically-Damped Vertical Hover Spring
 	local absSpeed = math.abs(currentSpeed)
-	local motionGate = math.clamp(absSpeed / 4.0, 0, 1)
+	local motionGate = math.clamp(absSpeed / 3.5, 0, 1)
 	if rawThrottle ~= 0 then
-		motionGate = math.max(motionGate, 0.35)
+		motionGate = math.max(motionGate, 0.45)
 	end
 
 	local driftBoost = if isDrifting then (DRIFT_STEER_MULTIPLIER * math.clamp(driftFactor, 0.9, 1.6)) else 1.0
@@ -574,43 +701,46 @@ RunService.RenderStepped:Connect(function(dt: number)
 		else 0
 	smoothedSlipAngle += (targetSlip - smoothedSlipAngle) * math.min(1, dt * 9.0)
 
-	if groundedNow then
-		-- Apply responsive yaw rotation while keeping roll/pitch stabilized against flipping
+	if groundedNow and groundHit then
+		-- Align roll/pitch gently with road/ramp surface normal while stabilizing against flipping
 		local currentAngVel = chassis.AssemblyAngularVelocity
-		local upVec = chassis.CFrame.UpVector
 		local rightVec = chassis.CFrame.RightVector
+		local surfaceNormal = groundHit.Normal
 
-		-- Upright stabilization torque if the car tilts too far on uneven debris
-		local rollErr = rightVec.Y
-		local pitchErr = forwardVec.Y
-		local stabilizePitch = math.clamp(-pitchErr * 4.5, -3.5, 3.5)
-		local stabilizeRoll = math.clamp(rollErr * 6.5, -4.5, 4.5)
+		local desiredPitchY = math.clamp(-surfaceNormal:Dot(flatForward), -0.45, 0.45)
+		local rollErr = rightVec.Y - math.clamp(surfaceNormal:Dot(flatRight), -0.25, 0.25)
+		local pitchErr = forwardVec.Y - desiredPitchY
+		local stabilizePitch = math.clamp(-pitchErr * 5.5, -4.0, 4.0)
+		local stabilizeRoll = math.clamp(rollErr * 7.5, -5.0, 5.0)
 
 		local desiredAngVel = Vector3.new(0, targetYawRate, 0)
 			+ rightVec * stabilizePitch
 			+ forwardVec * stabilizeRoll
-		chassis.AssemblyAngularVelocity = currentAngVel:Lerp(desiredAngVel, math.min(1, dt * 18))
+		chassis.AssemblyAngularVelocity = currentAngVel:Lerp(desiredAngVel, math.min(1, dt * 20))
 
-		-- Compute velocity with controlled lateral drift slip
+		-- Compute horizontal velocity with controlled lateral drift slip
 		local currentLateralSpeed = vel:Dot(flatRight)
 		local grip = if isDrifting then DRIFT_LATERAL_GRIP else NORMAL_LATERAL_GRIP
 		local nextLateralSpeed = currentLateralSpeed * math.max(0, 1 - grip * dt * 12)
 		if isDrifting then
-			-- Add outward tail slide kick proportional to steer & driftFactor
 			nextLateralSpeed += smoothedSteer * currentSpeed * 0.22 * driftFactor * dt * 6
 		end
 
 		local targetHorizontalVel = flatForward * currentSpeed + flatRight * nextLateralSpeed
-		local nextY = vel.Y
-		-- Gentle downforce so the car stays planted at high speed unless climbing a ramp
-		if forwardVec.Y < 0.12 and nextY > -2 then
-			nextY = math.min(nextY, -2.5)
-		elseif forwardVec.Y >= 0.18 and currentSpeed > 45 then
-			-- Ramp climb assist!
-			nextY = math.max(nextY, currentSpeed * forwardVec.Y * 1.15)
+
+		-- Critically-damped vertical spring velocity so the chassis floats smoothly at groundY + hoverHeight
+		-- and climbs effortlessly over curbs, sidewalks, and stunt ramps without ever snagging!
+		local groundY = groundHit.Position.Y
+		local targetY = groundY + hoverHeight
+		local vy = (targetY - chassis.Position.Y) * 18 - vel.Y * 0.45
+		vy = math.clamp(vy, -35, 45)
+
+		-- Ramp launch & slope climb assist
+		if forwardVec.Y >= 0.14 and currentSpeed > 25 then
+			vy = math.max(vy, currentSpeed * forwardVec.Y * 1.15)
 		end
 
-		chassis.AssemblyLinearVelocity = Vector3.new(targetHorizontalVel.X, nextY, targetHorizontalVel.Z)
+		chassis.AssemblyLinearVelocity = Vector3.new(targetHorizontalVel.X, vy, targetHorizontalVel.Z)
 	else
 		-- Mid-air stunt control: W/S pitches nose, A/D rolls/yaws vehicle!
 		local rightVec = chassis.CFrame.RightVector
@@ -623,19 +753,10 @@ RunService.RenderStepped:Connect(function(dt: number)
 		chassis.AssemblyAngularVelocity = chassis.AssemblyAngularVelocity:Lerp(airAngVel, math.min(1, dt * 6))
 	end
 
-	-- 8. Visual Wheel Spin, Tire Smoke/Skid Trails & Camera FOV Surge
-	animateWheels(model, dt, currentSpeed, smoothedSteer)
+	-- 8. VFX, Near-Miss Checks & HUD Live Attributes
 	setLocalVFX(model, isBoosting, isDrifting or (handbrakeHeld and absSpeed > 25))
 	checkNearMisses(model, chassis.Position, absSpeed)
 
-	local cam = Workspace.CurrentCamera
-	if cam then
-		local speedRatio = math.clamp(absSpeed / math.max(1, maxSpeed), 0, 1.4)
-		local targetFov = BASE_FOV + speedRatio * SPEED_FOV_ADD + (if isBoosting then BOOST_FOV_ADD else 0)
-		cam.FieldOfView = cam.FieldOfView + (targetFov - cam.FieldOfView) * math.min(1, dt * 8)
-	end
-
-	-- 9. Publish Live Attributes for HUD Consumption
 	local mph = math.round(absSpeed * 1.15)
 	local ratio = math.clamp(nitroFuel / math.max(0.1, nitroMax), 0, 1)
 	localPlayer:SetAttribute("VehicleSpeed", math.round(absSpeed))
@@ -648,4 +769,30 @@ RunService.RenderStepped:Connect(function(dt: number)
 	localPlayer:SetAttribute("IsBoosting", isBoosting)
 	localPlayer:SetAttribute("DriftAngle", math.round(math.deg(math.abs(smoothedSlipAngle))))
 	localPlayer:SetAttribute("AirTime", tonumber(string.format("%.1f", airTime)))
+end)
+
+--------------------------------------------------------------------------------
+-- 2. RenderStepped Visual Loop: Wheel Spin, Steering, Suspension Tilt & Camera FOV
+--------------------------------------------------------------------------------
+RunService.RenderStepped:Connect(function(dt: number)
+	if not activeSeat or not activeModel or not activeChassis then
+		return
+	end
+	if not activeModel.Parent or not activeSeat.Parent then
+		return
+	end
+	if dt <= 0 or dt > 0.15 then
+		return
+	end
+
+	animateWheelsAndSuspension(activeModel, dt, currentSpeed, smoothedSteer)
+
+	local cam = Workspace.CurrentCamera
+	if cam then
+		local maxSpeed = tonumber(activeModel:GetAttribute("MaxSpeed")) or 85
+		local absSpeed = math.abs(currentSpeed)
+		local speedRatio = math.clamp(absSpeed / math.max(1, maxSpeed), 0, 1.4)
+		local targetFov = BASE_FOV + speedRatio * SPEED_FOV_ADD + (if isBoosting then BOOST_FOV_ADD else 0)
+		cam.FieldOfView = cam.FieldOfView + (targetFov - cam.FieldOfView) * math.min(1, dt * 8)
+	end
 end)

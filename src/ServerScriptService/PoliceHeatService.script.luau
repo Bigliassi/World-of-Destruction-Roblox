@@ -205,6 +205,18 @@ local RootReportCopImpactRemote = ensureRemoteEvent(ReplicatedStorage, "PoliceTa
 --------------------------------------------------------------------------------
 -- Active Pursuit Data Structures
 --------------------------------------------------------------------------------
+type CopPartOffset = {
+	Part: BasePart,
+	Offset: CFrame,
+}
+
+type CopWheelEntry = {
+	Tire: BasePart,
+	Rim: BasePart,
+	Spoke: BasePart,
+	BaseOffset: CFrame,
+}
+
 type ActiveCopUnit = {
 	Id: string,
 	Kind: PoliceUnitKind,
@@ -215,6 +227,10 @@ type ActiveCopUnit = {
 	BlueSiren: Part,
 	RedLight: PointLight,
 	BlueLight: PointLight,
+	PartOffsets: { CopPartOffset },
+	Wheels: { CopWheelEntry },
+	WheelRadius: number,
+	WheelSpin: number,
 	Heading: number,
 	HP: number,
 	StunTimer: number,
@@ -329,14 +345,317 @@ local function getPlayerMotion(player: Player): (Vector3, Vector3, number, Vecto
 end
 
 --------------------------------------------------------------------------------
--- Model Builders: Police Cruisers, SUV Interceptors, SWAT Trucks, Roadblocks,
--- Spike Strips & Star-5 Police Helicopter with Spotlight!
+-- Building Obstacle Filters & Road Grid Navigation Helpers
+--------------------------------------------------------------------------------
+local roadCoords: { number } = { -630, -450, -270, -90, 0, 90, 270, 450, 630 }
+local FEELER_ANGLES_RAD: { number } = {
+	0,
+	math.rad(-25),
+	math.rad(25),
+	math.rad(-55),
+	math.rad(55),
+}
+local FEELER_RAY_LENGTH = 26.0
+local BUMPER_RAY_Y = 2.5
+
+local obstacleRayParams = RaycastParams.new()
+obstacleRayParams.IgnoreWater = true
+obstacleRayParams.RespectCanCollide = true
+
+local obstacleOverlapParams = OverlapParams.new()
+obstacleOverlapParams.RespectCanCollide = true
+
+local lastFilterRefreshAt = 0
+
+local function refreshObstacleFilters()
+	local now = os.clock()
+	if now - lastFilterRefreshAt < 1.0 then
+		return
+	end
+	lastFilterRefreshAt = now
+
+	local leoCity = Workspace:FindFirstChild("LeoCity")
+	local buildingsFolder = if leoCity then leoCity:FindFirstChild("Buildings") else nil
+	local landmarksFolder = if leoCity then leoCity:FindFirstChild("Landmarks") else nil
+
+	if buildingsFolder or landmarksFolder then
+		local includeList: { Instance } = {}
+		if buildingsFolder then
+			table.insert(includeList, buildingsFolder)
+		end
+		if landmarksFolder then
+			table.insert(includeList, landmarksFolder)
+		end
+		obstacleRayParams.FilterType = Enum.RaycastFilterType.Include
+		obstacleRayParams.FilterDescendantsInstances = includeList
+		obstacleOverlapParams.FilterType = Enum.RaycastFilterType.Include
+		obstacleOverlapParams.FilterDescendantsInstances = includeList
+	else
+		local excludeList: { Instance } = { policeWorldFolder }
+		for _, folderName in ipairs({ "Vehicles", "PlayerVehicles", "ParkedVehicles", "LeoCityAI" }) do
+			local f = Workspace:FindFirstChild(folderName)
+			if f then
+				table.insert(excludeList, f)
+			end
+		end
+		if leoCity then
+			for _, subName in ipairs({ "DestructibleProps", "Roads", "Sidewalks", "Trees" }) do
+				local sub = leoCity:FindFirstChild(subName)
+				if sub then
+					table.insert(excludeList, sub)
+				end
+			end
+		end
+		local baseplate = Workspace:FindFirstChild("Baseplate")
+		if baseplate then
+			table.insert(excludeList, baseplate)
+		end
+		for _, plr in ipairs(Players:GetPlayers()) do
+			if plr.Character then
+				table.insert(excludeList, plr.Character)
+			end
+		end
+		obstacleRayParams.FilterType = Enum.RaycastFilterType.Exclude
+		obstacleRayParams.FilterDescendantsInstances = excludeList
+		obstacleOverlapParams.FilterType = Enum.RaycastFilterType.Exclude
+		obstacleOverlapParams.FilterDescendantsInstances = excludeList
+	end
+end
+
+local function nearestRoadCoord(val: number): number
+	local best = roadCoords[1]
+	local bestDiff = math.abs(val - best)
+	for i = 2, #roadCoords do
+		local c = roadCoords[i]
+		local diff = math.abs(val - c)
+		if diff < bestDiff then
+			bestDiff = diff
+			best = c
+		end
+	end
+	return best
+end
+
+local function checkBuildingOverlapAt(pos: Vector3, heading: number, bodySize: Vector3): (boolean, BasePart?)
+	refreshObstacleFilters()
+	local boxCF = CFrame.new(pos) * CFrame.Angles(0, heading, 0)
+	local hitParts = Workspace:GetPartBoundsInBox(boxCF, bodySize * 0.9, obstacleOverlapParams)
+	for _, part in ipairs(hitParts) do
+		-- Ignore flat ground slabs; any vertical wall / building structure extends above Y = 1.4
+		if (part.Position.Y + part.Size.Y * 0.5) > 1.4 then
+			return true, part
+		end
+	end
+	return false, nil
+end
+
+local function computeOutwardNormalFromPart(unitPos: Vector3, part: BasePart): Vector3
+	local localPos = part.CFrame:PointToObjectSpace(unitPos)
+	local halfX = math.max(0.5, part.Size.X * 0.5)
+	local halfZ = math.max(0.5, part.Size.Z * 0.5)
+	local nx = localPos.X / halfX
+	local nz = localPos.Z / halfZ
+	local worldNormal: Vector3
+	if math.abs(nx) >= math.abs(nz) then
+		local signX = if nx >= 0 then 1 else -1
+		worldNormal = part.CFrame.RightVector * signX
+	else
+		local signZ = if nz >= 0 then 1 else -1
+		worldNormal = -part.CFrame.LookVector * signZ
+	end
+	local flat = Vector3.new(worldNormal.X, 0, worldNormal.Z)
+	if flat.Magnitude > 0.01 then
+		return flat.Unit
+	end
+	local fallback = Vector3.new(unitPos.X - part.Position.X, 0, unitPos.Z - part.Position.Z)
+	if fallback.Magnitude > 0.01 then
+		return fallback.Unit
+	end
+	return Vector3.new(0, 0, 1)
+end
+
+local function findRoadSnapSpawn(rawPos: Vector3, playerPos: Vector3, bodySize: Vector3): (Vector3, number)
+	refreshObstacleFilters()
+	local spawnY = bodySize.Y * 0.5 + 0.5
+	local nearX = nearestRoadCoord(rawPos.X)
+	local nearZ = nearestRoadCoord(rawPos.Z)
+	local distToRoadX = math.abs(rawPos.X - nearX)
+	local distToRoadZ = math.abs(rawPos.Z - nearZ)
+
+	local candidates: { Vector3 } = {}
+	if distToRoadX <= distToRoadZ then
+		table.insert(candidates, Vector3.new(nearX, spawnY, math.clamp(rawPos.Z, -630, 630)))
+		table.insert(candidates, Vector3.new(math.clamp(rawPos.X, -630, 630), spawnY, nearZ))
+	else
+		table.insert(candidates, Vector3.new(math.clamp(rawPos.X, -630, 630), spawnY, nearZ))
+		table.insert(candidates, Vector3.new(nearX, spawnY, math.clamp(rawPos.Z, -630, 630)))
+	end
+	table.insert(candidates, Vector3.new(nearX, spawnY, nearZ))
+
+	-- Additional road intersection & boulevard fallbacks around playerPos
+	local playerRoadX = nearestRoadCoord(playerPos.X)
+	local playerRoadZ = nearestRoadCoord(playerPos.Z)
+	for _, offset in ipairs({ -180, -90, 90, 180 }) do
+		table.insert(candidates, Vector3.new(playerRoadX, spawnY, math.clamp(playerPos.Z + offset, -630, 630)))
+		table.insert(candidates, Vector3.new(math.clamp(playerPos.X + offset, -630, 630), spawnY, playerRoadZ))
+	end
+	for _, rx in ipairs(roadCoords) do
+		for _, rz in ipairs(roadCoords) do
+			local p = Vector3.new(rx, spawnY, rz)
+			local d = (p - playerPos).Magnitude
+			if d >= 70 and d <= 165 then
+				table.insert(candidates, p)
+			end
+		end
+	end
+
+	for _, cand in ipairs(candidates) do
+		local toPlayer = Vector3.new(playerPos.X - cand.X, 0, playerPos.Z - cand.Z)
+		local heading = if toPlayer.Magnitude > 0.1 then math.atan2(-toPlayer.X, -toPlayer.Z) else 0
+		local blocked = checkBuildingOverlapAt(cand, heading, bodySize)
+		if not blocked and toPlayer.Magnitude >= 42 then
+			return cand, heading
+		end
+	end
+
+	local fallbackPos = Vector3.new(playerRoadX, spawnY, math.clamp(playerPos.Z + 100, -630, 630))
+	local toPlayer = Vector3.new(playerPos.X - fallbackPos.X, 0, playerPos.Z - fallbackPos.Z)
+	local fallbackHeading = if toPlayer.Magnitude > 0.1 then math.atan2(-toPlayer.X, -toPlayer.Z) else 0
+	return fallbackPos, fallbackHeading
+end
+
+local function selectRoadWaypointToward(unitPos: Vector3, seekTarget: Vector3): Vector3
+	refreshObstacleFilters()
+	local origin = Vector3.new(unitPos.X, BUMPER_RAY_Y, unitPos.Z)
+	local targetRayPos = Vector3.new(seekTarget.X, BUMPER_RAY_Y, seekTarget.Z)
+	local toTarget = targetRayPos - origin
+	if toTarget.Magnitude <= 6 then
+		return seekTarget
+	end
+
+	-- Cast direct line-of-sight ray from unitPos to seekTarget
+	local directHit = Workspace:Raycast(origin, toTarget, obstacleRayParams)
+	if not directHit then
+		return seekTarget
+	end
+
+	-- Building blocks line-of-sight: evaluate nearest Road Intersections & Boulevard corridors
+	local unitRoadX = nearestRoadCoord(unitPos.X)
+	local unitRoadZ = nearestRoadCoord(unitPos.Z)
+	local targetRoadX = nearestRoadCoord(seekTarget.X)
+	local targetRoadZ = nearestRoadCoord(seekTarget.Z)
+
+	local waypoints: { Vector3 } = {
+		Vector3.new(unitRoadX, unitPos.Y, unitRoadZ),
+		Vector3.new(unitRoadX, unitPos.Y, targetRoadZ),
+		Vector3.new(targetRoadX, unitPos.Y, unitRoadZ),
+		Vector3.new(unitRoadX, unitPos.Y, seekTarget.Z),
+		Vector3.new(seekTarget.X, unitPos.Y, unitRoadZ),
+		Vector3.new(0, unitPos.Y, unitRoadZ),
+		Vector3.new(unitRoadX, unitPos.Y, 0),
+	}
+
+	for _, rx in ipairs(roadCoords) do
+		if math.abs(rx - unitPos.X) <= 220 then
+			table.insert(waypoints, Vector3.new(rx, unitPos.Y, unitRoadZ))
+			table.insert(waypoints, Vector3.new(rx, unitPos.Y, targetRoadZ))
+		end
+	end
+	for _, rz in ipairs(roadCoords) do
+		if math.abs(rz - unitPos.Z) <= 220 then
+			table.insert(waypoints, Vector3.new(unitRoadX, unitPos.Y, rz))
+			table.insert(waypoints, Vector3.new(targetRoadX, unitPos.Y, rz))
+		end
+	end
+
+	local bestWP = Vector3.new(unitRoadX, unitPos.Y, unitRoadZ)
+	local bestScore = math.huge
+
+	for _, wp in ipairs(waypoints) do
+		local flatToWP = Vector3.new(wp.X - unitPos.X, 0, wp.Z - unitPos.Z)
+		local distToWP = flatToWP.Magnitude
+		if distToWP >= 10 then
+			local wpOrigin = Vector3.new(wp.X, BUMPER_RAY_Y, wp.Z)
+			local hitToWP = Workspace:Raycast(origin, wpOrigin - origin, obstacleRayParams)
+			if not hitToWP then
+				local distWPToGoal = Vector3.new(seekTarget.X - wp.X, 0, seekTarget.Z - wp.Z).Magnitude
+				local hitWPToGoal = Workspace:Raycast(wpOrigin, targetRayPos - wpOrigin, obstacleRayParams)
+				local losBonus = if not hitWPToGoal then -45 else 0
+				local score = distWPToGoal + distToWP * 0.55 + losBonus
+				if score < bestScore then
+					bestScore = score
+					bestWP = wp
+				end
+			end
+		end
+	end
+
+	return bestWP
+end
+
+--------------------------------------------------------------------------------
+-- Model Builders: High-Detail Police Cruisers, SUV Interceptors, SWAT Trucks,
+-- Roadblocks, Spike Strips & Star-5 Police Helicopter with Spotlight!
 --------------------------------------------------------------------------------
 local unitSerial = 0
+
+local function addCopSubPart(
+	model: Model,
+	chassisCF: CFrame,
+	offsets: { CopPartOffset },
+	className: string,
+	name: string,
+	size: Vector3,
+	color: Color3,
+	material: Enum.Material,
+	relCF: CFrame,
+	transparency: number?
+): BasePart
+	local part = Instance.new(className) :: BasePart
+	part.Name = name
+	part.Size = size
+	part.Color = color
+	part.Material = material
+	part.Transparency = transparency or 0
+	part.Anchored = true
+	part.CanCollide = false
+	part.TopSurface = Enum.SurfaceType.Smooth
+	part.BottomSurface = Enum.SurfaceType.Smooth
+	part.CFrame = chassisCF * relCF
+	part.Parent = model
+	table.insert(offsets, {
+		Part = part,
+		Offset = relCF,
+	})
+	return part
+end
+
+local function attachDoorMarking(doorPart: BasePart, face: Enum.NormalId, labelText: string, textColor: Color3)
+	local sg = Instance.new("SurfaceGui")
+	sg.Name = "PoliceDoorMarking"
+	sg.Face = face
+	sg.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	sg.PixelsPerStud = 36
+	sg.LightInfluence = 0.25
+	sg.Parent = doorPart
+
+	local lbl = Instance.new("TextLabel")
+	lbl.Size = UDim2.fromScale(1, 1)
+	lbl.BackgroundTransparency = 1
+	lbl.Text = labelText
+	lbl.TextColor3 = textColor
+	lbl.TextScaled = true
+	lbl.Font = Enum.Font.GothamBlack
+	lbl.Parent = sg
+end
 
 local function buildPoliceVehicle(kind: PoliceUnitKind, spawnPos: Vector3, heading: number, slotIndex: number): ActiveCopUnit
 	unitSerial += 1
 	local arch = UNIT_ARCHETYPES[kind]
+	local w = arch.BodySize.X
+	local h = arch.BodySize.Y
+	local len = arch.BodySize.Z
+
 	local model = Instance.new("Model")
 	model.Name = string.format("Police_%s_%d", kind, unitSerial)
 	model:SetAttribute("IsPoliceUnit", true)
@@ -344,50 +663,397 @@ local function buildPoliceVehicle(kind: PoliceUnitKind, spawnPos: Vector3, headi
 	model:SetAttribute("MaxHP", arch.MaxHP)
 	model:SetAttribute("HP", arch.MaxHP)
 
+	local chassisCF = CFrame.new(spawnPos) * CFrame.Angles(0, heading, 0)
+	local partOffsets: { CopPartOffset } = {}
+	local wheels: { CopWheelEntry } = {}
+
+	-- Primary colors by Police Unit Archetype
+	local lowerHullColor = if kind == "Cruiser"
+		then Color3.fromRGB(18, 22, 30)
+		elseif kind == "InterceptorSUV" then Color3.fromRGB(22, 26, 36)
+		else Color3.fromRGB(28, 36, 52)
+	local doorPanelColor = if kind == "Cruiser"
+		then Color3.fromRGB(242, 245, 250)
+		elseif kind == "InterceptorSUV" then Color3.fromRGB(28, 33, 44)
+		else Color3.fromRGB(22, 30, 46)
+	local roofColor = if kind == "Cruiser"
+		then Color3.fromRGB(242, 245, 250)
+		elseif kind == "InterceptorSUV" then Color3.fromRGB(24, 28, 38)
+		else Color3.fromRGB(26, 34, 50)
+	local hullMaterial = if kind == "SWATEnforcer" then Enum.Material.Metal else Enum.Material.SmoothPlastic
+
+	-- 1. Sculpted Lower Chassis Base
 	local chassis = Instance.new("Part")
 	chassis.Name = "Chassis"
-	chassis.Size = arch.BodySize
-	chassis.Color = arch.BodyColor
-	chassis.Material = Enum.Material.SmoothPlastic
+	chassis.Size = Vector3.new(w, h * 0.50, len)
+	chassis.Color = lowerHullColor
+	chassis.Material = hullMaterial
 	chassis.Anchored = true
 	chassis.CanCollide = true
-	chassis.CFrame = CFrame.new(spawnPos) * CFrame.Angles(0, heading, 0)
+	chassis.TopSurface = Enum.SurfaceType.Smooth
+	chassis.BottomSurface = Enum.SurfaceType.Smooth
+	chassis.CFrame = chassisCF
 	chassis.Parent = model
 	model.PrimaryPart = chassis
 
-	-- Side Police Livery Stripe / Cabin
-	local cabin = Instance.new("Part")
-	cabin.Name = "Cabin"
-	cabin.Size = Vector3.new(arch.BodySize.X * 0.86, arch.BodySize.Y * 0.65, arch.BodySize.Z * 0.52)
-	cabin.Color = arch.AccentColor
-	cabin.Material = Enum.Material.SmoothPlastic
-	cabin.Anchored = true
-	cabin.CanCollide = false
-	cabin.CFrame = chassis.CFrame * CFrame.new(0, arch.BodySize.Y * 0.62, 0.4)
-	cabin.Parent = model
+	-- 2. Pursuit Door Panels / Tactical Side Panels / Armored SWAT Hull
+	local doorLen = if kind == "SWATEnforcer" then len * 0.64 else len * 0.46
+	local doorCenterZ = if kind == "SWATEnforcer" then len * 0.08 else 0.15
+	local doorPanel = addCopSubPart(
+		model,
+		chassisCF,
+		partOffsets,
+		"Part",
+		"PursuitDoorPanels",
+		Vector3.new(w * 1.02, h * 0.48, doorLen),
+		doorPanelColor,
+		hullMaterial,
+		CFrame.new(0, h * 0.04, doorCenterZ)
+	)
+	local doorLabelText = if kind == "SWATEnforcer" then "SWAT" else "POLICE"
+	local doorTextColor = if kind == "Cruiser"
+		then Color3.fromRGB(16, 28, 78)
+		else Color3.fromRGB(235, 240, 252)
+	attachDoorMarking(doorPanel, Enum.NormalId.Left, doorLabelText, doorTextColor)
+	attachDoorMarking(doorPanel, Enum.NormalId.Right, doorLabelText, doorTextColor)
 
-	-- Front Push-Bumper / Bullbar
-	local bumper = Instance.new("Part")
-	bumper.Name = "PushBumper"
-	bumper.Size = Vector3.new(arch.BodySize.X * 0.92, arch.BodySize.Y * 0.45, 0.8)
-	bumper.Color = Color3.fromRGB(20, 22, 26)
-	bumper.Material = Enum.Material.Metal
-	bumper.Anchored = true
-	bumper.CanCollide = false
-	bumper.CFrame = chassis.CFrame * CFrame.new(0, -arch.BodySize.Y * 0.15, -arch.BodySize.Z * 0.5 - 0.35)
-	bumper.Parent = model
+	-- Accent tactical stripe along the sides for InterceptorSUV and SWATEnforcer
+	if kind ~= "Cruiser" then
+		addCopSubPart(
+			model,
+			chassisCF,
+			partOffsets,
+			"Part",
+			"TacticalSideStripe",
+			Vector3.new(w * 1.03, h * 0.10, len * 0.78),
+			if kind == "InterceptorSUV" then Color3.fromRGB(220, 228, 242) else Color3.fromRGB(185, 195, 215),
+			Enum.Material.SmoothPlastic,
+			CFrame.new(0, h * 0.10, 0.2)
+		)
+	end
 
-	-- Roof Siren Lightbar (Red + Blue)
-	local barY = arch.BodySize.Y * 0.98
-	local redSiren = Instance.new("Part")
-	redSiren.Name = "SirenRed"
-	redSiren.Size = Vector3.new(arch.BodySize.X * 0.36, 0.45, 0.9)
-	redSiren.Color = Color3.fromRGB(255, 35, 35)
-	redSiren.Material = Enum.Material.Neon
-	redSiren.Anchored = true
-	redSiren.CanCollide = false
-	redSiren.CFrame = chassis.CFrame * CFrame.new(-arch.BodySize.X * 0.2, barY, 0)
-	redSiren.Parent = model
+	-- 3. Sloped Front Hood (WedgePart) & Rear Deck / SWAT Troop Bay
+	local hoodLen = if kind == "SWATEnforcer" then len * 0.24 else len * 0.28
+	local hoodH = h * 0.24
+	local hoodZ = -len * 0.5 + hoodLen * 0.5 + 0.15
+	addCopSubPart(
+		model,
+		chassisCF,
+		partOffsets,
+		"WedgePart",
+		"SlopedHood",
+		Vector3.new(w * 0.96, hoodH, hoodLen),
+		lowerHullColor,
+		hullMaterial,
+		CFrame.new(0, h * 0.25 + hoodH * 0.5, hoodZ)
+	)
+
+	-- 4. Cabin Greenhouse, Angled Front Windshield (WedgePart), Painted Roof & Sloped Rear Window
+	local cabW = w * 0.88
+	local cabH = if kind == "Cruiser" then h * 0.54 elseif kind == "InterceptorSUV" then h * 0.58 else h * 0.62
+	local cabLen = if kind == "Cruiser" then len * 0.36 elseif kind == "InterceptorSUV" then len * 0.48 else len * 0.58
+	local cabZ = if kind == "Cruiser" then 0.35 elseif kind == "InterceptorSUV" then 0.85 else 1.25
+	local cabY = h * 0.25 + cabH * 0.5
+
+	addCopSubPart(
+		model,
+		chassisCF,
+		partOffsets,
+		"Part",
+		"Cabin",
+		Vector3.new(cabW, cabH, cabLen),
+		Color3.fromRGB(26, 36, 52),
+		Enum.Material.Glass,
+		CFrame.new(0, cabY, cabZ),
+		0.25
+	)
+
+	-- Angled Front Windshield (WedgePart, Material.Glass)
+	local windLen = if kind == "SWATEnforcer" then 1.35 else 1.75
+	addCopSubPart(
+		model,
+		chassisCF,
+		partOffsets,
+		"WedgePart",
+		"FrontWindshield",
+		Vector3.new(cabW * 0.98, cabH * 0.96, windLen),
+		Color3.fromRGB(38, 54, 76),
+		Enum.Material.Glass,
+		CFrame.new(0, cabY, cabZ - cabLen * 0.5 - windLen * 0.5),
+		0.2
+	)
+
+	-- Sloped Rear Window (WedgePart rotated 180 deg)
+	local rearWinLen = if kind == "Cruiser" then 1.55 else 0.95
+	addCopSubPart(
+		model,
+		chassisCF,
+		partOffsets,
+		"WedgePart",
+		"RearWindow",
+		Vector3.new(cabW * 0.96, cabH * 0.94, rearWinLen),
+		Color3.fromRGB(34, 48, 68),
+		Enum.Material.Glass,
+		CFrame.new(0, cabY, cabZ + cabLen * 0.5 + rearWinLen * 0.5) * CFrame.Angles(0, math.rad(180), 0),
+		0.25
+	)
+
+	-- Painted Roof Cap
+	local roofY = h * 0.25 + cabH + 0.12
+	addCopSubPart(
+		model,
+		chassisCF,
+		partOffsets,
+		"Part",
+		"PaintedRoof",
+		Vector3.new(cabW * 1.02, 0.24, cabLen * 0.98),
+		roofColor,
+		hullMaterial,
+		CFrame.new(0, roofY, cabZ)
+	)
+
+	-- Rear Trunk Deck for Cruiser / Armored Step Bumper for SWAT
+	if kind == "Cruiser" then
+		local trunkLen = len * 0.20
+		addCopSubPart(
+			model,
+			chassisCF,
+			partOffsets,
+			"Part",
+			"TrunkDeck",
+			Vector3.new(w * 0.96, h * 0.20, trunkLen),
+			lowerHullColor,
+			Enum.Material.SmoothPlastic,
+			CFrame.new(0, h * 0.25 + h * 0.10, len * 0.5 - trunkLen * 0.5 - 0.1)
+		)
+	elseif kind == "SWATEnforcer" then
+		for _, sx in ipairs({ -1, 1 }) do
+			addCopSubPart(
+				model,
+				chassisCF,
+				partOffsets,
+				"Part",
+				if sx < 0 then "ArmorSkirtL" else "ArmorSkirtR",
+				Vector3.new(0.35, h * 0.36, len * 0.84),
+				Color3.fromRGB(16, 20, 30),
+				Enum.Material.DiamondPlate,
+				CFrame.new(sx * (w * 0.51), -h * 0.08, 0)
+			)
+		end
+	end
+
+	-- 5. Heavy Steel Front Push-Bumper / PIT Bullbar with Vertical Ram Guards & Rear Bumper
+	local bumperZ = -len * 0.5 - 0.42
+	addCopSubPart(
+		model,
+		chassisCF,
+		partOffsets,
+		"Part",
+		"PushBumper",
+		Vector3.new(w * 0.96, h * 0.26, 0.72),
+		Color3.fromRGB(20, 22, 26),
+		Enum.Material.Metal,
+		CFrame.new(0, -h * 0.10, bumperZ)
+	)
+	addCopSubPart(
+		model,
+		chassisCF,
+		partOffsets,
+		"Part",
+		"BullbarCrossTube",
+		Vector3.new(w * 0.68, 0.28, 0.34),
+		Color3.fromRGB(32, 36, 42),
+		Enum.Material.Metal,
+		CFrame.new(0, h * 0.16, bumperZ - 0.12)
+	)
+	for _, sx in ipairs({ -1, 1 }) do
+		addCopSubPart(
+			model,
+			chassisCF,
+			partOffsets,
+			"Part",
+			if sx < 0 then "RamGuardL" else "RamGuardR",
+			Vector3.new(0.36, h * 0.56, 0.52),
+			Color3.fromRGB(24, 28, 34),
+			Enum.Material.Metal,
+			CFrame.new(sx * (w * 0.24), h * 0.02, bumperZ - 0.10)
+		)
+	end
+	addCopSubPart(
+		model,
+		chassisCF,
+		partOffsets,
+		"Part",
+		"RearBumper",
+		Vector3.new(w * 0.98, h * 0.24, 0.55),
+		Color3.fromRGB(22, 24, 30),
+		Enum.Material.Metal,
+		CFrame.new(0, -h * 0.12, len * 0.5 + 0.24)
+	)
+
+	-- 6. Front Grille, Front LED Headlights (with SpotLight), Rear Red Taillights & Side Mirrors
+	addCopSubPart(
+		model,
+		chassisCF,
+		partOffsets,
+		"Part",
+		"FrontGrille",
+		Vector3.new(w * 0.46, h * 0.26, 0.18),
+		Color3.fromRGB(30, 34, 40),
+		Enum.Material.DiamondPlate,
+		CFrame.new(0, h * 0.06, -len * 0.5 - 0.06)
+	)
+
+	for _, sx in ipairs({ -1, 1 }) do
+		local headlight = addCopSubPart(
+			model,
+			chassisCF,
+			partOffsets,
+			"Part",
+			if sx < 0 then "HeadlightL" else "HeadlightR",
+			Vector3.new(w * 0.20, h * 0.16, 0.20),
+			Color3.fromRGB(240, 248, 255),
+			Enum.Material.Neon,
+			CFrame.new(sx * (w * 0.35), h * 0.08, -len * 0.5 - 0.07)
+		)
+		local spot = Instance.new("SpotLight")
+		spot.Name = "HeadlightSpot"
+		spot.Face = Enum.NormalId.Front
+		spot.Brightness = 2.6
+		spot.Range = 54
+		spot.Angle = 55
+		spot.Color = Color3.fromRGB(245, 250, 255)
+		spot.Parent = headlight
+
+		-- Side Mirrors
+		addCopSubPart(
+			model,
+			chassisCF,
+			partOffsets,
+			"Part",
+			if sx < 0 then "SideMirrorL" else "SideMirrorR",
+			Vector3.new(0.55, 0.34, 0.42),
+			lowerHullColor,
+			Enum.Material.SmoothPlastic,
+			CFrame.new(sx * (cabW * 0.5 + 0.25), cabY - cabH * 0.12, cabZ - cabLen * 0.42)
+		)
+	end
+
+	-- Rear Red Taillights
+	addCopSubPart(
+		model,
+		chassisCF,
+		partOffsets,
+		"Part",
+		"TaillightBar",
+		Vector3.new(w * 0.82, h * 0.16, 0.18),
+		Color3.fromRGB(255, 32, 32),
+		Enum.Material.Neon,
+		CFrame.new(0, h * 0.08, len * 0.5 + 0.07)
+	)
+
+	-- 7. 4 Cylinder Wheels (WheelFL, WheelFR, WheelRL, WheelRR) with Metallic Rims that spin
+	local wheelRadius = if kind == "Cruiser" then 1.35 elseif kind == "InterceptorSUV" then 1.55 else 1.85
+	local wheelDiameter = wheelRadius * 2.0
+	local wheelWidth = if kind == "SWATEnforcer" then 1.45 else 1.15
+	local chassisCenterY = h * 0.5 + 0.5
+	local wheelLocalY = -chassisCenterY + wheelRadius
+	local wheelTrackX = w * 0.5 + wheelWidth * 0.28
+	local wheelBaseZ = len * 0.33
+
+	local wheelSpecs = {
+		{ Name = "WheelFL", X = -wheelTrackX, Z = -wheelBaseZ },
+		{ Name = "WheelFR", X = wheelTrackX, Z = -wheelBaseZ },
+		{ Name = "WheelRL", X = -wheelTrackX, Z = wheelBaseZ },
+		{ Name = "WheelRR", X = wheelTrackX, Z = wheelBaseZ },
+	}
+
+	for _, ws in ipairs(wheelSpecs) do
+		local baseOffset = CFrame.new(ws.X, wheelLocalY, ws.Z)
+
+		local tire = Instance.new("Part")
+		tire.Name = ws.Name
+		tire.Shape = Enum.PartType.Cylinder
+		tire.Size = Vector3.new(wheelWidth, wheelDiameter, wheelDiameter)
+		tire.Color = Color3.fromRGB(20, 22, 26)
+		tire.Material = Enum.Material.SmoothPlastic
+		tire.Anchored = true
+		tire.CanCollide = false
+		tire.TopSurface = Enum.SurfaceType.Smooth
+		tire.BottomSurface = Enum.SurfaceType.Smooth
+		tire.CFrame = chassisCF * baseOffset
+		tire.Parent = model
+
+		local rim = Instance.new("Part")
+		rim.Name = ws.Name .. "_Rim"
+		rim.Shape = Enum.PartType.Cylinder
+		rim.Size = Vector3.new(wheelWidth + 0.12, wheelDiameter * 0.56, wheelDiameter * 0.56)
+		rim.Color = Color3.fromRGB(190, 198, 212)
+		rim.Material = Enum.Material.Metal
+		rim.Anchored = true
+		rim.CanCollide = false
+		rim.TopSurface = Enum.SurfaceType.Smooth
+		rim.BottomSurface = Enum.SurfaceType.Smooth
+		rim.CFrame = tire.CFrame
+		rim.Parent = model
+
+		local spoke = Instance.new("Part")
+		spoke.Name = ws.Name .. "_Spoke"
+		spoke.Size = Vector3.new(wheelWidth + 0.18, wheelDiameter * 0.48, 0.22)
+		spoke.Color = Color3.fromRGB(95, 102, 118)
+		spoke.Material = Enum.Material.Metal
+		spoke.Anchored = true
+		spoke.CanCollide = false
+		spoke.CFrame = tire.CFrame
+		spoke.Parent = model
+
+		table.insert(wheels, {
+			Tire = tire,
+			Rim = rim,
+			Spoke = spoke,
+			BaseOffset = baseOffset,
+		})
+	end
+
+	-- 8. Detailed Roof Lightbar Bridge with Center Speaker Box and Red/Blue Strobe Lenses
+	local barY = roofY + 0.36
+	local barZ = cabZ - cabLen * 0.12
+
+	addCopSubPart(
+		model,
+		chassisCF,
+		partOffsets,
+		"Part",
+		"LightbarBridge",
+		Vector3.new(cabW * 0.86, 0.18, 0.95),
+		Color3.fromRGB(32, 36, 44),
+		Enum.Material.Metal,
+		CFrame.new(0, barY - 0.18, barZ)
+	)
+	addCopSubPart(
+		model,
+		chassisCF,
+		partOffsets,
+		"Part",
+		"SirenSpeakerBox",
+		Vector3.new(cabW * 0.18, 0.44, 0.96),
+		Color3.fromRGB(18, 20, 26),
+		Enum.Material.Metal,
+		CFrame.new(0, barY, barZ)
+	)
+
+	local redOffset = CFrame.new(-cabW * 0.26, barY, barZ)
+	local redSiren = addCopSubPart(
+		model,
+		chassisCF,
+		partOffsets,
+		"Part",
+		"SirenRed",
+		Vector3.new(cabW * 0.34, 0.42, 0.88),
+		Color3.fromRGB(255, 35, 35),
+		Enum.Material.Neon,
+		redOffset
+	) :: Part
 
 	local redLight = Instance.new("PointLight")
 	redLight.Color = Color3.fromRGB(255, 40, 40)
@@ -395,15 +1061,18 @@ local function buildPoliceVehicle(kind: PoliceUnitKind, spawnPos: Vector3, headi
 	redLight.Brightness = 3.5
 	redLight.Parent = redSiren
 
-	local blueSiren = Instance.new("Part")
-	blueSiren.Name = "SirenBlue"
-	blueSiren.Size = Vector3.new(arch.BodySize.X * 0.36, 0.45, 0.9)
-	blueSiren.Color = Color3.fromRGB(35, 110, 255)
-	blueSiren.Material = Enum.Material.Neon
-	blueSiren.Anchored = true
-	blueSiren.CanCollide = false
-	blueSiren.CFrame = chassis.CFrame * CFrame.new(arch.BodySize.X * 0.2, barY, 0)
-	blueSiren.Parent = model
+	local blueOffset = CFrame.new(cabW * 0.26, barY, barZ)
+	local blueSiren = addCopSubPart(
+		model,
+		chassisCF,
+		partOffsets,
+		"Part",
+		"SirenBlue",
+		Vector3.new(cabW * 0.34, 0.42, 0.88),
+		Color3.fromRGB(35, 110, 255),
+		Enum.Material.Neon,
+		blueOffset
+	) :: Part
 
 	local blueLight = Instance.new("PointLight")
 	blueLight.Color = Color3.fromRGB(40, 120, 255)
@@ -424,6 +1093,10 @@ local function buildPoliceVehicle(kind: PoliceUnitKind, spawnPos: Vector3, headi
 		BlueSiren = blueSiren,
 		RedLight = redLight,
 		BlueLight = blueLight,
+		PartOffsets = partOffsets,
+		Wheels = wheels,
+		WheelRadius = wheelRadius,
+		WheelSpin = 0,
 		Heading = heading,
 		HP = arch.MaxHP,
 		StunTimer = 0,
@@ -432,21 +1105,33 @@ local function buildPoliceVehicle(kind: PoliceUnitKind, spawnPos: Vector3, headi
 	}
 end
 
-local function updateCopModelTransform(unit: ActiveCopUnit, pos: Vector3, heading: number)
+local function updateCopModelTransform(unit: ActiveCopUnit, pos: Vector3, heading: number, distanceTraveled: number?)
 	local cf = CFrame.new(pos) * CFrame.Angles(0, heading, 0)
 	unit.Chassis.CFrame = cf
-	local arch = unit.Archetype
-	local cabin = unit.Model:FindFirstChild("Cabin") :: BasePart?
-	if cabin then
-		cabin.CFrame = cf * CFrame.new(0, arch.BodySize.Y * 0.62, 0.4)
+
+	for _, entry in ipairs(unit.PartOffsets) do
+		if entry.Part and entry.Part.Parent then
+			entry.Part.CFrame = cf * entry.Offset
+		end
 	end
-	local bumper = unit.Model:FindFirstChild("PushBumper") :: BasePart?
-	if bumper then
-		bumper.CFrame = cf * CFrame.new(0, -arch.BodySize.Y * 0.15, -arch.BodySize.Z * 0.5 - 0.35)
+
+	local stepDist = distanceTraveled or 0
+	if stepDist ~= 0 and unit.WheelRadius > 0.1 then
+		unit.WheelSpin = (unit.WheelSpin - stepDist / unit.WheelRadius) % (math.pi * 2)
 	end
-	local barY = arch.BodySize.Y * 0.98
-	unit.RedSiren.CFrame = cf * CFrame.new(-arch.BodySize.X * 0.2, barY, 0)
-	unit.BlueSiren.CFrame = cf * CFrame.new(arch.BodySize.X * 0.2, barY, 0)
+	local spinCF = CFrame.Angles(unit.WheelSpin, 0, 0)
+	for _, wEntry in ipairs(unit.Wheels) do
+		local wCF = cf * wEntry.BaseOffset * spinCF
+		if wEntry.Tire and wEntry.Tire.Parent then
+			wEntry.Tire.CFrame = wCF
+		end
+		if wEntry.Rim and wEntry.Rim.Parent then
+			wEntry.Rim.CFrame = wCF
+		end
+		if wEntry.Spoke and wEntry.Spoke.Parent then
+			wEntry.Spoke.CFrame = wCF
+		end
+	end
 end
 
 local function spawnDebrisBurst(position: Vector3, tint: Color3)
@@ -766,19 +1451,20 @@ local function reconcilePoliceForceForStars(player: Player, state: PlayerHeatSta
 		currentCounts[u.Kind] = (currentCounts[u.Kind] or 0) + 1
 	end
 
-	-- Spawn missing units in a wide perimeter ring (85..125 studs out)
+	-- Spawn missing units snapped to the nearest clear Road Line (85..125 studs out)
 	for _, kind in ipairs({ "Cruiser", "InterceptorSUV", "SWATEnforcer" } :: { PoliceUnitKind }) do
 		local needed = (desiredCounts[kind] or 0) - (currentCounts[kind] or 0)
 		for _ = 1, needed do
 			local angle = math.random() * math.pi * 2
 			local dist = math.random(85, 125)
-			local spawnPos = Vector3.new(
+			local rawSpawnPos = Vector3.new(
 				playerPos.X + math.cos(angle) * dist,
 				UNIT_ARCHETYPES[kind].BodySize.Y * 0.5 + 0.5,
 				playerPos.Z + math.sin(angle) * dist
 			)
+			local spawnPos, spawnHeading = findRoadSnapSpawn(rawSpawnPos, playerPos, UNIT_ARCHETYPES[kind].BodySize)
 			local slotIndex = #state.Units + 1
-			local newUnit = buildPoliceVehicle(kind, spawnPos, angle + math.pi, slotIndex)
+			local newUnit = buildPoliceVehicle(kind, spawnPos, spawnHeading, slotIndex)
 			table.insert(state.Units, newUnit)
 		end
 	end
@@ -1160,15 +1846,18 @@ RunService.Heartbeat:Connect(function(dt: number)
 			local toPlayer = Vector3.new(playerPos.X - unitPos.X, 0, playerPos.Z - unitPos.Z)
 			local dist = toPlayer.Magnitude
 
-			-- Teleport far-behind police closer along pursuit perimeter so chase stays intense
+			-- Teleport far-behind police closer along pursuit perimeter snapped to nearest clear Road Line
 			if dist > 260 then
 				local respawnAngle = math.random() * math.pi * 2
 				local respawnDist = math.random(95, 130)
-				unitPos = Vector3.new(
+				local rawRespawnPos = Vector3.new(
 					playerPos.X + math.cos(respawnAngle) * respawnDist,
 					unit.Archetype.BodySize.Y * 0.5 + 0.5,
 					playerPos.Z + math.sin(respawnAngle) * respawnDist
 				)
+				local snappedPos, snappedHeading = findRoadSnapSpawn(rawRespawnPos, playerPos, unit.Archetype.BodySize)
+				unitPos = snappedPos
+				unit.Heading = snappedHeading
 				toPlayer = Vector3.new(playerPos.X - unitPos.X, 0, playerPos.Z - unitPos.Z)
 				dist = toPlayer.Magnitude
 			end
@@ -1177,13 +1866,18 @@ RunService.Heartbeat:Connect(function(dt: number)
 				anyCopInLineOfSight = true
 			end
 
-			-- Stunned spin-out state after glancing hit
+			-- Stunned spin-out state after glancing hit (still prevented from entering buildings)
 			if unit.StunTimer > 0 then
 				unit.StunTimer = math.max(0, unit.StunTimer - dt)
 				unit.Heading += dt * 4.5
 				local coastFwd = Vector3.new(-math.sin(unit.Heading), 0, -math.cos(unit.Heading))
-				local nextPos = unitPos + coastFwd * (unit.Archetype.Speed * 0.25 * dt)
-				updateCopModelTransform(unit, nextPos, unit.Heading)
+				local coastStep = unit.Archetype.Speed * 0.25 * dt
+				local nextPos = unitPos + coastFwd * coastStep
+				local blocked = checkBuildingOverlapAt(nextPos, unit.Heading, unit.Archetype.BodySize)
+				if blocked then
+					nextPos = unitPos
+				end
+				updateCopModelTransform(unit, nextPos, unit.Heading, (nextPos - unitPos).Magnitude)
 				continue
 			end
 
@@ -1223,24 +1917,80 @@ RunService.Heartbeat:Connect(function(dt: number)
 					+ playerRight * (flankSide * 11 + weaveOffset)
 			end
 
-			local toSeek = Vector3.new(seekTarget.X - unitPos.X, 0, seekTarget.Z - unitPos.Z)
+			-- Smart Road Waypoint Navigation: if a building blocks line-of-sight to seekTarget,
+			-- steer toward the nearest clear Road Intersection / Boulevard corridor leading to player
+			local steerTarget = selectRoadWaypointToward(unitPos, seekTarget)
+			local toSeek = Vector3.new(steerTarget.X - unitPos.X, 0, steerTarget.Z - unitPos.Z)
+			local desiredHeading = unit.Heading
 			if toSeek.Magnitude > 0.1 then
 				local desiredDir = toSeek.Unit
-				local desiredHeading = math.atan2(-desiredDir.X, -desiredDir.Z)
-				local deltaAngle = math.atan2(math.sin(desiredHeading - unit.Heading), math.cos(desiredHeading - unit.Heading))
-				local maxStep = unit.Archetype.TurnRate * (1 + (stars - 1) * 0.05) * dt
-				unit.Heading += math.clamp(deltaAngle, -maxStep, maxStep)
+				desiredHeading = math.atan2(-desiredDir.X, -desiredDir.Z)
 			end
 
+			-- 5-Ray Forward Feeler Obstacle Avoidance (0°, -25°, +25°, -55°, +55° up to 26 studs at Y = 2.5)
+			refreshObstacleFilters()
+			local feelerOrigin = Vector3.new(unitPos.X, BUMPER_RAY_Y, unitPos.Z)
+			local centerOrInnerBlocked = false
+			local bestOpenHeading = desiredHeading
+			local bestOpenScore = -math.huge
+
+			for rayIdx, angleOffset in ipairs(FEELER_ANGLES_RAD) do
+				local rayHeading = unit.Heading + angleOffset
+				local rayDir = Vector3.new(-math.sin(rayHeading), 0, -math.cos(rayHeading))
+				local rayHit = Workspace:Raycast(feelerOrigin, rayDir * FEELER_RAY_LENGTH, obstacleRayParams)
+				local clearDist = if rayHit then (rayHit.Position - feelerOrigin).Magnitude else FEELER_RAY_LENGTH
+				if rayHit and rayIdx <= 3 then
+					centerOrInnerBlocked = true
+				end
+
+				-- Score candidate feeler directions by open distance and alignment with desiredHeading
+				local headingDiff = math.abs(math.atan2(math.sin(rayHeading - desiredHeading), math.cos(rayHeading - desiredHeading)))
+				local score = clearDist * 2.2 - headingDiff * 5.0
+				if score > bestOpenScore then
+					bestOpenScore = score
+					bestOpenHeading = rayHeading
+				end
+			end
+
+			local turnRateMultiplier = 1.0
+			local avoidanceSpeedScale = 1.0
+			if centerOrInnerBlocked then
+				-- Also sample wide escape angles (-85°, +85°) in case all 5 forward feelers face a wide wall
+				for _, wideOffset in ipairs({ math.rad(-85), math.rad(85) }) do
+					local wideHeading = unit.Heading + wideOffset
+					local wideDir = Vector3.new(-math.sin(wideHeading), 0, -math.cos(wideHeading))
+					local wideHit = Workspace:Raycast(feelerOrigin, wideDir * FEELER_RAY_LENGTH, obstacleRayParams)
+					local clearDist = if wideHit then (wideHit.Position - feelerOrigin).Magnitude else FEELER_RAY_LENGTH
+					local headingDiff = math.abs(math.atan2(math.sin(wideHeading - desiredHeading), math.cos(wideHeading - desiredHeading)))
+					local score = clearDist * 2.1 - headingDiff * 4.0
+					if score > bestOpenScore then
+						bestOpenScore = score
+						bestOpenHeading = wideHeading
+					end
+				end
+				desiredHeading = bestOpenHeading
+				turnRateMultiplier = 2.65
+				avoidanceSpeedScale = 0.78
+			end
+
+			local deltaAngle = math.atan2(math.sin(desiredHeading - unit.Heading), math.cos(desiredHeading - unit.Heading))
+			local maxStep = unit.Archetype.TurnRate * turnRateMultiplier * (1 + (stars - 1) * 0.05) * dt
+			unit.Heading += math.clamp(deltaAngle, -maxStep, maxStep)
+
 			local moveFwd = Vector3.new(-math.sin(unit.Heading), 0, -math.cos(unit.Heading))
-			local speedBoost = 1.0 + (stars - 1) * 0.04
+			local speedBoost = (1.0 + (stars - 1) * 0.04) * avoidanceSpeedScale
 			-- Slight ram burst when closing in at Star 2+
-			if stars >= 2 and dist < 38 and dist > 9 then
+			if not centerOrInnerBlocked and stars >= 2 and dist < 38 and dist > 9 then
 				speedBoost *= (1.0 + 0.12 * unit.Archetype.RamAggression)
 			end
 
-			local nextPos = unitPos + moveFwd * (unit.Archetype.Speed * speedBoost * dt)
-			nextPos = Vector3.new(nextPos.X, unit.Archetype.BodySize.Y * 0.5 + 0.5, nextPos.Z)
+			local stepDist = unit.Archetype.Speed * speedBoost * dt
+			local targetY = unit.Archetype.BodySize.Y * 0.5 + 0.5
+			local nextPos = Vector3.new(
+				unitPos.X + moveFwd.X * stepDist,
+				targetY,
+				unitPos.Z + moveFwd.Z * stepDist
+			)
 
 			-- Prevent clipping straight inside the player's chassis
 			local dxP = nextPos.X - playerPos.X
@@ -1273,7 +2023,78 @@ RunService.Heartbeat:Connect(function(dt: number)
 				end
 			end
 
-			updateCopModelTransform(unit, nextPos, unit.Heading)
+			-- Hard Wall Collision Prevention:
+			-- Cast a short sweep ray from unitPos to nextPos (+ 4 stud margin) and verify via GetPartBoundsInBox
+			local moveVec = Vector3.new(nextPos.X - unitPos.X, 0, nextPos.Z - unitPos.Z)
+			local moveLen = moveVec.Magnitude
+			local sweepHit: RaycastResult? = nil
+			if moveLen > 0.01 then
+				local sweepDir = moveVec / moveLen
+				local halfFrontExtent = unit.Archetype.BodySize.Z * 0.5
+				sweepHit = Workspace:Raycast(
+					feelerOrigin,
+					sweepDir * (moveLen + halfFrontExtent + 4.0),
+					obstacleRayParams
+				)
+			end
+			local boxBlocked, hitBuildingPart = checkBuildingOverlapAt(nextPos, unit.Heading, unit.Archetype.BodySize)
+
+			if sweepHit or boxBlocked then
+				local wallNormal: Vector3
+				if sweepHit then
+					local flatN = Vector3.new(sweepHit.Normal.X, 0, sweepHit.Normal.Z)
+					wallNormal = if flatN.Magnitude > 0.01 then flatN.Unit else -moveFwd
+				elseif hitBuildingPart then
+					wallNormal = computeOutwardNormalFromPart(unitPos, hitBuildingPart)
+				else
+					wallNormal = -moveFwd
+				end
+
+				-- Pick the wall tangent pointing toward steerTarget / open road
+				local tangentA = Vector3.new(-wallNormal.Z, 0, wallNormal.X)
+				local tangentB = -tangentA
+				local toGoal = Vector3.new(steerTarget.X - unitPos.X, 0, steerTarget.Z - unitPos.Z)
+				local chosenTangent = if tangentA:Dot(toGoal) >= tangentB:Dot(toGoal) then tangentA else tangentB
+
+				local slidePos = Vector3.new(
+					unitPos.X + (chosenTangent.X * stepDist * 0.72) + wallNormal.X * 1.1,
+					targetY,
+					unitPos.Z + (chosenTangent.Z * stepDist * 0.72) + wallNormal.Z * 1.1
+				)
+				local slideHeading = math.atan2(-chosenTangent.X, -chosenTangent.Z)
+
+				if not checkBuildingOverlapAt(slidePos, slideHeading, unit.Archetype.BodySize) then
+					nextPos = slidePos
+					unit.Heading = slideHeading
+				else
+					-- Try opposite tangent or push cleanly away from wall normal toward road
+					local altSlidePos = Vector3.new(
+						unitPos.X - (chosenTangent.X * stepDist * 0.65) + wallNormal.X * 1.5,
+						targetY,
+						unitPos.Z - (chosenTangent.Z * stepDist * 0.65) + wallNormal.Z * 1.5
+					)
+					local altHeading = math.atan2(chosenTangent.X, chosenTangent.Z)
+					if not checkBuildingOverlapAt(altSlidePos, altHeading, unit.Archetype.BodySize) then
+						nextPos = altSlidePos
+						unit.Heading = altHeading
+					else
+						local pushOutPos = Vector3.new(
+							unitPos.X + wallNormal.X * 2.2,
+							targetY,
+							unitPos.Z + wallNormal.Z * 2.2
+						)
+						if not checkBuildingOverlapAt(pushOutPos, slideHeading, unit.Archetype.BodySize) then
+							nextPos = pushOutPos
+						else
+							nextPos = unitPos
+						end
+						unit.Heading = slideHeading
+					end
+				end
+			end
+
+			local actualStep = (nextPos - unitPos).Magnitude
+			updateCopModelTransform(unit, nextPos, unit.Heading, actualStep)
 		end
 
 		-- Process wrecked police units in reverse index order
