@@ -114,22 +114,22 @@ local DEFAULT_MECHANIC_SPOTS: { { Name: string, Position: Vector3 } } = {
 local PARKED_SPAWN_SPOTS: { { Archetype: string, CFrame: CFrame, Color: Color3? } } = {
 	{
 		Archetype = "Sports",
-		CFrame = CFrame.new(26, 3.5, 18) * CFrame.Angles(0, math.rad(25), 0),
+		CFrame = CFrame.new(24, 3.5, 16) * CFrame.Angles(0, math.rad(25), 0),
 		Color = VehicleCatalog.PlayerPalette.ElectricBlue,
 	},
 	{
 		Archetype = "Muscle",
-		CFrame = CFrame.new(-28, 3.5, 18) * CFrame.Angles(0, math.rad(-25), 0),
+		CFrame = CFrame.new(-18, 3.5, 16) * CFrame.Angles(0, math.rad(-25), 0),
 		Color = VehicleCatalog.PlayerPalette.SolarOrange,
 	},
 	{
 		Archetype = "SUV",
-		CFrame = CFrame.new(38, 4.0, -32) * CFrame.Angles(0, math.rad(90), 0),
+		CFrame = CFrame.new(36, 4.0, 42) * CFrame.Angles(0, math.rad(90), 0),
 		Color = VehicleCatalog.PlayerPalette.ToxicGreen,
 	},
 	{
 		Archetype = "Pickup",
-		CFrame = CFrame.new(-42, 4.0, -32) * CFrame.Angles(0, math.rad(-90), 0),
+		CFrame = CFrame.new(-36, 4.0, 42) * CFrame.Angles(0, math.rad(-90), 0),
 		Color = VehicleCatalog.PlayerPalette.CrimsonRed,
 	},
 	{

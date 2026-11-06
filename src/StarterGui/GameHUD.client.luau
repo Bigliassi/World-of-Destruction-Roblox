@@ -219,7 +219,7 @@ local function triggerQuickAction(actionId: string)
 	elseif actionId == "SpawnCar" and remotes then
 		local r = remotes:FindFirstChild("SpawnVehicle") or remotes:FindFirstChild("RequestSpawnVehicle")
 		if r and r:IsA("RemoteEvent") then
-			r:FireServer(player:GetAttribute("SelectedVehicle") or "Muscle")
+			r:FireServer(player:GetAttribute("EquippedVehicle") or player:GetAttribute("SelectedVehicle") or "Compact")
 		end
 	elseif actionId == "Repair" and remotes then
 		local r = remotes:FindFirstChild("RepairVehicle") or remotes:FindFirstChild("RequestRepair")
@@ -451,7 +451,8 @@ RunService.RenderStepped:Connect(function(dt: number)
 	local gear = speedMph < 2 and "N" or tostring(math.clamp(math.ceil(speedMph / 28), 1, 6))
 	gearBadge.Text = "GEAR: " .. gear
 
-	local vHealth = math.clamp((tonumber(player:GetAttribute("VehicleHealth")) or 100) / math.max(1, tonumber(player:GetAttribute("MaxVehicleHealth")) or 100), 0, 1)
+	local maxVehHp = tonumber(player:GetAttribute("VehicleMaxHealth") or player:GetAttribute("MaxVehicleHealth")) or 100
+	local vHealth = math.clamp((tonumber(player:GetAttribute("VehicleHealth")) or 100) / math.max(1, maxVehHp), 0, 1)
 	local nitro = math.clamp((tonumber(player:GetAttribute("NitroFuel")) or 100) / math.max(1, tonumber(player:GetAttribute("MaxNitroFuel")) or 100), 0, 1)
 	healthBarFill.Size = UDim2.fromScale(vHealth, 1)
 	nitroBarFill.Size = UDim2.fromScale(nitro, 1)
@@ -464,8 +465,8 @@ RunService.RenderStepped:Connect(function(dt: number)
 			local dz = math.clamp((worldPos.Z - pPos.Z) / 700, -0.46, 0.46)
 			return UDim2.fromScale(0.5 + dx, 0.5 + dz)
 		end
-		shopBlip.Position = mapOffset(Vector3.new(120, 0, -90))
-		mechBlip.Position = mapOffset(Vector3.new(-140, 0, 110))
+		shopBlip.Position = mapOffset(Vector3.new(48, 0, -24))
+		mechBlip.Position = mapOffset(Vector3.new(-48, 0, -24))
 
 		local policeFolder = Workspace:FindFirstChild("PoliceUnits") or Workspace:FindFirstChild("ActivePolice")
 		local children = policeFolder and policeFolder:GetChildren() or {}

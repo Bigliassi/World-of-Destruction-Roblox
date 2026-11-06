@@ -1,18 +1,39 @@
 #!/usr/bin/env python3
 """
 build_rbxlx.py
-Discovers all .luau scripts under Roblox/src/ and builds a complete, valid
-Roblox XML place file at Roblox/WorldOfDestruction.rbxlx.
+Discovers all .luau scripts under Roblox/src/, pre-bakes a rich 3D LeoCity_EditPreview
+inside Workspace (with Workspace.Camera positioned at (0, 45, 85) looking toward (0, 10, 0)),
+and builds a complete, valid Roblox XML place file at Roblox/WorldOfDestruction.rbxlx.
 """
 
 from __future__ import annotations
 import html
+import math
 from pathlib import Path
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 SRC_DIR = ROOT_DIR / "src"
 OUTPUT_FILE = ROOT_DIR / "WorldOfDestruction.rbxlx"
+
+# Roblox Enum.Material numeric token values
+MAT_PLASTIC = 256
+MAT_SMOOTH_PLASTIC = 272
+MAT_NEON = 288
+MAT_WOOD = 512
+MAT_WOOD_PLANKS = 528
+MAT_MARBLE = 784
+MAT_CONCRETE = 816
+MAT_CORRODED_METAL = 1040
+MAT_METAL = 1088
+MAT_GRASS = 1280
+MAT_SAND = 1296
+MAT_ASPHALT = 1376
+MAT_GLASS = 1568
+
+# Roblox Enum.NormalId numeric token values
+FACE_BACK = 2
+FACE_FRONT = 5
 
 
 class RefGen:
@@ -39,6 +60,169 @@ def clean_script_name(path: Path) -> str:
         if name.endswith(suffix):
             return name[: -len(suffix)]
     return path.stem
+
+
+def color_xml(r: int, g: int, b: int, indent: int) -> str:
+    pad = "\t" * indent
+    rf, gf, bf = r / 255.0, g / 255.0, b / 255.0
+    uint_val = 0xFF000000 | ((r & 0xFF) << 16) | ((g & 0xFF) << 8) | (b & 0xFF)
+    return (
+        f'{pad}<Color3 name="Color"><R>{rf:.4f}</R><G>{gf:.4f}</G><B>{bf:.4f}</B></Color3>\n'
+        f'{pad}<Color3uint8 name="Color3uint8">{uint_val}</Color3uint8>'
+    )
+
+
+def cframe_yaw_xml(x: float, y: float, z: float, yaw_deg: float = 0.0, indent: int = 4, name: str = "CFrame") -> str:
+    pad = "\t" * indent
+    rad = math.radians(yaw_deg)
+    c = math.cos(rad)
+    s = math.sin(rad)
+    return (
+        f'{pad}<CoordinateFrame name="{name}">\n'
+        f"{pad}\t<X>{x:.3f}</X><Y>{y:.3f}</Y><Z>{z:.3f}</Z>\n"
+        f"{pad}\t<R00>{c:.6f}</R00><R01>0</R01><R02>{s:.6f}</R02>\n"
+        f"{pad}\t<R10>0</R10><R11>1</R11><R12>0</R12>\n"
+        f"{pad}\t<R20>{-s:.6f}</R20><R21>0</R21><R22>{c:.6f}</R22>\n"
+        f"{pad}</CoordinateFrame>"
+    )
+
+
+def cframe_look_at_xml(
+    eye: Tuple[float, float, float],
+    target: Tuple[float, float, float],
+    indent: int = 4,
+    name: str = "CFrame",
+) -> str:
+    pad = "\t" * indent
+    ex, ey, ez = eye
+    tx, ty, tz = target
+    # Back vector = (eye - target).Unit
+    bx, by, bz = ex - tx, ey - ty, ez - tz
+    blen = math.sqrt(bx * bx + by * by + bz * bz) or 1.0
+    bx, by, bz = bx / blen, by / blen, bz / blen
+
+    # Right vector = Up(0,1,0) x Back
+    rx, ry, rz = bz, 0.0, -bx
+    rlen = math.sqrt(rx * rx + ry * ry + rz * rz) or 1.0
+    rx, ry, rz = rx / rlen, ry / rlen, rz / rlen
+
+    # True Up vector = Back x Right
+    ux = by * rz - bz * ry
+    uy = bz * rx - bx * rz
+    uz = bx * ry - by * rx
+
+    return (
+        f'{pad}<CoordinateFrame name="{name}">\n'
+        f"{pad}\t<X>{ex:.3f}</X><Y>{ey:.3f}</Y><Z>{ez:.3f}</Z>\n"
+        f"{pad}\t<R00>{rx:.6f}</R00><R01>{ux:.6f}</R01><R02>{bx:.6f}</R02>\n"
+        f"{pad}\t<R10>{ry:.6f}</R10><R11>{uy:.6f}</R11><R12>{by:.6f}</R12>\n"
+        f"{pad}\t<R20>{rz:.6f}</R20><R21>{uz:.6f}</R21><R22>{bz:.6f}</R22>\n"
+        f"{pad}</CoordinateFrame>"
+    )
+
+
+def rotate_offset(
+    origin: Tuple[float, float, float],
+    yaw_deg: float,
+    local_offset: Tuple[float, float, float],
+) -> Tuple[float, float, float]:
+    rad = math.radians(yaw_deg)
+    c = math.cos(rad)
+    s = math.sin(rad)
+    lx, ly, lz = local_offset
+    wx = origin[0] + lx * c + lz * s
+    wy = origin[1] + ly
+    wz = origin[2] - lx * s + lz * c
+    return (wx, wy, wz)
+
+
+def make_surface_sign_xml(
+    ref: RefGen,
+    text: str,
+    text_rgb: Tuple[int, int, int],
+    face: int = FACE_FRONT,
+    indent: int = 4,
+) -> str:
+    pad = "\t" * indent
+    tr, tg, tb = text_rgb[0] / 255.0, text_rgb[1] / 255.0, text_rgb[2] / 255.0
+    return (
+        f'{pad}<Item class="SurfaceGui" referent="{ref.next()}">\n'
+        f"{pad}\t<Properties>\n"
+        f'{pad}\t\t<string name="Name">SignGui</string>\n'
+        f'{pad}\t\t<token name="Face">{face}</token>\n'
+        f'{pad}\t\t<token name="SizingMode">1</token>\n'
+        f'{pad}\t\t<float name="PixelsPerStud">24</float>\n'
+        f'{pad}\t\t<float name="LightInfluence">0</float>\n'
+        f"{pad}\t</Properties>\n"
+        f'{pad}\t<Item class="TextLabel" referent="{ref.next()}">\n'
+        f"{pad}\t\t<Properties>\n"
+        f'{pad}\t\t\t<string name="Name">SignLabel</string>\n'
+        f'{pad}\t\t\t<UDim2 name="Size"><XS>1</XS><XO>0</XO><YS>1</YS><YO>0</YO></UDim2>\n'
+        f'{pad}\t\t\t<float name="BackgroundTransparency">1</float>\n'
+        f'{pad}\t\t\t<string name="Text">{xml_escape(text)}</string>\n'
+        f'{pad}\t\t\t<Color3 name="TextColor3"><R>{tr:.4f}</R><G>{tg:.4f}</G><B>{tb:.4f}</B></Color3>\n'
+        f'{pad}\t\t\t<bool name="TextScaled">true</bool>\n'
+        f'{pad}\t\t\t<token name="Font">18</token>\n'
+        f'{pad}\t\t\t<float name="TextStrokeTransparency">0.2</float>\n'
+        f"{pad}\t\t</Properties>\n"
+        f"{pad}\t</Item>\n"
+        f"{pad}</Item>"
+    )
+
+
+def make_part_xml(
+    ref: RefGen,
+    name: str,
+    size: Tuple[float, float, float],
+    pos: Tuple[float, float, float],
+    rgb: Tuple[int, int, int],
+    material: int = MAT_CONCRETE,
+    yaw_deg: float = 0.0,
+    transparency: float = 0.0,
+    can_collide: bool = True,
+    class_name: str = "Part",
+    children_xml: Optional[List[str]] = None,
+    indent: int = 4,
+) -> str:
+    pad = "\t" * indent
+    sx, sy, sz = size
+    px, py, pz = pos
+    r, g, b = rgb
+    inner = ""
+    if children_xml:
+        inner = "\n" + "\n".join(children_xml) + "\n" + pad
+    else:
+        inner = "\n" + pad
+    shape_line = f'{pad}\t\t<token name="shape">1</token>\n' if class_name == "Part" else ""
+    return (
+        f'{pad}<Item class="{class_name}" referent="{ref.next()}">\n'
+        f"{pad}\t<Properties>\n"
+        f'{pad}\t\t<string name="Name">{xml_escape(name)}</string>\n'
+        f'{pad}\t\t<bool name="Anchored">true</bool>\n'
+        f'{pad}\t\t<bool name="CanCollide">{"true" if can_collide else "false"}</bool>\n'
+        f'{pad}\t\t<float name="Transparency">{transparency:.2f}</float>\n'
+        f'{pad}\t\t<token name="Material">{material}</token>\n'
+        f'{pad}\t\t<token name="TopSurface">0</token>\n'
+        f'{pad}\t\t<token name="BottomSurface">0</token>\n'
+        f"{shape_line}"
+        f'{pad}\t\t<Vector3 name="size"><X>{sx:.2f}</X><Y>{sy:.2f}</Y><Z>{sz:.2f}</Z></Vector3>\n'
+        f"{color_xml(r, g, b, indent + 2)}\n"
+        f"{cframe_yaw_xml(px, py, pz, yaw_deg, indent + 2)}\n"
+        f"{pad}\t</Properties>{inner}"
+        f"</Item>"
+    )
+
+
+def make_model_xml(ref: RefGen, name: str, children_xml: List[str], indent: int = 3) -> str:
+    pad = "\t" * indent
+    inner = "\n" + "\n".join(children_xml) + "\n" if children_xml else "\n"
+    return (
+        f'{pad}<Item class="Model" referent="{ref.next()}">\n'
+        f"{pad}\t<Properties>\n"
+        f'{pad}\t\t<string name="Name">{xml_escape(name)}</string>\n'
+        f"{pad}\t</Properties>{inner}"
+        f"{pad}</Item>"
+    )
 
 
 def make_script_item(ref: RefGen, class_name: str, name: str, source: str, indent: int = 2) -> str:
@@ -87,46 +271,796 @@ def discover_scripts(subdir: Path, default_class: str) -> List[Tuple[str, str, P
     return found
 
 
+def build_stunt_ramp_preview(
+    ref: RefGen,
+    pos: Tuple[float, float, float],
+    yaw_deg: float,
+    width: float,
+    height: float,
+    length: float,
+    label_text: str,
+    indent: int = 4,
+) -> str:
+    parts: List[str] = []
+    parts.append(
+        make_part_xml(
+            ref,
+            "RampWedge",
+            (width, height, length),
+            rotate_offset(pos, yaw_deg, (0.0, height * 0.5, 0.0)),
+            (50, 55, 68),
+            MAT_CONCRETE,
+            yaw_deg,
+            class_name="WedgePart",
+            indent=indent + 1,
+        )
+    )
+    parts.append(
+        make_part_xml(
+            ref,
+            "LeftRail",
+            (0.8, height + 1.0, length),
+            rotate_offset(pos, yaw_deg, (-width * 0.5 + 0.4, height * 0.5, 0.0)),
+            (255, 145, 20),
+            MAT_NEON,
+            yaw_deg,
+            indent=indent + 1,
+        )
+    )
+    parts.append(
+        make_part_xml(
+            ref,
+            "RightRail",
+            (0.8, height + 1.0, length),
+            rotate_offset(pos, yaw_deg, (width * 0.5 - 0.4, height * 0.5, 0.0)),
+            (255, 145, 20),
+            MAT_NEON,
+            yaw_deg,
+            indent=indent + 1,
+        )
+    )
+    parts.append(
+        make_part_xml(
+            ref,
+            "JumpLipGlow",
+            (width, 1.2, 3.0),
+            rotate_offset(pos, yaw_deg, (0.0, height + 0.6, -length * 0.5 + 1.5)),
+            (255, 220, 40),
+            MAT_NEON,
+            yaw_deg,
+            transparency=0.35,
+            can_collide=False,
+            indent=indent + 1,
+        )
+    )
+    return make_model_xml(ref, label_text, parts, indent=indent)
+
+
+def build_speed_shop_preview(
+    ref: RefGen,
+    pos: Tuple[float, float, float],
+    yaw_deg: float,
+    name: str = "SpeedShop",
+    indent: int = 4,
+) -> str:
+    parts: List[str] = [
+        make_part_xml(
+            ref,
+            "ShowroomFloor",
+            (54.0, 0.8, 44.0),
+            rotate_offset(pos, yaw_deg, (0.0, 0.4, 0.0)),
+            (28, 32, 42),
+            MAT_CONCRETE,
+            yaw_deg,
+            indent=indent + 1,
+        ),
+        make_part_xml(
+            ref,
+            "BackWall",
+            (52.0, 22.0, 2.0),
+            rotate_offset(pos, yaw_deg, (0.0, 11.0, 16.0)),
+            (22, 26, 36),
+            MAT_METAL,
+            yaw_deg,
+            indent=indent + 1,
+        ),
+        make_part_xml(
+            ref,
+            "LeftWall",
+            (2.0, 22.0, 30.0),
+            rotate_offset(pos, yaw_deg, (-25.0, 11.0, 2.0)),
+            (22, 26, 36),
+            MAT_METAL,
+            yaw_deg,
+            indent=indent + 1,
+        ),
+        make_part_xml(
+            ref,
+            "RightWall",
+            (2.0, 22.0, 30.0),
+            rotate_offset(pos, yaw_deg, (25.0, 11.0, 2.0)),
+            (22, 26, 36),
+            MAT_METAL,
+            yaw_deg,
+            indent=indent + 1,
+        ),
+        make_part_xml(
+            ref,
+            "Roof",
+            (54.0, 1.6, 34.0),
+            rotate_offset(pos, yaw_deg, (0.0, 22.5, 2.0)),
+            (18, 20, 28),
+            MAT_METAL,
+            yaw_deg,
+            indent=indent + 1,
+        ),
+        make_part_xml(
+            ref,
+            "ShowroomGlass",
+            (46.0, 16.0, 0.6),
+            rotate_offset(pos, yaw_deg, (0.0, 8.5, -12.0)),
+            (60, 210, 255),
+            MAT_GLASS,
+            yaw_deg,
+            transparency=0.55,
+            indent=indent + 1,
+        ),
+        make_part_xml(
+            ref,
+            "SignBoard",
+            (38.0, 6.5, 1.5),
+            rotate_offset(pos, yaw_deg, (0.0, 26.5, -11.0)),
+            (16, 20, 30),
+            MAT_METAL,
+            yaw_deg,
+            children_xml=[
+                make_surface_sign_xml(ref, "LEO SPEED SHOP & DEALER", (40, 240, 255), FACE_FRONT, indent + 2),
+                make_surface_sign_xml(ref, "LEO SPEED SHOP & DEALER", (40, 240, 255), FACE_BACK, indent + 2),
+            ],
+            indent=indent + 1,
+        ),
+        make_part_xml(
+            ref,
+            "SpeedShopPad",
+            (20.0, 0.6, 16.0),
+            rotate_offset(pos, yaw_deg, (0.0, 0.4, -22.0)),
+            (25, 235, 255),
+            MAT_NEON,
+            yaw_deg,
+            can_collide=False,
+            indent=indent + 1,
+        ),
+    ]
+    return make_model_xml(ref, name, parts, indent=indent)
+
+
+def build_mechanic_bay_preview(
+    ref: RefGen,
+    pos: Tuple[float, float, float],
+    yaw_deg: float,
+    name: str = "MechanicRepairBay",
+    indent: int = 4,
+) -> str:
+    parts: List[str] = [
+        make_part_xml(
+            ref,
+            "BayFloor",
+            (36.0, 0.8, 36.0),
+            rotate_offset(pos, yaw_deg, (0.0, 0.4, 0.0)),
+            (34, 38, 46),
+            MAT_CONCRETE,
+            yaw_deg,
+            indent=indent + 1,
+        ),
+        make_part_xml(
+            ref,
+            "LeftWall",
+            (2.0, 16.0, 28.0),
+            rotate_offset(pos, yaw_deg, (-14.0, 8.0, 0.0)),
+            (48, 52, 62),
+            MAT_CONCRETE,
+            yaw_deg,
+            indent=indent + 1,
+        ),
+        make_part_xml(
+            ref,
+            "RightWall",
+            (2.0, 16.0, 28.0),
+            rotate_offset(pos, yaw_deg, (14.0, 8.0, 0.0)),
+            (48, 52, 62),
+            MAT_CONCRETE,
+            yaw_deg,
+            indent=indent + 1,
+        ),
+        make_part_xml(
+            ref,
+            "Roof",
+            (32.0, 1.5, 30.0),
+            rotate_offset(pos, yaw_deg, (0.0, 16.5, 0.0)),
+            (28, 32, 40),
+            MAT_METAL,
+            yaw_deg,
+            indent=indent + 1,
+        ),
+        make_part_xml(
+            ref,
+            "MechanicSign",
+            (28.0, 5.0, 1.4),
+            rotate_offset(pos, yaw_deg, (0.0, 19.8, -13.0)),
+            (20, 26, 32),
+            MAT_METAL,
+            yaw_deg,
+            children_xml=[
+                make_surface_sign_xml(ref, "INSTANT REPAIR & NITRO REFILL", (60, 255, 120), FACE_FRONT, indent + 2),
+                make_surface_sign_xml(ref, "INSTANT REPAIR & NITRO REFILL", (60, 255, 120), FACE_BACK, indent + 2),
+            ],
+            indent=indent + 1,
+        ),
+        make_part_xml(
+            ref,
+            "RepairPad",
+            (20.0, 0.6, 22.0),
+            rotate_offset(pos, yaw_deg, (0.0, 0.5, 0.0)),
+            (50, 255, 110),
+            MAT_NEON,
+            yaw_deg,
+            transparency=0.25,
+            can_collide=False,
+            indent=indent + 1,
+        ),
+    ]
+    return make_model_xml(ref, name, parts, indent=indent)
+
+
+def build_skyscraper_preview(
+    ref: RefGen,
+    center: Tuple[float, float, float],
+    width: float,
+    depth: float,
+    height: float,
+    tint: Tuple[int, int, int],
+    name: str,
+    is_leo_tower: bool = False,
+    indent: int = 4,
+) -> str:
+    cx, cy, cz = center
+    parts: List[str] = [
+        make_part_xml(
+            ref,
+            "Shaft",
+            (width, height, depth),
+            (cx, cy + height * 0.5, cz),
+            tint,
+            MAT_CONCRETE,
+            indent=indent + 1,
+        ),
+        make_part_xml(
+            ref,
+            "GlassLobby",
+            (width * 0.82, 14.0, depth + 0.6),
+            (cx, cy + 7.0, cz),
+            (110, 200, 255),
+            MAT_GLASS,
+            transparency=0.45,
+            indent=indent + 1,
+        ),
+    ]
+
+    floors = max(3, min(10, int(height // 16)))
+    for f in range(1, floors + 1):
+        y = cy + 16.0 + (f - 0.5) * ((height - 20.0) / floors)
+        win_col = (255, 215, 135) if (f % 2 == 0) else (120, 195, 255)
+        parts.append(
+            make_part_xml(
+                ref,
+                "WindowBandZ",
+                (width * 0.86, 3.2, depth + 0.4),
+                (cx, y, cz),
+                win_col,
+                MAT_NEON,
+                indent=indent + 1,
+            )
+        )
+        parts.append(
+            make_part_xml(
+                ref,
+                "WindowBandX",
+                (width + 0.4, 3.2, depth * 0.86),
+                (cx, y, cz),
+                win_col,
+                MAT_NEON,
+                indent=indent + 1,
+            )
+        )
+
+    crown_h = height * 0.18
+    crown_children: List[str] = []
+    if is_leo_tower:
+        crown_children = [
+            make_surface_sign_xml(ref, "LEO TOWER", (255, 215, 60), FACE_FRONT, indent + 2),
+            make_surface_sign_xml(ref, "LEO TOWER", (255, 215, 60), FACE_BACK, indent + 2),
+        ]
+    parts.append(
+        make_part_xml(
+            ref,
+            "Crown",
+            (width * 0.7, crown_h, depth * 0.7),
+            (cx, cy + height + crown_h * 0.5, cz),
+            tint,
+            MAT_METAL,
+            children_xml=crown_children,
+            indent=indent + 1,
+        )
+    )
+
+    if is_leo_tower:
+        parts.append(
+            make_part_xml(
+                ref,
+                "LeoSpire",
+                (6.0, 28.0, 6.0),
+                (cx, cy + height + crown_h + 14.0, cz),
+                (255, 215, 55),
+                MAT_NEON,
+                can_collide=False,
+                indent=indent + 1,
+            )
+        )
+
+    return make_model_xml(ref, name, parts, indent=indent)
+
+
+def build_leo_city_edit_preview_xml(ref: RefGen) -> str:
+    """
+    Builds Workspace.LeoCity_EditPreview so that opening WorldOfDestruction.rbxlx in Roblox Studio
+    Edit Mode immediately displays the full 3D Leo City in front of the viewport camera.
+    Replaced cleanly at runtime by WorldBuilderService.script.luau when Play is pressed.
+    """
+    block_size = 180.0
+    road_width = 36.0
+    grid_radius = 3
+    usable = block_size - road_width
+    total_span = (grid_radius * 2 + 1) * block_size + 240.0
+    grid_extent = (grid_radius + 1) * block_size
+
+    ground_items: List[str] = [
+        make_part_xml(
+            ref,
+            "CityBaseplate",
+            (total_span, 4.0, total_span),
+            (0.0, -2.0, 0.0),
+            (36, 40, 48),
+            MAT_CONCRETE,
+            indent=4,
+        ),
+        make_part_xml(
+            ref,
+            "OceanWater",
+            (360.0, 3.6, total_span),
+            ((grid_radius + 1.2) * block_size, -1.6, 0.0),
+            (28, 125, 210),
+            MAT_GLASS,
+            indent=4,
+        ),
+    ]
+
+    roads_items: List[str] = []
+    buildings_items: List[str] = []
+    landmarks_items: List[str] = []
+    zones_items: List[str] = []
+
+    road_lines = [(i + 0.5) * block_size for i in range(-grid_radius - 1, grid_radius + 1)]
+    for rx in road_lines:
+        roads_items.append(
+            make_part_xml(
+                ref,
+                "RoadNS",
+                (road_width, 0.3, grid_extent * 2.0),
+                (rx, 0.15, 0.0),
+                (28, 30, 38),
+                MAT_ASPHALT,
+                indent=4,
+            )
+        )
+        for z in range(int(-grid_extent + 20), int(grid_extent - 20) + 1, 56):
+            roads_items.append(
+                make_part_xml(
+                    ref,
+                    "LaneDashNS",
+                    (0.8, 0.34, 14.0),
+                    (rx, 0.17, float(z)),
+                    (240, 195, 50),
+                    MAT_SMOOTH_PLASTIC,
+                    indent=4,
+                )
+            )
+
+    for rz in road_lines:
+        roads_items.append(
+            make_part_xml(
+                ref,
+                "RoadEW",
+                (grid_extent * 2.0, 0.32, road_width),
+                (0.0, 0.16, rz),
+                (28, 30, 38),
+                MAT_ASPHALT,
+                indent=4,
+            )
+        )
+        for x in range(int(-grid_extent + 20), int(grid_extent - 20) + 1, 56):
+            roads_items.append(
+                make_part_xml(
+                    ref,
+                    "LaneDashEW",
+                    (14.0, 0.35, 0.8),
+                    (float(x), 0.175, rz),
+                    (240, 195, 50),
+                    MAT_SMOOTH_PLASTIC,
+                    indent=4,
+                )
+            )
+
+    # Crosswalks around the central Downtown & Leo Plaza intersections
+    for rx in (-270.0, -90.0, 90.0, 270.0):
+        for rz in (-270.0, -90.0, 90.0, 270.0):
+            for s in (-2, -1, 1, 2):
+                roads_items.append(
+                    make_part_xml(
+                        ref,
+                        "CrosswalkN",
+                        (3.2, 0.36, 1.2),
+                        (rx + s * 5.5, 0.18, rz - road_width * 0.5 - 2.0),
+                        (220, 225, 235),
+                        MAT_SMOOTH_PLASTIC,
+                        indent=4,
+                    )
+                )
+                roads_items.append(
+                    make_part_xml(
+                        ref,
+                        "CrosswalkE",
+                        (1.2, 0.36, 3.2),
+                        (rx + road_width * 0.5 + 2.0, 0.18, rz + s * 5.5),
+                        (220, 225, 235),
+                        MAT_SMOOTH_PLASTIC,
+                        indent=4,
+                    )
+                )
+
+    # City blocks, sidewalks, Leo Plaza fountain, Speed Shops, Mechanic Bays, Stunt Ramps, and Skyscrapers
+    for bx in range(-grid_radius, grid_radius + 1):
+        for bz in range(-grid_radius, grid_radius + 1):
+            ox, oz = bx * block_size, bz * block_size
+            ground_items.append(
+                make_part_xml(
+                    ref,
+                    "SidewalkBlock",
+                    (usable, 0.6, usable),
+                    (ox, 0.3, oz),
+                    (68, 74, 86),
+                    MAT_CONCRETE,
+                    indent=4,
+                )
+            )
+
+            if bx == 0 and bz == 0:
+                # Leo Plaza Fountain & Spire centerpiece
+                landmarks_items.append(
+                    make_part_xml(
+                        ref,
+                        "LeoPlazaFountain",
+                        (26.0, 6.0, 26.0),
+                        (ox, 3.3, oz - 18.0),
+                        (85, 175, 245),
+                        MAT_MARBLE,
+                        indent=4,
+                    )
+                )
+                landmarks_items.append(
+                    make_part_xml(
+                        ref,
+                        "FountainWaterTier",
+                        (18.0, 1.4, 18.0),
+                        (ox, 6.8, oz - 18.0),
+                        (65, 210, 255),
+                        MAT_GLASS,
+                        transparency=0.25,
+                        indent=4,
+                    )
+                )
+                landmarks_items.append(
+                    make_part_xml(
+                        ref,
+                        "FountainWaterSpire",
+                        (4.2, 9.5, 4.2),
+                        (ox, 11.5, oz - 18.0),
+                        (140, 235, 255),
+                        MAT_NEON,
+                        can_collide=False,
+                        indent=4,
+                    )
+                )
+                # Crate stacks & hydrants on Leo Plaza
+                for cx_off, cz_off in ((0.0, -38.0), (-20.0, -12.0), (20.0, -12.0)):
+                    landmarks_items.append(
+                        make_part_xml(
+                            ref,
+                            "PlazaCrateStack",
+                            (6.4, 6.4, 3.2),
+                            (ox + cx_off, 3.8, oz + cz_off),
+                            (145, 98, 56),
+                            MAT_WOOD_PLANKS,
+                            indent=4,
+                        )
+                    )
+                for hx in (-usable * 0.5 + 3.5, usable * 0.5 - 3.5):
+                    landmarks_items.append(
+                        make_part_xml(
+                            ref,
+                            "FireHydrant",
+                            (1.6, 3.2, 1.6),
+                            (ox + hx, 2.2, oz),
+                            (220, 35, 35),
+                            MAT_METAL,
+                            indent=4,
+                        )
+                    )
+                # Leo Plaza Stunt Mega-Ramp, Plaza Speed Shop & Plaza Mechanic Repair Bay
+                zones_items.append(
+                    build_stunt_ramp_preview(ref, (ox, 0.6, oz - 58.0), 0.0, 18.0, 8.0, 24.0, "LeoPlazaRamp", indent=4)
+                )
+                zones_items.append(
+                    build_speed_shop_preview(ref, (ox + 48.0, 0.6, oz - 24.0), 180.0, "PlazaSpeedShop", indent=4)
+                )
+                zones_items.append(
+                    build_mechanic_bay_preview(ref, (ox - 48.0, 0.6, oz - 24.0), 180.0, "PlazaMechanicRepairBay", indent=4)
+                )
+            elif bx == 1 and bz == 0:
+                zones_items.append(build_speed_shop_preview(ref, (ox, 0.6, oz), -90.0, "SpeedShop", indent=4))
+            elif bx == -1 and bz == 0:
+                zones_items.append(build_mechanic_bay_preview(ref, (ox, 0.6, oz), 90.0, "MechanicRepairBay", indent=4))
+            elif bx == 0 and bz == -2:
+                zones_items.append(build_mechanic_bay_preview(ref, (ox, 0.6, oz), 0.0, "NorthMechanicRepairBay", indent=4))
+                buildings_items.append(
+                    make_part_xml(
+                        ref,
+                        "BoomGasStationCanopy",
+                        (52.0, 2.2, 32.0),
+                        (ox, 18.6, oz + 36.0),
+                        (230, 45, 45),
+                        MAT_METAL,
+                        indent=4,
+                    )
+                )
+            elif bx == 2 and bz == 2:
+                zones_items.append(build_speed_shop_preview(ref, (ox, 0.6, oz), 180.0, "EastSpeedShop", indent=4))
+            elif bx == grid_radius:
+                ground_items.append(
+                    make_part_xml(
+                        ref,
+                        "BeachSand",
+                        (usable, 0.7, usable),
+                        (ox, 0.35, oz),
+                        (235, 205, 145),
+                        MAT_SAND,
+                        indent=4,
+                    )
+                )
+                ground_items.append(
+                    make_part_xml(
+                        ref,
+                        "BoardwalkDeck",
+                        (28.0, 1.0, usable),
+                        (ox - 38.0, 0.5, oz),
+                        (155, 108, 68),
+                        MAT_WOOD_PLANKS,
+                        indent=4,
+                    )
+                )
+                zones_items.append(
+                    build_stunt_ramp_preview(ref, (ox + 10.0, 0.7, oz), 0.0, 18.0, 8.0, 24.0, "BoardwalkStuntJump", indent=4)
+                )
+            elif bx <= -2 and bz <= -1:
+                buildings_items.append(
+                    make_part_xml(
+                        ref,
+                        "IndustrialWarehouse",
+                        (56.0, 26.0, 40.0),
+                        (ox + 28.0, 13.6, oz + 25.0),
+                        (95, 65, 55),
+                        MAT_CORRODED_METAL,
+                        indent=4,
+                    )
+                )
+                landmarks_items.append(
+                    make_part_xml(
+                        ref,
+                        "ConstructionCraneMast",
+                        (5.0, 85.0, 5.0),
+                        (ox - 35.0, 45.1, oz - 35.0),
+                        (245, 185, 30),
+                        MAT_METAL,
+                        indent=4,
+                    )
+                )
+                landmarks_items.append(
+                    make_part_xml(
+                        ref,
+                        "ConstructionCraneJib",
+                        (75.0, 4.0, 4.0),
+                        (ox - 10.0, 86.6, oz - 35.0),
+                        (245, 185, 30),
+                        MAT_METAL,
+                        indent=4,
+                    )
+                )
+            elif bx <= -2 and bz >= 1:
+                ground_items.append(
+                    make_part_xml(
+                        ref,
+                        "ParkLawn",
+                        (usable - 16.0, 0.8, usable - 16.0),
+                        (ox, 0.4, oz),
+                        (52, 135, 65),
+                        MAT_GRASS,
+                        indent=4,
+                    )
+                )
+                ground_items.append(
+                    make_part_xml(
+                        ref,
+                        "ParkPond",
+                        (46.0, 0.9, 34.0),
+                        (ox - 22.0, 0.5, oz + 18.0),
+                        (45, 155, 235),
+                        MAT_GLASS,
+                        indent=4,
+                    )
+                )
+                zones_items.append(
+                    build_stunt_ramp_preview(
+                        ref, (ox - 22.0, 0.8, oz - 18.0), 180.0, 20.0, 9.0, 26.0, "ParkLakeMegaJump", indent=4
+                    )
+                )
+            elif abs(bx) <= 1 and abs(bz) <= 1:
+                is_leo = (bx == 0 and bz == -1) or (bx == 1 and bz == -1)
+                if bx == 0 and bz == -1:
+                    h = 195.0
+                elif bx == 1 and bz == -1:
+                    h = 175.0
+                else:
+                    h = 110.0 + ((abs(bx * 3 + bz * 5) % 4) * 18.0)
+                col = (28, 38, 62) if is_leo else (42, 48, 64)
+                t_name = "LeoTower" if (bx == 0 and bz == -1) else "DowntownTower"
+                buildings_items.append(
+                    build_skyscraper_preview(
+                        ref,
+                        (ox - 26.0, 0.6, oz - 26.0),
+                        44.0,
+                        44.0,
+                        h,
+                        col,
+                        t_name,
+                        is_leo_tower=is_leo,
+                        indent=4,
+                    )
+                )
+                if is_leo:
+                    zones_items.append(
+                        build_stunt_ramp_preview(
+                            ref,
+                            (ox - 26.0, 0.6 + h, oz - 26.0 - 44.0 * 0.3),
+                            0.0,
+                            18.0,
+                            8.0,
+                            24.0,
+                            "RooftopMegaJump",
+                            indent=4,
+                        )
+                    )
+                buildings_items.append(
+                    build_skyscraper_preview(
+                        ref,
+                        (ox + 26.0, 0.6, oz + 26.0),
+                        38.0,
+                        38.0,
+                        88.0,
+                        (52, 58, 72),
+                        "GlassOfficeTower",
+                        is_leo_tower=False,
+                        indent=4,
+                    )
+                )
+            else:
+                buildings_items.append(
+                    build_skyscraper_preview(
+                        ref,
+                        (ox - 24.0, 0.6, oz - 24.0),
+                        34.0,
+                        34.0,
+                        48.0,
+                        (64, 54, 58),
+                        "CityBlockBuilding",
+                        is_leo_tower=False,
+                        indent=4,
+                    )
+                )
+                buildings_items.append(
+                    build_skyscraper_preview(
+                        ref,
+                        (ox + 24.0, 0.6, oz + 24.0),
+                        32.0,
+                        32.0,
+                        38.0,
+                        (54, 62, 74),
+                        "CommercialStore",
+                        is_leo_tower=False,
+                        indent=4,
+                    )
+                )
+
+    subfolders = [
+        make_folder_item(ref, "Ground", ground_items, indent=3),
+        make_folder_item(ref, "Roads", roads_items, indent=3),
+        make_folder_item(ref, "Landmarks", landmarks_items, indent=3),
+        make_folder_item(ref, "InteractiveZones", zones_items, indent=3),
+        make_folder_item(ref, "Buildings", buildings_items, indent=3),
+    ]
+    return make_model_xml(ref, "LeoCity_EditPreview", subfolders, indent=2)
+
+
 def build_workspace_xml(ref: RefGen) -> str:
-    return f"""\t<Item class="Workspace" referent="{ref.next()}">
+    ws_ref = ref.next()
+    cam_ref = ref.next()
+    terrain_ref = ref.next()
+    spawn_ref = ref.next()
+
+    cam_cframe_xml = cframe_look_at_xml((0.0, 45.0, 85.0), (0.0, 10.0, 0.0), indent=4, name="CFrame")
+    cam_focus_xml = cframe_yaw_xml(0.0, 10.0, 0.0, 0.0, indent=4, name="Focus")
+    edit_preview_xml = build_leo_city_edit_preview_xml(ref)
+    spawn_color_xml = color_xml(55, 65, 85, indent=4)
+
+    return f"""\t<Item class="Workspace" referent="{ws_ref}">
 \t\t<Properties>
 \t\t\t<string name="Name">Workspace</string>
+\t\t\t<Ref name="CurrentCamera">{cam_ref}</Ref>
 \t\t\t<float name="Gravity">196.2</float>
 \t\t\t<token name="StreamingEnabled">1</token>
 \t\t</Properties>
-\t\t<Item class="Camera" referent="{ref.next()}">
+\t\t<Item class="Camera" referent="{cam_ref}">
 \t\t\t<Properties>
 \t\t\t\t<string name="Name">Camera</string>
+\t\t\t\t<token name="CameraType">0</token>
 \t\t\t\t<float name="FieldOfView">70</float>
+{cam_cframe_xml}
+{cam_focus_xml}
 \t\t\t</Properties>
 \t\t</Item>
-\t\t<Item class="Terrain" referent="{ref.next()}">
+\t\t<Item class="Terrain" referent="{terrain_ref}">
 \t\t\t<Properties>
 \t\t\t\t<string name="Name">Terrain</string>
 \t\t\t</Properties>
 \t\t</Item>
-\t\t<Item class="SpawnLocation" referent="{ref.next()}">
+\t\t<Item class="SpawnLocation" referent="{spawn_ref}">
 \t\t\t<Properties>
 \t\t\t\t<string name="Name">SpawnLocation</string>
 \t\t\t\t<bool name="Anchored">true</bool>
 \t\t\t\t<bool name="CanCollide">true</bool>
 \t\t\t\t<bool name="Neutral">true</bool>
 \t\t\t\t<float name="Transparency">0</float>
+\t\t\t\t<token name="Material">{MAT_CONCRETE}</token>
+\t\t\t\t<token name="TopSurface">0</token>
+\t\t\t\t<token name="BottomSurface">0</token>
 \t\t\t\t<Vector3 name="size">
-\t\t\t\t\t<X>12</X>
+\t\t\t\t\t<X>16</X>
 \t\t\t\t\t<Y>1</Y>
-\t\t\t\t\t<Z>12</Z>
+\t\t\t\t\t<Z>16</Z>
 \t\t\t\t</Vector3>
-\t\t\t\t<CoordinateFrame name="CFrame">
-\t\t\t\t\t<X>0</X>
-\t\t\t\t\t<Y>2</Y>
-\t\t\t\t\t<Z>0</Z>
-\t\t\t\t\t<R00>1</R00><R01>0</R01><R02>0</R02>
-\t\t\t\t\t<R10>0</R10><R11>1</R11><R12>0</R12>
-\t\t\t\t\t<R20>0</R20><R21>0</R21><R22>1</R22>
-\t\t\t\t</CoordinateFrame>
+{spawn_color_xml}
+{cframe_yaw_xml(0.0, 0.5, 25.0, 0.0, indent=4)}
 \t\t\t</Properties>
 \t\t</Item>
+{edit_preview_xml}
 \t</Item>"""
 
 
@@ -285,6 +1219,7 @@ def main() -> None:
     OUTPUT_FILE.write_text(xml_content, encoding="utf-8")
 
     print(f"Built Roblox XML place: {OUTPUT_FILE}")
+    print("Pre-baked Workspace.LeoCity_EditPreview + Camera CFrame at (0, 45, 85) -> (0, 10, 0)")
     print(f"Packed {len(manifest)} Luau scripts:")
     for container, name, path in manifest:
         rel = path.relative_to(ROOT_DIR)

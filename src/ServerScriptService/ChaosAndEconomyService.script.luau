@@ -571,7 +571,6 @@ local function registerComboAction(
 	-- Broadcast Heat increase to PoliceHeatService
 	if heatDelta > 0 then
 		AddHeatBindable:Fire(player, heatDelta, finalCallout, worldPosition)
-		FolderAddHeatBindable:Fire(player, heatDelta, finalCallout, worldPosition)
 	end
 
 	-- Fire Style Callout to Client HUD

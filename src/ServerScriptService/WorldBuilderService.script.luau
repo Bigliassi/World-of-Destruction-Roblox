@@ -66,9 +66,19 @@ Workspace:SetAttribute("LeoCityBlockSize", BLOCK_SIZE)
 Workspace:SetAttribute("LeoCityRoadWidth", ROAD_WIDTH)
 Workspace:SetAttribute("LeoCityGridRadius", GRID_RADIUS)
 
+local existingPreview = Workspace:FindFirstChild("LeoCity_EditPreview")
+if existingPreview then
+	existingPreview:Destroy()
+end
+
 local existingCity = Workspace:FindFirstChild("LeoCity")
 if existingCity then
 	existingCity:Destroy()
+end
+
+local defaultSpawn = Workspace:FindFirstChild("SpawnLocation")
+if defaultSpawn and defaultSpawn:IsA("SpawnLocation") then
+	defaultSpawn:Destroy()
 end
 
 local CityRoot = Instance.new("Folder")
@@ -172,7 +182,10 @@ local function tagDestructible(
 	explosive: boolean?
 )
 	instance:SetAttribute("PropType", propType)
+	instance:SetAttribute("DestructibleType", propType)
+	instance:SetAttribute("IsDestructible", true)
 	instance:SetAttribute("CashValue", cashValue)
+	instance:SetAttribute("CashReward", cashValue)
 	instance:SetAttribute("ChaosPoints", chaosPoints)
 	instance:SetAttribute("BreakThreshold", breakThreshold)
 	instance:SetAttribute("Explosive", explosive == true)
@@ -463,7 +476,9 @@ local function buildSpeedShop(pos: Vector3, yawDeg: number)
 
 	local pad = makePart(m, "SpeedShopPad", Vector3.new(20, 0.6, 16), rot * CFrame.new(0, 0.4, -22), Color3.fromRGB(25, 235, 255), Enum.Material.Neon, true)
 	pad.CanCollide = false
+	pad:SetAttribute("IsSpeedShop", true)
 	CollectionService:AddTag(pad, "SpeedShopPad")
+	CollectionService:AddTag(pad, "SpeedShop")
 
 	local prompt = Instance.new("ProximityPrompt")
 	prompt.ActionText = "Open Speed Shop"
@@ -513,7 +528,9 @@ local function buildMechanicRepairBay(pos: Vector3, yawDeg: number)
 	local pad = makePart(m, "RepairPad", Vector3.new(20, 0.6, 22), rot * CFrame.new(0, 0.5, 0), Color3.fromRGB(50, 255, 110), Enum.Material.Neon, true)
 	pad.Transparency = 0.25
 	pad.CanCollide = false
+	pad:SetAttribute("IsMechanicSpot", true)
 	CollectionService:AddTag(pad, "MechanicPad")
+	CollectionService:AddTag(pad, "MechanicSpot")
 
 	local cooldowns: { [Model]: number } = {}
 	pad.Touched:Connect(function(hit: BasePart)
@@ -572,7 +589,13 @@ local function buildSkyscraper(center: Vector3, width: number, depth: number, he
 
 	-- Setback crown
 	local crownH = height * 0.18
-	makePart(m, "Crown", Vector3.new(width * 0.7, crownH, depth * 0.7), CFrame.new(center + Vector3.new(0, height + crownH * 0.5, 0)), tint, Enum.Material.Metal, true)
+	local crown = makePart(m, "Crown", Vector3.new(width * 0.7, crownH, depth * 0.7), CFrame.new(center + Vector3.new(0, height + crownH * 0.5, 0)), tint, Enum.Material.Metal, true)
+	if name == "LeoTower" then
+		local spire = makePart(m, "LeoSpire", Vector3.new(6, 28, 6), CFrame.new(center + Vector3.new(0, height + crownH + 14, 0)), Color3.fromRGB(255, 215, 55), Enum.Material.Neon, true)
+		spire.CanCollide = false
+		addSurfaceSign(crown, "LEO TOWER", Color3.fromRGB(255, 215, 60), Enum.NormalId.Front)
+		addSurfaceSign(crown, "LEO TOWER", Color3.fromRGB(255, 215, 60), Enum.NormalId.Back)
+	end
 
 	if hasRooftopRamp then
 		buildStuntRamp(center + Vector3.new(0, height, -depth * 0.3), 0, 18, 8, 24, "RooftopMegaJump")
@@ -743,15 +766,21 @@ local function buildLeoCity()
 
 			-- District & Landmark Assignment
 			if bx == 0 and bz == 0 then
-				-- LEO PLAZA: Central Fountain, immediate crate stacks, stunt jump, and Speed Shop / Mechanic nearby
+				-- LEO PLAZA: Central Fountain, Water Tier, Spire, Crate Stacks, Stunt Mega-Ramps, and Plaza Speed Shop / Mechanic Bay
 				local fountain = makePart(LandmarksFolder, "LeoPlazaFountain", Vector3.new(26, 6, 26), CFrame.new(origin + Vector3.new(0, 3.3, -18)), Color3.fromRGB(85, 175, 245), Enum.Material.Marble, true)
+				local tier = makePart(LandmarksFolder, "FountainWaterTier", Vector3.new(18, 1.4, 18), CFrame.new(origin + Vector3.new(0, 6.8, -18)), Color3.fromRGB(65, 210, 255), Enum.Material.Glass, true)
+				tier.Transparency = 0.25
+				local spire = makePart(LandmarksFolder, "FountainWaterSpire", Vector3.new(4.2, 9.5, 4.2), CFrame.new(origin + Vector3.new(0, 11.5, -18)), Color3.fromRGB(140, 235, 255), Enum.Material.Neon, true)
+				spire.CanCollide = false
 				tagDestructible(fountain, "PlazaFountain", 500, 300, 75, false)
-				spawnCrateCluster(origin + Vector3.new(0, 0.6, -48), 4)
-				spawnCrateCluster(origin + Vector3.new(-24, 0.6, -12), 3)
-				spawnCrateCluster(origin + Vector3.new(24, 0.6, -12), 3)
+				spawnCrateCluster(origin + Vector3.new(0, 0.6, -38), 4)
+				spawnCrateCluster(origin + Vector3.new(-20, 0.6, -12), 3)
+				spawnCrateCluster(origin + Vector3.new(20, 0.6, -12), 3)
 				spawnBench(origin + Vector3.new(-18, 0.6, -18), 90)
 				spawnBench(origin + Vector3.new(18, 0.6, -18), -90)
 				buildStuntRamp(origin + Vector3.new(0, 0.6, -58), 0, 18, 8, 24, "LeoPlazaRamp")
+				buildSpeedShop(origin + Vector3.new(48, 0.6, -24), 180)
+				buildMechanicRepairBay(origin + Vector3.new(-48, 0.6, -24), 180)
 			elseif bx == 1 and bz == 0 then
 				buildSpeedShop(origin + Vector3.new(0, 0.6, 0), -90)
 				spawnBusStop(origin + Vector3.new(0, 0.6, -edge + 2), 0)
@@ -776,10 +805,11 @@ local function buildLeoCity()
 				buildSuburbanParkBlock(origin)
 			elseif math.abs(bx) <= 1 and math.abs(bz) <= 1 then
 				-- Downtown Skyscraper Core
-				local isLeoTower = (bx == 1 and bz == -1)
-				local h = if isLeoTower then 195 else 110 + ((math.abs(bx * 3 + bz * 5) % 4) * 18)
+				local isLeoTower = (bx == 0 and bz == -1) or (bx == 1 and bz == -1)
+				local h = if (bx == 0 and bz == -1) then 195 elseif (bx == 1 and bz == -1) then 175 else 110 + ((math.abs(bx * 3 + bz * 5) % 4) * 18)
 				local col = if isLeoTower then Color3.fromRGB(28, 38, 62) else Color3.fromRGB(42, 48, 64)
-				buildSkyscraper(origin + Vector3.new(-26, 0.6, -26), 44, 44, h, col, if isLeoTower then "LeoTower" else "DowntownTower", isLeoTower)
+				local towerName = if (bx == 0 and bz == -1) then "LeoTower" else "DowntownTower"
+				buildSkyscraper(origin + Vector3.new(-26, 0.6, -26), 44, 44, h, col, towerName, isLeoTower)
 				buildSkyscraper(origin + Vector3.new(26, 0.6, 26), 38, 38, 88, Color3.fromRGB(52, 58, 72), "GlassOfficeTower", false)
 				spawnBusStop(origin + Vector3.new(0, 0.6, -edge + 2), 0)
 				spawnCrateCluster(origin + Vector3.new(26, 0.6, -26), 3)

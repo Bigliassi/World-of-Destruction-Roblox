@@ -282,12 +282,21 @@ local function findNearestVehiclePosition(origin: Vector3): Vector3
 end
 
 local function findNearestSpeedShopPosition(origin: Vector3): Vector3
-	local shopA = Vector3.new(120, 1, 120)
-	local shopB = Vector3.new(-120, 1, -120)
-	if (shopA - origin).Magnitude <= (shopB - origin).Magnitude then
-		return shopA
+	local shops = {
+		Vector3.new(48, 1, -24),
+		Vector3.new(180, 1, 0),
+		Vector3.new(360, 1, 360),
+	}
+	local best = shops[1]
+	local bestDist = (best - origin).Magnitude
+	for _, s in ipairs(shops) do
+		local d = (s - origin).Magnitude
+		if d < bestDist then
+			bestDist = d
+			best = s
+		end
 	end
-	return shopB
+	return best
 end
 
 --------------------------------------------------------------------------------
@@ -1149,16 +1158,16 @@ RunService.RenderStepped:Connect(function()
 		targetPos = findNearestVehiclePosition(playerPos)
 		targetLabel = "▼ YOUR VEHICLE [V]"
 	elseif spec.TargetKind == "Destructibles" then
-		targetPos = Vector3.new(60, 1.5, 30)
-		targetLabel = "▼ SMASH ZONE"
+		targetPos = Vector3.new(0, 1.5, -18)
+		targetLabel = "▼ SMASH PLAZA PROPS"
 	elseif spec.TargetKind == "Stunt" then
-		targetPos = Vector3.new(-210, 1.5, -30)
+		targetPos = Vector3.new(0, 1.5, -58)
 		targetLabel = "▼ MEGA-RAMP STUNT"
 	elseif spec.TargetKind == "SpeedShop" then
 		targetPos = findNearestSpeedShopPosition(playerPos)
 		targetLabel = "▼ SPEED SHOP [B]"
 	elseif spec.TargetKind == "Heat" then
-		targetPos = Vector3.new(60, 1.5, 60)
+		targetPos = Vector3.new(-26, 1.5, -206)
 		targetLabel = "▼ LEO TOWER CHAOS"
 	end
 

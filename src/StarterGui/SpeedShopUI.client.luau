@@ -552,6 +552,12 @@ task.spawn(function()
 			setShopOpen(true)
 		end)
 	end
+	local toggleRemote = remotes:FindFirstChild("SpeedShopToggle")
+	if toggleRemote and toggleRemote:IsA("RemoteEvent") then
+		toggleRemote.OnClientEvent:Connect(function(openState: any)
+			setShopOpen(openState ~= false)
+		end)
+	end
 end)
 
 refreshVehicleView()

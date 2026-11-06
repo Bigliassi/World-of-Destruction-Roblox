@@ -261,17 +261,19 @@ destroyProp = function(inst: Instance, attacker: Player?, hitVel: Vector3, isFro
 	local chaosPoints = (inst:GetAttribute("ChaosPoints") :: number?) or 15
 	local isExplosive = (inst:GetAttribute("Explosive") :: boolean?) == true
 
-	-- Clone clean template for respawning before unanchoring/modifying
-	local cleanClone = inst:Clone()
-	cleanClone:SetAttribute("Destroyed", false)
-	if inst.Parent then
-		table.insert(respawnQueue, {
-			template = cleanClone,
-			parent = inst.Parent,
-			originCF = originCF,
-			destroyedAt = os.clock(),
-			liveInstance = inst,
-		})
+	-- Clone clean template for respawning before unanchoring/modifying (skip AI traffic cars which self-respawn)
+	if inst.Parent and not CollectionService:HasTag(inst, "AITrafficVehicle") then
+		local cleanClone = inst:Clone()
+		if cleanClone then
+			cleanClone:SetAttribute("Destroyed", false)
+			table.insert(respawnQueue, {
+				template = cleanClone,
+				parent = inst.Parent,
+				originCF = originCF,
+				destroyedAt = os.clock(),
+				liveInstance = inst,
+			})
+		end
 	end
 
 	-- Unanchor and apply dramatic impulse + angular spin
@@ -328,10 +330,11 @@ destroyProp = function(inst: Instance, attacker: Player?, hitVel: Vector3, isFro
 	}
 	if DestructionBindable then
 		DestructionBindable:Fire(payload)
-	end
-	local rootDestBindable = ServerStorage:FindFirstChild("DestructionEvent")
-	if rootDestBindable and rootDestBindable:IsA("BindableEvent") and attacker then
-		rootDestBindable:Fire(attacker, payload, cashValue, propPos)
+	else
+		local rootDestBindable = ServerStorage:FindFirstChild("DestructionEvent")
+		if rootDestBindable and rootDestBindable:IsA("BindableEvent") and attacker then
+			rootDestBindable:Fire(attacker, payload, cashValue, propPos)
+		end
 	end
 	if DestructionRemote then
 		if attacker then

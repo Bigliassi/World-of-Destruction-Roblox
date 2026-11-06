@@ -109,14 +109,17 @@ local function runDiagnostics()
 	)
 
 	-- Count destructible props across Workspace
-	local destructibleCount = 0
-	for _, inst in ipairs(Workspace:GetDescendants()) do
-		if inst:GetAttribute("IsDestructible") == true
-			or inst:GetAttribute("Destructible") == true
-			or inst:GetAttribute("DestructibleType") ~= nil
-			or inst:GetAttribute("MaxHealth") ~= nil
-		then
-			destructibleCount += 1
+	local destructibleCount = #game:GetService("CollectionService"):GetTagged("Destructible")
+	if destructibleCount == 0 then
+		for _, inst in ipairs(Workspace:GetDescendants()) do
+			if inst:GetAttribute("IsDestructible") == true
+				or inst:GetAttribute("Destructible") == true
+				or inst:GetAttribute("DestructibleType") ~= nil
+				or inst:GetAttribute("PropType") ~= nil
+				or inst:GetAttribute("MaxHealth") ~= nil
+			then
+				destructibleCount += 1
+			end
 		end
 	end
 	recordCheck(
