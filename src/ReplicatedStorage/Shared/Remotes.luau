@@ -79,6 +79,14 @@ local REMOTE_SPECS: { RemoteSpec } = {
 	{ Name = "RequestMonetizationPurchase", ClassName = "RemoteEvent" },
 	{ Name = "MonetizationNotification", ClassName = "RemoteEvent" },
 	{ Name = "GetMonetizationCatalog", ClassName = "RemoteFunction" },
+
+	-- Character Creator & Avatar Wardrobe Remotes
+	{ Name = "GetAvatarWardrobe", ClassName = "RemoteFunction" },
+	{ Name = "EquipAvatarItem", ClassName = "RemoteFunction" },
+	{ Name = "PurchaseAvatarItem", ClassName = "RemoteFunction" },
+	{ Name = "ApplyCharacterPreset", ClassName = "RemoteEvent" },
+	{ Name = "AvatarUpdated", ClassName = "RemoteEvent" },
+	{ Name = "OpenAvatarEditor", ClassName = "RemoteEvent" },
 }
 
 local SPEC_BY_NAME: { [string]: RemoteSpec } = {}

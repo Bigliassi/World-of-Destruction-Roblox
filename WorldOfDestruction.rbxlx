@@ -2,24 +2,24 @@
 <roblox xmlns:xmime="http://www.w3.org/2005/05/xmlmime" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://www.roblox.com/roblox.xsd" version="4">
 	<External>null</External>
 	<External>nil</External>
-	<Item class="Workspace" referent="RBX00000020">
+	<Item class="Workspace" referent="RBX00000023">
 		<Properties>
 			<string name="Name">Workspace</string>
 			<float name="Gravity">196.2</float>
 			<token name="StreamingEnabled">1</token>
 		</Properties>
-		<Item class="Camera" referent="RBX00000021">
+		<Item class="Camera" referent="RBX00000024">
 			<Properties>
 				<string name="Name">Camera</string>
 				<float name="FieldOfView">70</float>
 			</Properties>
 		</Item>
-		<Item class="Terrain" referent="RBX00000022">
+		<Item class="Terrain" referent="RBX00000025">
 			<Properties>
 				<string name="Name">Terrain</string>
 			</Properties>
 		</Item>
-		<Item class="SpawnLocation" referent="RBX00000023">
+		<Item class="SpawnLocation" referent="RBX00000026">
 			<Properties>
 				<string name="Name">SpawnLocation</string>
 				<bool name="Anchored">true</bool>
@@ -42,8 +42,8 @@
 			</Properties>
 		</Item>
 	</Item>
-	<Item class="Players" referent="RBX00000024"><Properties><string name="Name">Players</string></Properties></Item>
-	<Item class="Lighting" referent="RBX00000025">
+	<Item class="Players" referent="RBX00000027"><Properties><string name="Name">Players</string></Properties></Item>
+	<Item class="Lighting" referent="RBX00000028">
 		<Properties>
 			<string name="Name">Lighting</string>
 			<float name="Brightness">2.5</float>
@@ -53,14 +53,14 @@
 			<Color3 name="Ambient"><R>0.22</R><G>0.24</G><B>0.28</B></Color3>
 			<Color3 name="OutdoorAmbient"><R>0.42</R><G>0.45</G><B>0.52</B></Color3>
 		</Properties>
-		<Item class="Atmosphere" referent="RBX00000026">
+		<Item class="Atmosphere" referent="RBX00000029">
 			<Properties>
 				<string name="Name">Atmosphere</string>
 				<float name="Density">0.32</float>
 				<float name="Offset">0.15</float>
 			</Properties>
 		</Item>
-		<Item class="BloomEffect" referent="RBX00000027">
+		<Item class="BloomEffect" referent="RBX0000002A">
 			<Properties>
 				<string name="Name">Bloom</string>
 				<bool name="Enabled">true</bool>
@@ -70,15 +70,549 @@
 			</Properties>
 		</Item>
 	</Item>
-	<Item class="ReplicatedStorage" referent="RBX00000007">
+	<Item class="ReplicatedStorage" referent="RBX00000008">
 		<Properties>
 			<string name="Name">ReplicatedStorage</string>
 		</Properties>
-		<Item class="Folder" referent="RBX00000005">
+		<Item class="Folder" referent="RBX00000006">
 			<Properties>
 				<string name="Name">Shared</string>
 			</Properties>
 			<Item class="ModuleScript" referent="RBX00000001">
+				<Properties>
+					<bool name="Disabled">false</bool>
+					<string name="Name">AvatarCatalog</string>
+					<ProtectedString name="Source"><![CDATA[--!strict
+-- AvatarCatalog.luau
+-- Shared catalog of Free, Cash, and Robux character customization items, presets, and 3D procedural attachment builder.
+
+local AvatarCatalog = {}
+
+export type CurrencyType = "Free" | "Cash" | "Robux"
+export type CategoryName = "Outfit" | "Headgear" | "BackAccessory" | "HeldGear" | "AuraTrail" | "SkinTone"
+
+export type AvatarItem = {
+	Id: string,
+	Name: string,
+	Category: CategoryName,
+	Currency: CurrencyType,
+	Price: number,
+	ProductId: number?,
+	Rarity: string,
+	PrimaryColor: Color3,
+	AccentColor: Color3,
+	Description: string,
+	PerkLabel: string?,
+	CashMultiplierBonus: number?,
+	XPMultiplierBonus: number?,
+	SprintBonus: number?,
+	ChaosBonus: number?,
+}
+
+export type AvatarLoadout = {
+	Outfit: string,
+	Headgear: string,
+	BackAccessory: string,
+	HeldGear: string,
+	AuraTrail: string,
+	SkinTone: string,
+}
+
+AvatarCatalog.Categories = {
+	{ Id = "Presets", Label = "Presets" },
+	{ Id = "Outfit", Label = "Outfits" },
+	{ Id = "Headgear", Label = "Headgear" },
+	{ Id = "BackAccessory", Label = "Backpacks" },
+	{ Id = "HeldGear", Label = "Held Gear" },
+	{ Id = "AuraTrail", Label = "Auras" },
+	{ Id = "SkinTone", Label = "Skin Tone" },
+}
+
+AvatarCatalog.VIPAvatarMegaBundle = {
+	Id = "VIPAvatarMegaBundle",
+	Name = "VIP All-Access Robux Mega Bundle",
+	Currency = "Robux",
+	Price = 599,
+	ProductId = 0, -- 0 triggers Studio/Sandbox instant unlock or replaces with live GamePass/Product ID
+	Description = "Instantly unlocks ALL Robux & Cash outfits, crowns, jetpacks, wings, hammers, and supernova auras!",
+}
+
+AvatarCatalog.Items = {
+	-- ================= OUTFITS =================
+	StreetRookieHoodie = {
+		Id = "StreetRookieHoodie", Name = "Street Rookie Hoodie", Category = "Outfit",
+		Currency = "Free", Price = 0, Rarity = "Common",
+		PrimaryColor = Color3.fromRGB(45, 55, 72), AccentColor = Color3.fromRGB(56, 189, 248),
+		Description = "Classic urban streetwear hoodie built for everyday drifting and smashing.",
+	},
+	LeoCreatorJacket = {
+		Id = "LeoCreatorJacket", Name = "Leo Creator Jacket", Category = "Outfit",
+		Currency = "Free", Price = 0, Rarity = "Rare",
+		PrimaryColor = Color3.fromRGB(220, 38, 38), AccentColor = Color3.fromRGB(250, 204, 21),
+		Description = "Signature Leo varsity stunt jacket with gold trim and reinforced shoulders.",
+	},
+	DemolitionJumpsuit = {
+		Id = "DemolitionJumpsuit", Name = "Demolition Jumpsuit", Category = "Outfit",
+		Currency = "Free", Price = 0, Rarity = "Common",
+		PrimaryColor = Color3.fromRGB(234, 88, 12), AccentColor = Color3.fromRGB(30, 41, 59),
+		Description = "High-visibility heavy crew jumpsuit with reflective hazard striping.",
+	},
+	AsphaltBikerLeather = {
+		Id = "AsphaltBikerLeather", Name = "Asphalt Biker Leather", Category = "Outfit",
+		Currency = "Cash", Price = 1500, Rarity = "Uncommon",
+		PrimaryColor = Color3.fromRGB(24, 24, 27), AccentColor = Color3.fromRGB(161, 161, 170),
+		Description = "Studded midnight leather jacket with chrome shoulder plates.",
+	},
+	TacticalSWATSet = {
+		Id = "TacticalSWATSet", Name = "Tactical SWAT Set", Category = "Outfit",
+		Currency = "Cash", Price = 4500, Rarity = "Rare",
+		PrimaryColor = Color3.fromRGB(30, 58, 138), AccentColor = Color3.fromRGB(96, 165, 250),
+		Description = "Heavy armored tactical vest and knee guards built for high-heat pursuits.",
+	},
+	NeonCyberSuit = {
+		Id = "NeonCyberSuit", Name = "Neon Cyber Suit", Category = "Outfit",
+		Currency = "Cash", Price = 9000, Rarity = "Epic",
+		PrimaryColor = Color3.fromRGB(17, 24, 39), AccentColor = Color3.fromRGB(34, 211, 238),
+		Description = "Glowing synthwave exosuit lined with pulsing cyan circuit plates.",
+	},
+	InfernoStuntSuit = {
+		Id = "InfernoStuntSuit", Name = "Inferno Stunt Suit", Category = "Outfit",
+		Currency = "Robux", Price = 99, ProductId = 0, Rarity = "Epic",
+		PrimaryColor = Color3.fromRGB(153, 27, 27), AccentColor = Color3.fromRGB(251, 146, 60),
+		Description = "Blazing daredevil racing suit with molten neon chest plates.",
+	},
+	GoldenSovereignArmor = {
+		Id = "GoldenSovereignArmor", Name = "Golden Sovereign Armor", Category = "Outfit",
+		Currency = "Robux", Price = 249, ProductId = 0, Rarity = "Legendary",
+		PrimaryColor = Color3.fromRGB(234, 179, 8), AccentColor = Color3.fromRGB(254, 240, 138),
+		Description = "Solid 24K gold battle armor worn by Leo City royalty.",
+		PerkLabel = "+10% Cash Earned", CashMultiplierBonus = 0.10,
+	},
+
+	-- ================= HEADGEAR =================
+	None = {
+		Id = "None", Name = "None", Category = "Headgear",
+		Currency = "Free", Price = 0, Rarity = "Common",
+		PrimaryColor = Color3.fromRGB(100, 116, 139), AccentColor = Color3.fromRGB(148, 163, 184),
+		Description = "Clean default look with no extra accessory.",
+	},
+	NoneHeadgear = {
+		Id = "NoneHeadgear", Name = "No Headgear", Category = "Headgear",
+		Currency = "Free", Price = 0, Rarity = "Common",
+		PrimaryColor = Color3.fromRGB(100, 116, 139), AccentColor = Color3.fromRGB(148, 163, 184),
+		Description = "Clean hair/head look with no helmet or hat.",
+	},
+	StreetSnapback = {
+		Id = "StreetSnapback", Name = "Street Snapback", Category = "Headgear",
+		Currency = "Free", Price = 0, Rarity = "Common",
+		PrimaryColor = Color3.fromRGB(220, 38, 38), AccentColor = Color3.fromRGB(255, 255, 255),
+		Description = "Forward-facing Leo City flat-brim snapback cap.",
+	},
+	HardHatYellow = {
+		Id = "HardHatYellow", Name = "Site Boss Hard Hat", Category = "Headgear",
+		Currency = "Free", Price = 0, Rarity = "Common",
+		PrimaryColor = Color3.fromRGB(250, 204, 21), AccentColor = Color3.fromRGB(30, 41, 59),
+		Description = "OSHA-approved demolition crew hard hat.",
+	},
+	StuntCrashHelmet = {
+		Id = "StuntCrashHelmet", Name = "Stunt Crash Helmet", Category = "Headgear",
+		Currency = "Cash", Price = 1200, Rarity = "Uncommon",
+		PrimaryColor = Color3.fromRGB(248, 250, 252), AccentColor = Color3.fromRGB(239, 68, 68),
+		Description = "Full-face racing helmet with tinted visor stripe.",
+	},
+	PoliceChiefCap = {
+		Id = "PoliceChiefCap", Name = "Police Chief Cap", Category = "Headgear",
+		Currency = "Cash", Price = 3000, Rarity = "Rare",
+		PrimaryColor = Color3.fromRGB(30, 41, 59), AccentColor = Color3.fromRGB(250, 204, 21),
+		Description = "Gold-badged commander peaked cap from Leo PD.",
+	},
+	NeonVisorHelm = {
+		Id = "NeonVisorHelm", Name = "Neon Visor Helm", Category = "Headgear",
+		Currency = "Cash", Price = 6500, Rarity = "Epic",
+		PrimaryColor = Color3.fromRGB(15, 23, 42), AccentColor = Color3.fromRGB(56, 189, 248),
+		Description = "Futuristic cyber helmet with a holographic LED visor.",
+	},
+	CyberKitsuneMask = {
+		Id = "CyberKitsuneMask", Name = "Cyber Kitsune Mask", Category = "Headgear",
+		Currency = "Robux", Price = 125, ProductId = 0, Rarity = "Epic",
+		PrimaryColor = Color3.fromRGB(24, 24, 27), AccentColor = Color3.fromRGB(236, 72, 153),
+		Description = "Neon-eared cybernetic fox mask with glowing magenta eyes.",
+	},
+	CrownOfDestruction = {
+		Id = "CrownOfDestruction", Name = "Crown of Destruction", Category = "Headgear",
+		Currency = "Robux", Price = 299, ProductId = 0, Rarity = "Legendary",
+		PrimaryColor = Color3.fromRGB(250, 204, 21), AccentColor = Color3.fromRGB(239, 68, 68),
+		Description = "Jeweled golden sovereign crown forged from wrecked supercars.",
+		PerkLabel = "+10% XP Earned", XPMultiplierBonus = 0.10,
+	},
+
+	-- ================= BACK ACCESSORIES =================
+	NoneBack = {
+		Id = "NoneBack", Name = "No Back Gear", Category = "BackAccessory",
+		Currency = "Free", Price = 0, Rarity = "Common",
+		PrimaryColor = Color3.fromRGB(100, 116, 139), AccentColor = Color3.fromRGB(148, 163, 184),
+		Description = "No backpack or wings equipped.",
+	},
+	WreckingToolPack = {
+		Id = "WreckingToolPack", Name = "Wrecking Tool Pack", Category = "BackAccessory",
+		Currency = "Free", Price = 0, Rarity = "Common",
+		PrimaryColor = Color3.fromRGB(71, 85, 105), AccentColor = Color3.fromRGB(249, 115, 22),
+		Description = "Utility rig stocked with prybars, flares, and repair cells.",
+	},
+	BoomboxSpeaker = {
+		Id = "BoomboxSpeaker", Name = "Street Bass Boombox", Category = "BackAccessory",
+		Currency = "Cash", Price = 2500, Rarity = "Rare",
+		PrimaryColor = Color3.fromRGB(30, 41, 59), AccentColor = Color3.fromRGB(34, 211, 238),
+		Description = "Dual-subwoofer shoulder boombox with neon equalizer bars.",
+	},
+	GoldBullionDuffel = {
+		Id = "GoldBullionDuffel", Name = "Gold Bullion Duffel", Category = "BackAccessory",
+		Currency = "Cash", Price = 5500, Rarity = "Epic",
+		PrimaryColor = Color3.fromRGB(20, 83, 45), AccentColor = Color3.fromRGB(250, 204, 21),
+		Description = "Heist duffel bag overflowing with solid gold bars.",
+	},
+	NitroThrusterJetpack = {
+		Id = "NitroThrusterJetpack", Name = "Nitro Thruster Jetpack", Category = "BackAccessory",
+		Currency = "Robux", Price = 175, ProductId = 0, Rarity = "Legendary",
+		PrimaryColor = Color3.fromRGB(30, 41, 59), AccentColor = Color3.fromRGB(249, 115, 22),
+		Description = "Twin-turbine nitro booster pack with live exhaust flames.",
+		PerkLabel = "+15% Sprint & Jump", SprintBonus = 0.15,
+	},
+	ArchangelChaosWings = {
+		Id = "ArchangelChaosWings", Name = "Archangel Chaos Wings", Category = "BackAccessory",
+		Currency = "Robux", Price = 349, ProductId = 0, Rarity = "Legendary",
+		PrimaryColor = Color3.fromRGB(250, 204, 21), AccentColor = Color3.fromRGB(56, 189, 248),
+		Description = "Massive articulated cyber-feathered wings that radiate light.",
+	},
+
+	-- ================= HELD GEAR =================
+	NoneHeld = {
+		Id = "NoneHeld", Name = "Empty Hands", Category = "HeldGear",
+		Currency = "Free", Price = 0, Rarity = "Common",
+		PrimaryColor = Color3.fromRGB(100, 116, 139), AccentColor = Color3.fromRGB(148, 163, 184),
+		Description = "Keep hands free.",
+	},
+	NeonWrench = {
+		Id = "NeonWrench", Name = "Neon Mechanic Wrench", Category = "HeldGear",
+		Currency = "Free", Price = 0, Rarity = "Common",
+		PrimaryColor = Color3.fromRGB(148, 163, 184), AccentColor = Color3.fromRGB(56, 189, 248),
+		Description = "Heavy torque wrench for tuning rides or bashing crates.",
+	},
+	DemolitionSledge = {
+		Id = "DemolitionSledge", Name = "Demolition Sledge", Category = "HeldGear",
+		Currency = "Cash", Price = 2000, Rarity = "Rare",
+		PrimaryColor = Color3.fromRGB(51, 65, 85), AccentColor = Color3.fromRGB(239, 68, 68),
+		Description = "Reinforced steel sledgehammer built for concrete barriers.",
+	},
+	PlasmaFlareTorch = {
+		Id = "PlasmaFlareTorch", Name = "Plasma Flare Blade", Category = "HeldGear",
+		Currency = "Cash", Price = 4000, Rarity = "Epic",
+		PrimaryColor = Color3.fromRGB(15, 23, 42), AccentColor = Color3.fromRGB(168, 85, 247),
+		Description = "Superheated plasma cutter that leaves violet light streaks.",
+	},
+	GoldenWreckingHammer = {
+		Id = "GoldenWreckingHammer", Name = "Golden Wrecking Hammer", Category = "HeldGear",
+		Currency = "Robux", Price = 149, ProductId = 0, Rarity = "Legendary",
+		PrimaryColor = Color3.fromRGB(234, 179, 8), AccentColor = Color3.fromRGB(254, 240, 138),
+		Description = "Colossal solid-gold warhammer of the Destruction King.",
+	},
+
+	-- ================= AURA TRAILS =================
+	NoneAura = {
+		Id = "NoneAura", Name = "No Aura", Category = "AuraTrail",
+		Currency = "Free", Price = 0, Rarity = "Common",
+		PrimaryColor = Color3.fromRGB(100, 116, 139), AccentColor = Color3.fromRGB(148, 163, 184),
+		Description = "Standard character appearance with no particle aura.",
+	},
+	TireSmokeTrail = {
+		Id = "TireSmokeTrail", Name = "Burnout Drift Smoke", Category = "AuraTrail",
+		Currency = "Cash", Price = 1800, Rarity = "Uncommon",
+		PrimaryColor = Color3.fromRGB(203, 213, 225), AccentColor = Color3.fromRGB(249, 115, 22),
+		Description = "Billowing burnout smoke and hot road embers at your feet.",
+	},
+	NeonVoltTrail = {
+		Id = "NeonVoltTrail", Name = "Neon Volt Lightning", Category = "AuraTrail",
+		Currency = "Cash", Price = 4800, Rarity = "Epic",
+		PrimaryColor = Color3.fromRGB(34, 211, 238), AccentColor = Color3.fromRGB(168, 85, 247),
+		Description = "Crackling high-voltage electric arcs surging around your body.",
+	},
+	CashShowerAura = {
+		Id = "CashShowerAura", Name = "Tycoon Cash Shower", Category = "AuraTrail",
+		Currency = "Robux", Price = 199, ProductId = 0, Rarity = "Epic",
+		PrimaryColor = Color3.fromRGB(34, 197, 94), AccentColor = Color3.fromRGB(250, 204, 21),
+		Description = "Swirling vortex of green bills and golden sparkles.",
+	},
+	SupernovaChaosAura = {
+		Id = "SupernovaChaosAura", Name = "Supernova Chaos Aura", Category = "AuraTrail",
+		Currency = "Robux", Price = 299, ProductId = 0, Rarity = "Legendary",
+		PrimaryColor = Color3.fromRGB(249, 115, 22), AccentColor = Color3.fromRGB(250, 204, 21),
+		Description = "Blazing solar flares and rising plasma rings.",
+		PerkLabel = "+15% Chaos Score", ChaosBonus = 0.15,
+	},
+
+	-- ================= SKIN TONES =================
+	SkinWarmTan = {
+		Id = "SkinWarmTan", Name = "Warm Tan", Category = "SkinTone",
+		Currency = "Free", Price = 0, Rarity = "Common",
+		PrimaryColor = Color3.fromRGB(217, 160, 115), AccentColor = Color3.fromRGB(217, 160, 115),
+		Description = "Warm sun-kissed tone.",
+	},
+	SkinLightPeach = {
+		Id = "SkinLightPeach", Name = "Light Peach", Category = "SkinTone",
+		Currency = "Free", Price = 0, Rarity = "Common",
+		PrimaryColor = Color3.fromRGB(245, 205, 174), AccentColor = Color3.fromRGB(245, 205, 174),
+		Description = "Light classic tone.",
+	},
+	SkinGoldenOlive = {
+		Id = "SkinGoldenOlive", Name = "Golden Olive", Category = "SkinTone",
+		Currency = "Free", Price = 0, Rarity = "Common",
+		PrimaryColor = Color3.fromRGB(198, 134, 66), AccentColor = Color3.fromRGB(198, 134, 66),
+		Description = "Golden Mediterranean tone.",
+	},
+	SkinDeepBronze = {
+		Id = "SkinDeepBronze", Name = "Deep Bronze", Category = "SkinTone",
+		Currency = "Free", Price = 0, Rarity = "Common",
+		PrimaryColor = Color3.fromRGB(141, 85, 36), AccentColor = Color3.fromRGB(141, 85, 36),
+		Description = "Rich deep bronze tone.",
+	},
+	SkinRichEbony = {
+		Id = "SkinRichEbony", Name = "Rich Ebony", Category = "SkinTone",
+		Currency = "Free", Price = 0, Rarity = "Common",
+		PrimaryColor = Color3.fromRGB(78, 46, 28), AccentColor = Color3.fromRGB(78, 46, 28),
+		Description = "Deep espresso tone.",
+	},
+	SkinRobotChrome = {
+		Id = "SkinRobotChrome", Name = "Cyber Chrome", Category = "SkinTone",
+		Currency = "Free", Price = 0, Rarity = "Rare",
+		PrimaryColor = Color3.fromRGB(148, 163, 184), AccentColor = Color3.fromRGB(56, 189, 248),
+		Description = "Synthetic metallic android chassis finish.",
+	},
+}
+
+AvatarCatalog.Presets = {
+	{
+		Id = "LeoStar", Name = "Leo Star", Badge = "FREE STARTER",
+		Loadout = {
+			Outfit = "LeoCreatorJacket", Headgear = "StreetSnapback", BackAccessory = "WreckingToolPack",
+			HeldGear = "NeonWrench", AuraTrail = "NoneAura", SkinTone = "SkinWarmTan",
+		},
+	},
+	{
+		Id = "StreetDrifter", Name = "Street Drifter", Badge = "STREET",
+		Loadout = {
+			Outfit = "AsphaltBikerLeather", Headgear = "StuntCrashHelmet", BackAccessory = "BoomboxSpeaker",
+			HeldGear = "NeonWrench", AuraTrail = "TireSmokeTrail", SkinTone = "SkinLightPeach",
+		},
+	},
+	{
+		Id = "DemoMechanic", Name = "Demo Mechanic", Badge = "FREE CREW",
+		Loadout = {
+			Outfit = "DemolitionJumpsuit", Headgear = "HardHatYellow", BackAccessory = "WreckingToolPack",
+			HeldGear = "NeonWrench", AuraTrail = "NoneAura", SkinTone = "SkinDeepBronze",
+		},
+	},
+	{
+		Id = "CyberRacer", Name = "Cyber Racer", Badge = "PRO TECH",
+		Loadout = {
+			Outfit = "NeonCyberSuit", Headgear = "NeonVisorHelm", BackAccessory = "BoomboxSpeaker",
+			HeldGear = "PlasmaFlareTorch", AuraTrail = "NeonVoltTrail", SkinTone = "SkinRobotChrome",
+		},
+	},
+	{
+		Id = "GoldenVIP", Name = "Golden VIP", Badge = "ROBUX VIP",
+		Loadout = {
+			Outfit = "GoldenSovereignArmor", Headgear = "CrownOfDestruction", BackAccessory = "ArchangelChaosWings",
+			HeldGear = "GoldenWreckingHammer", AuraTrail = "CashShowerAura", SkinTone = "SkinGoldenOlive",
+		},
+	},
+	{
+		Id = "InfernoKing", Name = "Inferno King", Badge = "ROBUX BOSS",
+		Loadout = {
+			Outfit = "InfernoStuntSuit", Headgear = "CyberKitsuneMask", BackAccessory = "NitroThrusterJetpack",
+			HeldGear = "GoldenWreckingHammer", AuraTrail = "SupernovaChaosAura", SkinTone = "SkinWarmTan",
+		},
+	},
+}
+
+function AvatarCatalog.GetDefaultLoadout(): AvatarLoadout
+	return {
+		Outfit = "LeoCreatorJacket",
+		Headgear = "StreetSnapback",
+		BackAccessory = "WreckingToolPack",
+		HeldGear = "NeonWrench",
+		AuraTrail = "NoneAura",
+		SkinTone = "SkinWarmTan",
+	}
+end
+
+function AvatarCatalog.GetItemsByCategory(category: string): { AvatarItem }
+	local list = {}
+	for _, item in pairs(AvatarCatalog.Items) do
+		if item.Category == category then
+			table.insert(list, item)
+		end
+	end
+	table.sort(list, function(a, b)
+		local order = { Free = 1, Cash = 2, Robux = 3 }
+		if order[a.Currency] ~= order[b.Currency] then
+			return order[a.Currency] < order[b.Currency]
+		end
+		if a.Price ~= b.Price then
+			return a.Price < b.Price
+		end
+		return a.Name < b.Name
+	end)
+	return list
+end
+
+function AvatarCatalog.ComputePerks(loadout: AvatarLoadout)
+	local cashMult = 1.0
+	local xpMult = 1.0
+	local sprintMult = 1.0
+	local chaosMult = 1.0
+	for _, itemId in pairs(loadout :: any) do
+		local item = AvatarCatalog.Items[itemId]
+		if item then
+			cashMult += (item.CashMultiplierBonus or 0)
+			xpMult += (item.XPMultiplierBonus or 0)
+			sprintMult += (item.SprintBonus or 0)
+			chaosMult += (item.ChaosBonus or 0)
+		end
+	end
+	return {
+		CashMult = cashMult,
+		XPMult = xpMult,
+		SprintMult = sprintMult,
+		ChaosMult = chaosMult,
+	}
+end
+
+local function weldPart(parent: Instance, target: BasePart, name: string, size: Vector3, color: Color3, mat: Enum.Material, offset: CFrame): Part
+	local p = Instance.new("Part")
+	p.Name = name
+	p.Size = size
+	p.Color = color
+	p.Material = mat
+	p.CanCollide = false
+	p.Massless = true
+	p.Anchored = false
+	p.CFrame = target.CFrame * offset
+	p.Parent = parent
+	local w = Instance.new("WeldConstraint")
+	w.Part0 = target
+	w.Part1 = p
+	w.Parent = p
+	return p
+end
+
+function AvatarCatalog.ApplyLoadoutToCharacter(character: Model, loadout: AvatarLoadout)
+	if not character then return end
+	local oldFolder = character:FindFirstChild("WODAvatarAttachments")
+	if oldFolder then
+		oldFolder:Destroy()
+	end
+	local folder = Instance.new("Folder")
+	folder.Name = "WODAvatarAttachments"
+	folder.Parent = character
+
+	local torso = (character:FindFirstChild("UpperTorso") or character:FindFirstChild("Torso") or character:FindFirstChild("HumanoidRootPart")) :: BasePart?
+	local head = character:FindFirstChild("Head") :: BasePart?
+	local rightHand = (character:FindFirstChild("RightHand") or character:FindFirstChild("Right Arm")) :: BasePart?
+
+	local skinItem = AvatarCatalog.Items[loadout.SkinTone or "SkinWarmTan"] or AvatarCatalog.Items.SkinWarmTan
+	local outfitItem = AvatarCatalog.Items[loadout.Outfit or "LeoCreatorJacket"] or AvatarCatalog.Items.LeoCreatorJacket
+
+	-- Apply skin tone & outfit colors across character limbs
+	for _, child in ipairs(character:GetChildren()) do
+		if child:IsA("BasePart") and child.Name ~= "HumanoidRootPart" then
+			local n = child.Name
+			if n == "Head" or n:find("Hand") then
+				child.Color = skinItem.PrimaryColor
+			elseif n:find("Torso") or n:find("Arm") then
+				child.Color = outfitItem.PrimaryColor
+			elseif n:find("Leg") or n:find("Foot") then
+				child.Color = outfitItem.PrimaryColor:Lerp(Color3.fromRGB(20, 24, 32), 0.35)
+			end
+		end
+	end
+
+	-- 1. Chest Armor / Jacket Trim
+	if torso then
+		weldPart(folder, torso, "ChestPlate", Vector3.new(1.85, 1.4, 1.12), outfitItem.PrimaryColor, Enum.Material.SmoothPlastic, CFrame.new(0, 0.1, 0))
+		weldPart(folder, torso, "ChestStripe", Vector3.new(1.9, 0.32, 1.16), outfitItem.AccentColor, Enum.Material.Neon, CFrame.new(0, 0.25, 0))
+		weldPart(folder, torso, "LeftPauldron", Vector3.new(0.7, 0.45, 1.15), outfitItem.AccentColor, Enum.Material.Metal, CFrame.new(-1.15, 0.75, 0))
+		weldPart(folder, torso, "RightPauldron", Vector3.new(0.7, 0.45, 1.15), outfitItem.AccentColor, Enum.Material.Metal, CFrame.new(1.15, 0.75, 0))
+	end
+
+	-- 2. Headgear
+	local headItem = AvatarCatalog.Items[loadout.Headgear or "NoneHeadgear"]
+	if head and headItem and headItem.Id ~= "NoneHeadgear" then
+		if headItem.Id == "CrownOfDestruction" then
+			weldPart(folder, head, "CrownBase", Vector3.new(1.35, 0.45, 1.35), headItem.PrimaryColor, Enum.Material.Foil, CFrame.new(0, 0.7, 0))
+			weldPart(folder, head, "CrownGem", Vector3.new(0.45, 0.45, 1.42), headItem.AccentColor, Enum.Material.Neon, CFrame.new(0, 0.85, 0))
+		elseif headItem.Id == "CyberKitsuneMask" or headItem.Id == "NeonVisorHelm" or headItem.Id == "StuntCrashHelmet" then
+			weldPart(folder, head, "HelmShell", Vector3.new(1.4, 1.35, 1.4), headItem.PrimaryColor, Enum.Material.SmoothPlastic, CFrame.new(0, 0.1, 0))
+			weldPart(folder, head, "HelmVisor", Vector3.new(1.25, 0.42, 0.2), headItem.AccentColor, Enum.Material.Neon, CFrame.new(0, 0.15, -0.68))
+		else
+			weldPart(folder, head, "HatDome", Vector3.new(1.32, 0.55, 1.32), headItem.PrimaryColor, Enum.Material.SmoothPlastic, CFrame.new(0, 0.58, 0))
+			weldPart(folder, head, "HatBrim", Vector3.new(1.35, 0.15, 1.75), headItem.AccentColor, Enum.Material.SmoothPlastic, CFrame.new(0, 0.36, -0.22))
+		end
+	end
+
+	-- 3. Back Accessory
+	local backItem = AvatarCatalog.Items[loadout.BackAccessory or "NoneBack"]
+	if torso and backItem and backItem.Id ~= "NoneBack" then
+		if backItem.Id == "ArchangelChaosWings" then
+			weldPart(folder, torso, "WingCore", Vector3.new(0.8, 1.1, 0.4), backItem.PrimaryColor, Enum.Material.Neon, CFrame.new(0, 0.2, 0.65))
+			weldPart(folder, torso, "LeftWing", Vector3.new(2.8, 1.6, 0.2), backItem.AccentColor, Enum.Material.Neon, CFrame.new(-1.5, 0.5, 0.85) * CFrame.Angles(0, math.rad(20), math.rad(15)))
+			weldPart(folder, torso, "RightWing", Vector3.new(2.8, 1.6, 0.2), backItem.AccentColor, Enum.Material.Neon, CFrame.new(1.5, 0.5, 0.85) * CFrame.Angles(0, math.rad(-20), math.rad(-15)))
+		elseif backItem.Id == "NitroThrusterJetpack" then
+			weldPart(folder, torso, "JetCore", Vector3.new(1.3, 1.4, 0.65), backItem.PrimaryColor, Enum.Material.Metal, CFrame.new(0, 0.1, 0.75))
+			local thrusterL = weldPart(folder, torso, "ThrusterL", Vector3.new(0.45, 1.6, 0.45), backItem.AccentColor, Enum.Material.Neon, CFrame.new(-0.5, 0.0, 0.9))
+			local fire = Instance.new("ParticleEmitter")
+			fire.Color = ColorSequence.new(backItem.AccentColor, Color3.fromRGB(255, 255, 255))
+			fire.Rate = 25
+			fire.Speed = NumberRange.new(3, 6)
+			fire.Lifetime = NumberRange.new(0.25, 0.5)
+			fire.Size = NumberSequence.new(0.45, 0)
+			fire.Parent = thrusterL
+		else
+			weldPart(folder, torso, "BackpackMain", Vector3.new(1.45, 1.55, 0.75), backItem.PrimaryColor, Enum.Material.SmoothPlastic, CFrame.new(0, 0.1, 0.8))
+			weldPart(folder, torso, "BackpackTrim", Vector3.new(1.5, 0.35, 0.8), backItem.AccentColor, Enum.Material.Neon, CFrame.new(0, 0.3, 0.82))
+		end
+	end
+
+	-- 4. Held Gear
+	local heldItem = AvatarCatalog.Items[loadout.HeldGear or "NoneHeld"]
+	if rightHand and heldItem and heldItem.Id ~= "NoneHeld" then
+		weldPart(folder, rightHand, "GearHandle", Vector3.new(0.28, 0.28, 2.6), heldItem.PrimaryColor, Enum.Material.Metal, CFrame.new(0, -0.5, -0.8))
+		weldPart(folder, rightHand, "GearHead", Vector3.new(0.95, 0.65, 0.65), heldItem.AccentColor, Enum.Material.Neon, CFrame.new(0, -0.5, -2.0))
+	end
+
+	-- 5. Aura Trail
+	local auraItem = AvatarCatalog.Items[loadout.AuraTrail or "NoneAura"]
+	if torso and auraItem and auraItem.Id ~= "NoneAura" then
+		local emitter = Instance.new("ParticleEmitter")
+		emitter.Name = "WODAuraEmitter"
+		emitter.Color = ColorSequence.new(auraItem.PrimaryColor, auraItem.AccentColor)
+		emitter.LightEmission = 0.85
+		emitter.Rate = 32
+		emitter.Lifetime = NumberRange.new(0.6, 1.2)
+		emitter.Speed = NumberRange.new(2, 5)
+		emitter.SpreadAngle = Vector2.new(180, 180)
+		emitter.Size = NumberSequence.new({
+			NumberSequenceKeypoint.new(0, 0.65),
+			NumberSequenceKeypoint.new(1, 0),
+		})
+		emitter.Parent = torso
+	end
+end
+
+return AvatarCatalog
+]]></ProtectedString>
+				</Properties>
+			</Item>
+			<Item class="ModuleScript" referent="RBX00000002">
 				<Properties>
 					<bool name="Disabled">false</bool>
 					<string name="Name">GameConfig</string>
@@ -1373,7 +1907,7 @@ return GameConfig
 ]]></ProtectedString>
 				</Properties>
 			</Item>
-			<Item class="ModuleScript" referent="RBX00000002">
+			<Item class="ModuleScript" referent="RBX00000003">
 				<Properties>
 					<bool name="Disabled">false</bool>
 					<string name="Name">Remotes</string>
@@ -1458,6 +1992,14 @@ local REMOTE_SPECS: { RemoteSpec } = {
 	{ Name = "RequestMonetizationPurchase", ClassName = "RemoteEvent" },
 	{ Name = "MonetizationNotification", ClassName = "RemoteEvent" },
 	{ Name = "GetMonetizationCatalog", ClassName = "RemoteFunction" },
+
+	-- Character Creator & Avatar Wardrobe Remotes
+	{ Name = "GetAvatarWardrobe", ClassName = "RemoteFunction" },
+	{ Name = "EquipAvatarItem", ClassName = "RemoteFunction" },
+	{ Name = "PurchaseAvatarItem", ClassName = "RemoteFunction" },
+	{ Name = "ApplyCharacterPreset", ClassName = "RemoteEvent" },
+	{ Name = "AvatarUpdated", ClassName = "RemoteEvent" },
+	{ Name = "OpenAvatarEditor", ClassName = "RemoteEvent" },
 }
 
 local SPEC_BY_NAME: { [string]: RemoteSpec } = {}
@@ -1598,7 +2140,7 @@ return Remotes
 ]]></ProtectedString>
 				</Properties>
 			</Item>
-			<Item class="ModuleScript" referent="RBX00000003">
+			<Item class="ModuleScript" referent="RBX00000004">
 				<Properties>
 					<bool name="Disabled">false</bool>
 					<string name="Name">Types</string>
@@ -1866,7 +2408,7 @@ return Types
 ]]></ProtectedString>
 				</Properties>
 			</Item>
-			<Item class="ModuleScript" referent="RBX00000004">
+			<Item class="ModuleScript" referent="RBX00000005">
 				<Properties>
 					<bool name="Disabled">false</bool>
 					<string name="Name">VehicleCatalog</string>
@@ -3137,17 +3679,17 @@ return VehicleCatalog
 				</Properties>
 			</Item>
 		</Item>
-		<Item class="Folder" referent="RBX00000006">
+		<Item class="Folder" referent="RBX00000007">
 			<Properties>
 				<string name="Name">Remotes</string>
 			</Properties>
 		</Item>
 	</Item>
-	<Item class="ServerScriptService" referent="RBX00000015">
+	<Item class="ServerScriptService" referent="RBX00000017">
 		<Properties>
 			<string name="Name">ServerScriptService</string>
 		</Properties>
-		<Item class="Script" referent="RBX00000008">
+		<Item class="Script" referent="RBX00000009">
 			<Properties>
 				<bool name="Disabled">false</bool>
 				<string name="Name">AutomatedSelfTest</string>
@@ -3386,7 +3928,398 @@ task.spawn(runDiagnostics)
 ]]></ProtectedString>
 			</Properties>
 		</Item>
-		<Item class="Script" referent="RBX00000009">
+		<Item class="Script" referent="RBX0000000A">
+			<Properties>
+				<bool name="Disabled">false</bool>
+				<string name="Name">AvatarCustomizationService</string>
+				<ProtectedString name="Source"><![CDATA[--!strict
+-- AvatarCustomizationService.script.luau
+-- Manages player character customization, free/cash/Robux item unlocks, presets, Boutique Kiosk, and 3D character application.
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local MarketplaceService = game:GetService("MarketplaceService")
+local HttpService = game:GetService("HttpService")
+local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local AvatarCatalog = require(Shared:WaitForChild("AvatarCatalog"))
+
+local remotesFolder = ReplicatedStorage:FindFirstChild("Remotes")
+if not remotesFolder then
+	remotesFolder = Instance.new("Folder")
+	remotesFolder.Name = "Remotes"
+	remotesFolder.Parent = ReplicatedStorage
+end
+
+local function ensureRemote(name: string, className: string): Instance
+	local existing = remotesFolder:FindFirstChild(name)
+	if existing then
+		return existing
+	end
+	local r = Instance.new(className)
+	r.Name = name
+	r.Parent = remotesFolder
+	return r
+end
+
+local getAvatarWardrobeRF = ensureRemote("GetAvatarWardrobe", "RemoteFunction") :: RemoteFunction
+local equipAvatarItemRF = ensureRemote("EquipAvatarItem", "RemoteFunction") :: RemoteFunction
+local purchaseAvatarItemRF = ensureRemote("PurchaseAvatarItem", "RemoteFunction") :: RemoteFunction
+local applyCharacterPresetRE = ensureRemote("ApplyCharacterPreset", "RemoteEvent") :: RemoteEvent
+local avatarUpdatedRE = ensureRemote("AvatarUpdated", "RemoteEvent") :: RemoteEvent
+local openAvatarEditorRE = ensureRemote("OpenAvatarEditor", "RemoteEvent") :: RemoteEvent
+
+type PlayerAvatarState = {
+	Loadout: AvatarCatalog.AvatarLoadout,
+	Unlocked: { [string]: boolean },
+	HasCustomized: boolean,
+}
+
+local playerStates: { [Player]: PlayerAvatarState } = {}
+
+local function getDefaultUnlocked(): { [string]: boolean }
+	local unlocked: { [string]: boolean } = {}
+	for id, item in pairs(AvatarCatalog.Items) do
+		if item.Currency == "Free" then
+			unlocked[id] = true
+		end
+	end
+	return unlocked
+end
+
+local function getPlayerCash(player: Player): number
+	local attrCash = player:GetAttribute("Cash")
+	if typeof(attrCash) == "number" then
+		return attrCash
+	end
+	local ls = player:FindFirstChild("leaderstats")
+	local cashVal = ls and ls:FindFirstChild("Cash") :: IntValue?
+	if cashVal then
+		return cashVal.Value
+	end
+	return 0
+end
+
+local function setPlayerCash(player: Player, newCash: number)
+	local clamped = math.max(0, math.floor(newCash))
+	player:SetAttribute("Cash", clamped)
+	local ls = player:FindFirstChild("leaderstats")
+	local cashVal = ls and ls:FindFirstChild("Cash") :: IntValue?
+	if cashVal then
+		cashVal.Value = clamped
+	end
+end
+
+local function applyToCharacter(player: Player)
+	local state = playerStates[player]
+	if not state then return end
+	local character = player.Character
+	if not character then return end
+
+	AvatarCatalog.ApplyLoadoutToCharacter(character, state.Loadout)
+	local perks = AvatarCatalog.ComputePerks(state.Loadout)
+	local humanoid = character:FindFirstChildOfClass("Humanoid")
+	if humanoid then
+		humanoid.WalkSpeed = math.floor(16 * perks.SprintMult + 0.5)
+		humanoid.UseJumpPower = true
+		humanoid.JumpPower = math.floor(50 * perks.SprintMult + 0.5)
+	end
+end
+
+local function syncStateToPlayer(player: Player)
+	local state = playerStates[player]
+	if not state then return end
+
+	local perks = AvatarCatalog.ComputePerks(state.Loadout)
+	player:SetAttribute("AvatarLoadoutJson", HttpService:JSONEncode(state.Loadout))
+	player:SetAttribute("UnlockedAvatarItemsJson", HttpService:JSONEncode(state.Unlocked))
+	player:SetAttribute("HasCustomizedCharacter", state.HasCustomized)
+	player:SetAttribute("AvatarPerkCashMult", perks.CashMult)
+	player:SetAttribute("AvatarPerkXPMult", perks.XPMult)
+	player:SetAttribute("AvatarPerkSprintMult", perks.SprintMult)
+
+	applyToCharacter(player)
+	avatarUpdatedRE:FireClient(player, {
+		Loadout = state.Loadout,
+		Unlocked = state.Unlocked,
+		Perks = perks,
+		HasCustomized = state.HasCustomized,
+	})
+end
+
+local function initPlayer(player: Player)
+	local state: PlayerAvatarState = {
+		Loadout = AvatarCatalog.GetDefaultLoadout(),
+		Unlocked = getDefaultUnlocked(),
+		HasCustomized = false,
+	}
+	playerStates[player] = state
+	syncStateToPlayer(player)
+
+	player.CharacterAdded:Connect(function()
+		task.wait(0.15)
+		applyToCharacter(player)
+	end)
+	if player.Character then
+		task.spawn(function()
+			task.wait(0.15)
+			applyToCharacter(player)
+		end)
+	end
+end
+
+local function unlockMegaBundleForPlayer(player: Player)
+	local state = playerStates[player]
+	if not state then return end
+	for id, _ in pairs(AvatarCatalog.Items) do
+		state.Unlocked[id] = true
+	end
+	state.Unlocked[AvatarCatalog.VIPAvatarMegaBundle.Id] = true
+	-- Equip Golden VIP signature set automatically on Mega Bundle unlock
+	state.Loadout = {
+		Outfit = "GoldenSovereignArmor",
+		Headgear = "CrownOfDestruction",
+		BackAccessory = "ArchangelChaosWings",
+		HeldGear = "GoldenWreckingHammer",
+		AuraTrail = "SupernovaChaosAura",
+		SkinTone = state.Loadout.SkinTone or "SkinWarmTan",
+	}
+	state.HasCustomized = true
+	syncStateToPlayer(player)
+end
+
+getAvatarWardrobeRF.OnServerInvoke = function(player: Player)
+	local state = playerStates[player]
+	if not state then
+		initPlayer(player)
+		state = playerStates[player]
+	end
+	return {
+		Loadout = state.Loadout,
+		Unlocked = state.Unlocked,
+		Perks = AvatarCatalog.ComputePerks(state.Loadout),
+		HasCustomized = state.HasCustomized,
+		Cash = getPlayerCash(player),
+	}
+end
+
+equipAvatarItemRF.OnServerInvoke = function(player: Player, itemId: any)
+	if typeof(itemId) ~= "string" then
+		return { Success = false, Message = "Invalid item ID." }
+	end
+	local state = playerStates[player]
+	if not state then
+		return { Success = false, Message = "Profile not ready." }
+	end
+	local item = AvatarCatalog.Items[itemId]
+	if not item then
+		return { Success = false, Message = "Item not found in catalog." }
+	end
+	if not state.Unlocked[itemId] and item.Currency ~= "Free" then
+		return { Success = false, Message = "Unlock this item first!" }
+	end
+
+	state.Unlocked[itemId] = true
+	(state.Loadout :: any)[item.Category] = itemId
+	state.HasCustomized = true
+	syncStateToPlayer(player)
+	return {
+		Success = true,
+		Message = "Equipped " .. item.Name .. "!",
+		Loadout = state.Loadout,
+		Unlocked = state.Unlocked,
+	}
+end
+
+purchaseAvatarItemRF.OnServerInvoke = function(player: Player, itemId: any)
+	if typeof(itemId) ~= "string" then
+		return { Success = false, Message = "Invalid item ID." }
+	end
+	local state = playerStates[player]
+	if not state then
+		return { Success = false, Message = "Profile not ready." }
+	end
+
+	-- Handle VIP Mega Bundle (599 Robux)
+	if itemId == AvatarCatalog.VIPAvatarMegaBundle.Id then
+		local bundle = AvatarCatalog.VIPAvatarMegaBundle
+		if state.Unlocked[bundle.Id] then
+			return { Success = true, Message = "VIP Mega Bundle already owned!" }
+		end
+		if bundle.ProductId and bundle.ProductId > 0 and not RunService:IsStudio() then
+			pcall(function()
+				MarketplaceService:PromptProductPurchase(player, bundle.ProductId)
+			end)
+			return { Success = true, PromptedRobux = true, Message = "Complete Robux purchase in prompt!" }
+		end
+		-- Studio Sandbox / Placeholder ID immediate unlock so players & testers can enjoy Robux items immediately
+		unlockMegaBundleForPlayer(player)
+		return {
+			Success = true,
+			Message = "VIP ALL-ACCESS MEGA BUNDLE UNLOCKED! (Robux Sandbox Grant)",
+			Loadout = state.Loadout,
+			Unlocked = state.Unlocked,
+		}
+	end
+
+	local item = AvatarCatalog.Items[itemId]
+	if not item then
+		return { Success = false, Message = "Unknown item." }
+	end
+
+	if state.Unlocked[itemId] or item.Currency == "Free" then
+		state.Unlocked[itemId] = true
+		;(state.Loadout :: any)[item.Category] = itemId
+		state.HasCustomized = true
+		syncStateToPlayer(player)
+		return {
+			Success = true,
+			Message = "Equipped " .. item.Name .. "!",
+			Loadout = state.Loadout,
+			Unlocked = state.Unlocked,
+		}
+	end
+
+	if item.Currency == "Cash" then
+		local cash = getPlayerCash(player)
+		if cash < item.Price then
+			return {
+				Success = false,
+				Message = string.format("Need $%d Destruction Cash! (You have $%d)", item.Price, cash),
+			}
+		end
+		setPlayerCash(player, cash - item.Price)
+		state.Unlocked[itemId] = true
+		;(state.Loadout :: any)[item.Category] = itemId
+		state.HasCustomized = true
+		syncStateToPlayer(player)
+		return {
+			Success = true,
+			Message = string.format("Purchased & Equipped %s for $%d!", item.Name, item.Price),
+			Loadout = state.Loadout,
+			Unlocked = state.Unlocked,
+		}
+	elseif item.Currency == "Robux" then
+		if item.ProductId and item.ProductId > 0 and not RunService:IsStudio() then
+			pcall(function()
+				MarketplaceService:PromptProductPurchase(player, item.ProductId)
+			end)
+			return { Success = true, PromptedRobux = true, Message = "Complete Robux purchase in prompt!" }
+		end
+		-- Studio Sandbox / Placeholder ID instant Robux unlock
+		state.Unlocked[itemId] = true
+		;(state.Loadout :: any)[item.Category] = itemId
+		state.HasCustomized = true
+		syncStateToPlayer(player)
+		return {
+			Success = true,
+			Message = string.format("UNLOCKED ROBUX ITEM: %s (%d R$ Sandbox Grant)!", item.Name, item.Price),
+			Loadout = state.Loadout,
+			Unlocked = state.Unlocked,
+		}
+	end
+
+	return { Success = false, Message = "Purchase failed." }
+end
+
+applyCharacterPresetRE.OnServerEvent:Connect(function(player: Player, presetId: any)
+	local state = playerStates[player]
+	if not state or typeof(presetId) ~= "string" then return end
+
+	if presetId == "MarkCustomized" then
+		state.HasCustomized = true
+		syncStateToPlayer(player)
+		return
+	end
+
+	for _, preset in ipairs(AvatarCatalog.Presets) do
+		if preset.Id == presetId then
+			for category, itemId in pairs(preset.Loadout) do
+				local item = AvatarCatalog.Items[itemId]
+				if item and (item.Currency == "Free" or state.Unlocked[itemId]) then
+					state.Unlocked[itemId] = true
+					;(state.Loadout :: any)[category] = itemId
+				end
+			end
+			state.HasCustomized = true
+			syncStateToPlayer(player)
+			break
+		end
+	end
+end)
+
+-- Spawn Leo City Fashion & Gear Boutique Kiosk near Spawn Plaza
+local function buildAvatarBoutiqueKiosk()
+	if Workspace:FindFirstChild("LeoAvatarBoutiqueKiosk") then
+		return
+	end
+	local model = Instance.new("Model")
+	model.Name = "LeoAvatarBoutiqueKiosk"
+
+	local pad = Instance.new("Part")
+	pad.Name = "BoutiquePlatform"
+	pad.Size = Vector3.new(12, 0.8, 12)
+	pad.Position = Vector3.new(-32, 0.5, 28)
+	pad.Anchored = true
+	pad.Material = Enum.Material.Neon
+	pad.Color = Color3.fromRGB(236, 72, 153)
+	pad.Parent = model
+
+	local pedestal = Instance.new("Part")
+	pedestal.Name = "BoutiqueKioskTower"
+	pedestal.Size = Vector3.new(5, 8, 2.5)
+	pedestal.Position = Vector3.new(-32, 4.9, 24)
+	pedestal.Anchored = true
+	pedestal.Material = Enum.Material.SmoothPlastic
+	pedestal.Color = Color3.fromRGB(15, 23, 42)
+	pedestal.Parent = model
+
+	local bb = Instance.new("BillboardGui")
+	bb.Size = UDim2.fromOffset(260, 74)
+	bb.StudsOffset = Vector3.new(0, 6.2, 0)
+	bb.AlwaysOnTop = true
+	bb.Parent = pedestal
+
+	local title = Instance.new("TextLabel")
+	title.Size = UDim2.fromScale(1, 1)
+	title.BackgroundColor3 = Color3.fromRGB(15, 23, 42)
+	title.BackgroundTransparency = 0.15
+	title.TextColor3 = Color3.fromRGB(250, 204, 21)
+	title.Font = Enum.Font.GothamBlack
+	title.TextScaled = true
+	title.Text = "LEO FASHION & ROBUX GEAR\n[Customize Character]"
+	title.Parent = bb
+	Instance.new("UICorner", title).CornerRadius = UDim.new(0, 8)
+
+	local prompt = Instance.new("ProximityPrompt")
+	prompt.ObjectText = "Leo Fashion & Gear Boutique"
+	prompt.ActionText = "Customize Character [C]"
+	prompt.HoldDuration = 0
+	prompt.MaxActivationDistance = 16
+	prompt.Parent = pedestal
+
+	prompt.Triggered:Connect(function(player: Player)
+		openAvatarEditorRE:FireClient(player)
+	end)
+
+	model.Parent = Workspace
+end
+
+buildAvatarBoutiqueKiosk()
+
+for _, player in ipairs(Players:GetPlayers()) do
+	task.spawn(initPlayer, player)
+end
+Players.PlayerAdded:Connect(initPlayer)
+Players.PlayerRemoving:Connect(function(player: Player)
+	playerStates[player] = nil
+end)
+]]></ProtectedString>
+			</Properties>
+		</Item>
+		<Item class="Script" referent="RBX0000000B">
 			<Properties>
 				<bool name="Disabled">false</bool>
 				<string name="Name">ChaosAndEconomyService</string>
@@ -4385,7 +5318,7 @@ end)
 ]]></ProtectedString>
 			</Properties>
 		</Item>
-		<Item class="Script" referent="RBX0000000A">
+		<Item class="Script" referent="RBX0000000C">
 			<Properties>
 				<bool name="Disabled">false</bool>
 				<string name="Name">DestructionService</string>
@@ -4836,7 +5769,7 @@ print("[DestructionService] Ready and monitoring destructible city props.")
 ]]></ProtectedString>
 			</Properties>
 		</Item>
-		<Item class="Script" referent="RBX0000000B">
+		<Item class="Script" referent="RBX0000000D">
 			<Properties>
 				<bool name="Disabled">false</bool>
 				<string name="Name">GarageAndShopService</string>
@@ -5907,7 +6840,7 @@ end)
 ]]></ProtectedString>
 			</Properties>
 		</Item>
-		<Item class="Script" referent="RBX0000000C">
+		<Item class="Script" referent="RBX0000000E">
 			<Properties>
 				<bool name="Disabled">false</bool>
 				<string name="Name">GraphicsAndAtmosphereService</string>
@@ -6260,7 +7193,7 @@ end)
 ]]></ProtectedString>
 			</Properties>
 		</Item>
-		<Item class="Script" referent="RBX0000000D">
+		<Item class="Script" referent="RBX0000000F">
 			<Properties>
 				<bool name="Disabled">false</bool>
 				<string name="Name">MonetizationService</string>
@@ -6932,7 +7865,7 @@ end)
 ]]></ProtectedString>
 			</Properties>
 		</Item>
-		<Item class="Script" referent="RBX0000000E">
+		<Item class="Script" referent="RBX00000010">
 			<Properties>
 				<bool name="Disabled">false</bool>
 				<string name="Name">PlayerDataService</string>
@@ -7800,7 +8733,7 @@ end)
 ]]></ProtectedString>
 			</Properties>
 		</Item>
-		<Item class="Script" referent="RBX0000000F">
+		<Item class="Script" referent="RBX00000011">
 			<Properties>
 				<bool name="Disabled">false</bool>
 				<string name="Name">PoliceHeatService</string>
@@ -9129,7 +10062,7 @@ end)
 ]]></ProtectedString>
 			</Properties>
 		</Item>
-		<Item class="Script" referent="RBX00000010">
+		<Item class="Script" referent="RBX00000012">
 			<Properties>
 				<bool name="Disabled">false</bool>
 				<string name="Name">ProgressionAndLevelsService</string>
@@ -9813,7 +10746,7 @@ Players.PlayerRemoving:Connect(cleanupPlayerProgression)
 ]]></ProtectedString>
 			</Properties>
 		</Item>
-		<Item class="Script" referent="RBX00000011">
+		<Item class="Script" referent="RBX00000013">
 			<Properties>
 				<bool name="Disabled">false</bool>
 				<string name="Name">TrafficAndNPCAIService</string>
@@ -10370,7 +11303,7 @@ print("[TrafficAndNPCAIService] Synchronized traffic lights, AI vehicles, and si
 ]]></ProtectedString>
 			</Properties>
 		</Item>
-		<Item class="Script" referent="RBX00000012">
+		<Item class="Script" referent="RBX00000014">
 			<Properties>
 				<bool name="Disabled">false</bool>
 				<string name="Name">VehicleService</string>
@@ -11379,7 +12312,7 @@ end)
 ]]></ProtectedString>
 			</Properties>
 		</Item>
-		<Item class="Script" referent="RBX00000013">
+		<Item class="Script" referent="RBX00000015">
 			<Properties>
 				<bool name="Disabled">false</bool>
 				<string name="Name">WeatherTimeService</string>
@@ -11659,7 +12592,7 @@ print("[WeatherTimeService] Dynamic Day/Night & Weather cycle active.")
 ]]></ProtectedString>
 			</Properties>
 		</Item>
-		<Item class="Script" referent="RBX00000014">
+		<Item class="Script" referent="RBX00000016">
 			<Properties>
 				<bool name="Disabled">false</bool>
 				<string name="Name">WorldBuilderService</string>
@@ -12468,12 +13401,561 @@ print(string.format("[WorldBuilderService] Leo City built with %d destructible p
 			</Properties>
 		</Item>
 	</Item>
-	<Item class="StarterGui" referent="RBX00000019">
+	<Item class="StarterGui" referent="RBX0000001C">
 		<Properties>
 			<string name="Name">StarterGui</string>
 			<bool name="ResetPlayerGuiOnSpawn">false</bool>
 		</Properties>
-		<Item class="LocalScript" referent="RBX00000016">
+		<Item class="LocalScript" referent="RBX00000018">
+			<Properties>
+				<bool name="Disabled">false</bool>
+				<string name="Name">CharacterCreatorAndWardrobeUI</string>
+				<ProtectedString name="Source"><![CDATA[--!strict
+-- CharacterCreatorAndWardrobeUI.client.luau
+-- Full Startup Character Creator ("CREATE YOUR WRECKER") & In-Game Wardrobe UI ([C] key / HUD button / Boutique Kiosk)
+-- Supports Free Starters, Destruction Cash items, and Paid Robux items + VIP Mega Bundle with 3D Viewport preview.
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local UserInputService = game:GetService("UserInputService")
+
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local AvatarCatalog = require(Shared:WaitForChild("AvatarCatalog"))
+local Remotes = ReplicatedStorage:WaitForChild("Remotes")
+
+local getAvatarWardrobeRF = Remotes:WaitForChild("GetAvatarWardrobe") :: RemoteFunction
+local equipAvatarItemRF = Remotes:WaitForChild("EquipAvatarItem") :: RemoteFunction
+local purchaseAvatarItemRF = Remotes:WaitForChild("PurchaseAvatarItem") :: RemoteFunction
+local applyCharacterPresetRE = Remotes:WaitForChild("ApplyCharacterPreset") :: RemoteEvent
+local avatarUpdatedRE = Remotes:WaitForChild("AvatarUpdated") :: RemoteEvent
+local openAvatarEditorRE = Remotes:WaitForChild("OpenAvatarEditor") :: RemoteEvent
+
+local currentLoadout: AvatarCatalog.AvatarLoadout = AvatarCatalog.GetDefaultLoadout()
+local unlockedItems: { [string]: boolean } = {}
+local activeCategory = "Presets"
+local showOnStartup = true
+local previewYaw = 20
+local previewModel: Model? = nil
+
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "CharacterCreatorAndWardrobeUI"
+screenGui.ResetOnSpawn = false
+screenGui.DisplayOrder = 28
+screenGui.IgnoreGuiInset = true
+screenGui.Parent = playerGui
+
+-- Floating Quick-Open HUD Button (Top-Right alongside HUD or accessible anytime)
+local quickHudBtn = Instance.new("TextButton")
+quickHudBtn.Name = "OpenCreatorHudButton"
+quickHudBtn.Size = UDim2.fromOffset(154, 38)
+quickHudBtn.Position = UDim2.new(1, -172, 0, 68)
+quickHudBtn.BackgroundColor3 = Color3.fromRGB(236, 72, 153)
+quickHudBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+quickHudBtn.Font = Enum.Font.GothamBlack
+quickHudBtn.TextSize = 13
+quickHudBtn.Text = "CUSTOMIZE [C]"
+quickHudBtn.Parent = screenGui
+Instance.new("UICorner", quickHudBtn).CornerRadius = UDim.new(0, 8)
+local qStroke = Instance.new("UIStroke", quickHudBtn)
+qStroke.Color = Color3.fromRGB(250, 204, 21)
+qStroke.Thickness = 1.5
+
+-- Full Modal Backdrop
+local backdrop = Instance.new("Frame")
+backdrop.Name = "CreatorModal"
+backdrop.Size = UDim2.fromScale(1, 1)
+backdrop.BackgroundColor3 = Color3.fromRGB(6, 10, 19)
+backdrop.BackgroundTransparency = 0.22
+backdrop.Visible = false
+backdrop.Parent = screenGui
+
+local panel = Instance.new("Frame")
+panel.Name = "MainPanel"
+panel.Size = UDim2.fromOffset(920, 560)
+panel.Position = UDim2.fromScale(0.5, 0.5)
+panel.AnchorPoint = Vector2.new(0.5, 0.5)
+panel.BackgroundColor3 = Color3.fromRGB(15, 23, 42)
+panel.Parent = backdrop
+Instance.new("UICorner", panel).CornerRadius = UDim.new(0, 14)
+local panelStroke = Instance.new("UIStroke", panel)
+panelStroke.Color = Color3.fromRGB(56, 189, 248)
+panelStroke.Thickness = 2
+
+-- Header Bar
+local headerTitle = Instance.new("TextLabel")
+headerTitle.Size = UDim2.new(0.55, 0, 0, 44)
+headerTitle.Position = UDim2.fromOffset(22, 10)
+headerTitle.BackgroundTransparency = 1
+headerTitle.TextXAlignment = Enum.TextXAlignment.Left
+headerTitle.Font = Enum.Font.GothamBlack
+headerTitle.TextSize = 24
+headerTitle.TextColor3 = Color3.fromRGB(250, 204, 21)
+headerTitle.Text = "CREATE YOUR WRECKER — AVATAR & GEAR SHOP"
+headerTitle.Parent = panel
+
+local statusBanner = Instance.new("TextLabel")
+statusBanner.Size = UDim2.new(0.55, 0, 0, 20)
+statusBanner.Position = UDim2.fromOffset(22, 48)
+statusBanner.BackgroundTransparency = 1
+statusBanner.TextXAlignment = Enum.TextXAlignment.Left
+statusBanner.Font = Enum.Font.GothamBold
+statusBanner.TextSize = 13
+statusBanner.TextColor3 = Color3.fromRGB(125, 211, 252)
+statusBanner.Text = "Mix Free Starters, Destruction Cash Gear, and VIP Robux Armor!"
+statusBanner.Parent = panel
+
+-- VIP Robux Mega Bundle Top Banner
+local vipBtn = Instance.new("TextButton")
+vipBtn.Name = "VIPBundleBanner"
+vipBtn.Size = UDim2.fromOffset(315, 48)
+vipBtn.Position = UDim2.new(1, -385, 0, 14)
+vipBtn.BackgroundColor3 = Color3.fromRGB(234, 179, 8)
+vipBtn.TextColor3 = Color3.fromRGB(15, 23, 42)
+vipBtn.Font = Enum.Font.GothamBlack
+vipBtn.TextSize = 13
+vipBtn.Text = "UNLOCK ALL ROBUX + CASH GEAR\nVIP MEGA BUNDLE — 599 R$"
+vipBtn.Parent = panel
+Instance.new("UICorner", vipBtn).CornerRadius = UDim.new(0, 10)
+
+local closeBtn = Instance.new("TextButton")
+closeBtn.Size = UDim2.fromOffset(44, 44)
+closeBtn.Position = UDim2.new(1, -58, 0, 16)
+closeBtn.BackgroundColor3 = Color3.fromRGB(220, 38, 38)
+closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+closeBtn.Font = Enum.Font.GothamBlack
+closeBtn.TextSize = 18
+closeBtn.Text = "X"
+closeBtn.Parent = panel
+Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(0, 10)
+
+-- Left Column: 3D Viewport Character Preview
+local previewCard = Instance.new("Frame")
+previewCard.Size = UDim2.fromOffset(290, 465)
+previewCard.Position = UDim2.fromOffset(20, 76)
+previewCard.BackgroundColor3 = Color3.fromRGB(9, 14, 26)
+previewCard.Parent = panel
+Instance.new("UICorner", previewCard).CornerRadius = UDim.new(0, 12)
+
+local viewport = Instance.new("ViewportFrame")
+viewport.Size = UDim2.new(1, -16, 0, 305)
+viewport.Position = UDim2.fromOffset(8, 8)
+viewport.BackgroundColor3 = Color3.fromRGB(17, 24, 39)
+viewport.Ambient = Color3.fromRGB(190, 200, 220)
+viewport.LightColor = Color3.fromRGB(255, 250, 235)
+viewport.LightDirection = Vector3.new(-1, -1, -1)
+viewport.Parent = previewCard
+Instance.new("UICorner", viewport).CornerRadius = UDim.new(0, 10)
+
+local vpCam = Instance.new("Camera")
+vpCam.Parent = viewport
+viewport.CurrentCamera = vpCam
+
+local vpWorld = Instance.new("WorldModel")
+vpWorld.Parent = viewport
+
+local rotLeftBtn = Instance.new("TextButton")
+rotLeftBtn.Size = UDim2.fromOffset(44, 32)
+rotLeftBtn.Position = UDim2.fromOffset(14, 272)
+rotLeftBtn.BackgroundColor3 = Color3.fromRGB(30, 41, 59)
+rotLeftBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+rotLeftBtn.Font = Enum.Font.GothamBlack
+rotLeftBtn.TextSize = 16
+rotLeftBtn.Text = "<"
+rotLeftBtn.Parent = previewCard
+Instance.new("UICorner", rotLeftBtn).CornerRadius = UDim.new(0, 6)
+
+local randBtn = Instance.new("TextButton")
+randBtn.Size = UDim2.fromOffset(156, 32)
+randBtn.Position = UDim2.fromOffset(67, 272)
+randBtn.BackgroundColor3 = Color3.fromRGB(79, 70, 229)
+randBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+randBtn.Font = Enum.Font.GothamBold
+randBtn.TextSize = 13
+randBtn.Text = "RANDOMIZE LOOK"
+randBtn.Parent = previewCard
+Instance.new("UICorner", randBtn).CornerRadius = UDim.new(0, 6)
+
+local rotRightBtn = Instance.new("TextButton")
+rotRightBtn.Size = UDim2.fromOffset(44, 32)
+rotRightBtn.Position = UDim2.fromOffset(232, 272)
+rotRightBtn.BackgroundColor3 = Color3.fromRGB(30, 41, 59)
+rotRightBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+rotRightBtn.Font = Enum.Font.GothamBlack
+rotRightBtn.TextSize = 16
+rotRightBtn.Text = ">"
+rotRightBtn.Parent = previewCard
+Instance.new("UICorner", rotRightBtn).CornerRadius = UDim.new(0, 6)
+
+local perksLabel = Instance.new("TextLabel")
+perksLabel.Size = UDim2.new(1, -20, 0, 42)
+perksLabel.Position = UDim2.fromOffset(10, 320)
+perksLabel.BackgroundTransparency = 1
+perksLabel.Font = Enum.Font.GothamBold
+perksLabel.TextSize = 12
+perksLabel.TextColor3 = Color3.fromRGB(74, 222, 128)
+perksLabel.TextWrapped = true
+perksLabel.Text = "Active Perks: Base Stats"
+perksLabel.Parent = previewCard
+
+local startupToggleBtn = Instance.new("TextButton")
+startupToggleBtn.Size = UDim2.new(1, -24, 0, 28)
+startupToggleBtn.Position = UDim2.fromOffset(12, 366)
+startupToggleBtn.BackgroundColor3 = Color3.fromRGB(30, 41, 59)
+startupToggleBtn.TextColor3 = Color3.fromRGB(203, 213, 225)
+startupToggleBtn.Font = Enum.Font.GothamBold
+startupToggleBtn.TextSize = 12
+startupToggleBtn.Text = "[✓] Show Creator on Startup"
+startupToggleBtn.Parent = previewCard
+Instance.new("UICorner", startupToggleBtn).CornerRadius = UDim.new(0, 6)
+
+local playBtn = Instance.new("TextButton")
+playBtn.Size = UDim2.new(1, -24, 0, 52)
+playBtn.Position = UDim2.fromOffset(12, 401)
+playBtn.BackgroundColor3 = Color3.fromRGB(34, 197, 94)
+playBtn.TextColor3 = Color3.fromRGB(15, 23, 42)
+playBtn.Font = Enum.Font.GothamBlack
+playBtn.TextSize = 16
+playBtn.Text = "SAVE & START SMASHING! [PLAY]"
+playBtn.Parent = previewCard
+Instance.new("UICorner", playBtn).CornerRadius = UDim.new(0, 10)
+
+-- Right Column: Category Tabs + Item Grid
+local tabBar = Instance.new("Frame")
+tabBar.Size = UDim2.fromOffset(576, 40)
+tabBar.Position = UDim2.fromOffset(324, 76)
+tabBar.BackgroundTransparency = 1
+tabBar.Parent = panel
+local tabLayout = Instance.new("UIListLayout", tabBar)
+tabLayout.FillDirection = Enum.FillDirection.Horizontal
+tabLayout.Padding = UDim.new(0, 6)
+
+local gridScroll = Instance.new("ScrollingFrame")
+gridScroll.Size = UDim2.fromOffset(576, 414)
+gridScroll.Position = UDim2.fromOffset(324, 126)
+gridScroll.BackgroundColor3 = Color3.fromRGB(9, 14, 26)
+gridScroll.BorderSizePixel = 0
+gridScroll.ScrollBarThickness = 6
+gridScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+gridScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+gridScroll.Parent = panel
+Instance.new("UICorner", gridScroll).CornerRadius = UDim.new(0, 12)
+
+local gridPadding = Instance.new("UIPadding", gridScroll)
+gridPadding.PaddingTop = UDim.new(0, 12)
+gridPadding.PaddingLeft = UDim.new(0, 12)
+gridPadding.PaddingRight = UDim.new(0, 12)
+gridPadding.PaddingBottom = UDim.new(0, 12)
+
+local gridLayout = Instance.new("UIGridLayout", gridScroll)
+gridLayout.CellSize = UDim2.fromOffset(176, 178)
+gridLayout.CellPadding = UDim2.fromOffset(10, 10)
+
+local function updateViewportCamera()
+	local focusPos = Vector3.new(0, 2.7, 0)
+	local rad = math.rad(previewYaw)
+	local camPos = focusPos + Vector3.new(math.sin(rad) * 6.8, 1.1, math.cos(rad) * 6.8)
+	vpCam.CFrame = CFrame.lookAt(camPos, focusPos)
+end
+
+local function rebuildPreviewMannequin()
+	if previewModel then
+		previewModel:Destroy()
+	end
+	local m = Instance.new("Model")
+	m.Name = "PreviewWrecker"
+
+	local function makeLimb(name: string, size: Vector3, pos: Vector3): Part
+		local p = Instance.new("Part")
+		p.Name = name
+		p.Size = size
+		p.Position = pos
+		p.Anchored = true
+		p.Material = Enum.Material.SmoothPlastic
+		p.Parent = m
+		return p
+	end
+
+	local torso = makeLimb("UpperTorso", Vector3.new(2, 2, 1), Vector3.new(0, 3.0, 0))
+	makeLimb("Head", Vector3.new(1.2, 1.2, 1.2), Vector3.new(0, 4.6, 0))
+	makeLimb("LeftUpperArm", Vector3.new(0.9, 1.9, 0.9), Vector3.new(-1.5, 3.0, 0))
+	makeLimb("RightHand", Vector3.new(0.9, 1.9, 0.9), Vector3.new(1.5, 3.0, 0))
+	makeLimb("LeftLeg", Vector3.new(0.95, 2.0, 0.95), Vector3.new(-0.52, 1.0, 0))
+	makeLimb("RightLeg", Vector3.new(0.95, 2.0, 0.95), Vector3.new(0.52, 1.0, 0))
+	m.PrimaryPart = torso
+	m.Parent = vpWorld
+
+	AvatarCatalog.ApplyLoadoutToCharacter(m, currentLoadout)
+	-- Ensure welded procedural attachments stay anchored in ViewportFrame
+	for _, d in ipairs(m:GetDescendants()) do
+		if d:IsA("BasePart") then
+			d.Anchored = true
+		end
+	end
+	previewModel = m
+	updateViewportCamera()
+
+	local perks = AvatarCatalog.ComputePerks(currentLoadout)
+	perksLabel.Text = string.format(
+		"Perks: Cash x%.2f | XP x%.2f | Speed x%.2f | Chaos x%.2f",
+		perks.CashMult, perks.XPMult, perks.SprintMult, perks.ChaosMult
+	)
+end
+
+local renderCategoryGrid: () -> ()
+
+local tabButtons: { [string]: TextButton } = {}
+for _, cat in ipairs(AvatarCatalog.Categories) do
+	local b = Instance.new("TextButton")
+	b.Size = UDim2.fromOffset(76, 36)
+	b.BackgroundColor3 = Color3.fromRGB(30, 41, 59)
+	b.TextColor3 = Color3.fromRGB(226, 232, 240)
+	b.Font = Enum.Font.GothamBold
+	b.TextSize = 12
+	b.Text = cat.Label
+	b.Parent = tabBar
+	Instance.new("UICorner", b).CornerRadius = UDim.new(0, 8)
+	tabButtons[cat.Id] = b
+	b.MouseButton1Click:Connect(function()
+		activeCategory = cat.Id
+		renderCategoryGrid()
+	end)
+end
+
+renderCategoryGrid = function()
+	for id, btn in pairs(tabButtons) do
+		local selected = (id == activeCategory)
+		btn.BackgroundColor3 = selected and Color3.fromRGB(56, 189, 248) or Color3.fromRGB(30, 41, 59)
+		btn.TextColor3 = selected and Color3.fromRGB(15, 23, 42) or Color3.fromRGB(226, 232, 240)
+	end
+
+	for _, child in ipairs(gridScroll:GetChildren()) do
+		if child:IsA("Frame") then
+			child:Destroy()
+		end
+	end
+
+	if activeCategory == "Presets" then
+		for _, preset in ipairs(AvatarCatalog.Presets) do
+			local card = Instance.new("Frame")
+			card.BackgroundColor3 = Color3.fromRGB(22, 32, 54)
+			card.Parent = gridScroll
+			Instance.new("UICorner", card).CornerRadius = UDim.new(0, 10)
+
+			local badge = Instance.new("TextLabel")
+			badge.Size = UDim2.new(1, -16, 0, 22)
+			badge.Position = UDim2.fromOffset(8, 8)
+			badge.BackgroundTransparency = 1
+			badge.Font = Enum.Font.GothamBlack
+			badge.TextSize = 11
+			badge.TextColor3 = Color3.fromRGB(250, 204, 21)
+			badge.Text = preset.Badge
+			badge.Parent = card
+
+			local nameLbl = Instance.new("TextLabel")
+			nameLbl.Size = UDim2.new(1, -16, 0, 38)
+			nameLbl.Position = UDim2.fromOffset(8, 36)
+			nameLbl.BackgroundTransparency = 1
+			nameLbl.Font = Enum.Font.GothamBlack
+			nameLbl.TextSize = 16
+			nameLbl.TextWrapped = true
+			nameLbl.TextColor3 = Color3.fromRGB(255, 255, 255)
+			nameLbl.Text = preset.Name
+			nameLbl.Parent = card
+
+			local applyBtn = Instance.new("TextButton")
+			applyBtn.Size = UDim2.new(1, -20, 0, 38)
+			applyBtn.Position = UDim2.fromOffset(10, 126)
+			applyBtn.BackgroundColor3 = Color3.fromRGB(56, 189, 248)
+			applyBtn.TextColor3 = Color3.fromRGB(15, 23, 42)
+			applyBtn.Font = Enum.Font.GothamBlack
+			applyBtn.TextSize = 13
+			applyBtn.Text = "APPLY PRESET"
+			applyBtn.Parent = card
+			Instance.new("UICorner", applyBtn).CornerRadius = UDim.new(0, 8)
+
+			applyBtn.MouseButton1Click:Connect(function()
+				applyCharacterPresetRE:FireServer(preset.Id)
+				statusBanner.Text = "Applied Preset: " .. preset.Name .. " (Unlocked pieces equipped!)"
+			end)
+		end
+		return
+	end
+
+	local items = AvatarCatalog.GetItemsByCategory(activeCategory)
+	for _, item in ipairs(items) do
+		local isOwned = unlockedItems[item.Id] or item.Currency == "Free"
+		local isEquipped = ((currentLoadout :: any)[item.Category] == item.Id)
+
+		local card = Instance.new("Frame")
+		card.BackgroundColor3 = Color3.fromRGB(22, 32, 54)
+		card.Parent = gridScroll
+		Instance.new("UICorner", card).CornerRadius = UDim.new(0, 10)
+
+		local swatch = Instance.new("Frame")
+		swatch.Size = UDim2.new(1, -20, 0, 36)
+		swatch.Position = UDim2.fromOffset(10, 10)
+		swatch.BackgroundColor3 = item.PrimaryColor
+		swatch.Parent = card
+		Instance.new("UICorner", swatch).CornerRadius = UDim.new(0, 6)
+
+		local accentDot = Instance.new("Frame")
+		accentDot.Size = UDim2.fromOffset(28, 22)
+		accentDot.Position = UDim2.new(1, -34, 0.5, -11)
+		accentDot.BackgroundColor3 = item.AccentColor
+		accentDot.Parent = swatch
+		Instance.new("UICorner", accentDot).CornerRadius = UDim.new(0, 4)
+
+		local title = Instance.new("TextLabel")
+		title.Size = UDim2.new(1, -16, 0, 34)
+		title.Position = UDim2.fromOffset(8, 50)
+		title.BackgroundTransparency = 1
+		title.Font = Enum.Font.GothamBlack
+		title.TextSize = 13
+		title.TextWrapped = true
+		title.TextColor3 = Color3.fromRGB(255, 255, 255)
+		title.Text = item.Name
+		title.Parent = card
+
+		local desc = Instance.new("TextLabel")
+		desc.Size = UDim2.new(1, -16, 0, 36)
+		desc.Position = UDim2.fromOffset(8, 84)
+		desc.BackgroundTransparency = 1
+		desc.Font = Enum.Font.GothamMedium
+		desc.TextSize = 11
+		desc.TextWrapped = true
+		desc.TextColor3 = item.PerkLabel and Color3.fromRGB(250, 204, 21) or Color3.fromRGB(148, 163, 184)
+		desc.Text = item.PerkLabel or item.Description
+		desc.Parent = card
+
+		local actionBtn = Instance.new("TextButton")
+		actionBtn.Size = UDim2.new(1, -16, 0, 36)
+		actionBtn.Position = UDim2.fromOffset(8, 132)
+		actionBtn.Font = Enum.Font.GothamBlack
+		actionBtn.TextSize = 12
+		actionBtn.Parent = card
+		Instance.new("UICorner", actionBtn).CornerRadius = UDim.new(0, 8)
+
+		if isEquipped then
+			actionBtn.BackgroundColor3 = Color3.fromRGB(34, 197, 94)
+			actionBtn.TextColor3 = Color3.fromRGB(15, 23, 42)
+			actionBtn.Text = "EQUIPPED"
+		elseif isOwned then
+			actionBtn.BackgroundColor3 = Color3.fromRGB(56, 189, 248)
+			actionBtn.TextColor3 = Color3.fromRGB(15, 23, 42)
+			actionBtn.Text = (item.Currency == "Free") and "FREE • EQUIP" or "OWNED • EQUIP"
+		elseif item.Currency == "Cash" then
+			actionBtn.BackgroundColor3 = Color3.fromRGB(16, 185, 129)
+			actionBtn.TextColor3 = Color3.fromRGB(15, 23, 42)
+			actionBtn.Text = string.format("BUY $%d CASH", item.Price)
+		else
+			actionBtn.BackgroundColor3 = Color3.fromRGB(250, 204, 21)
+			actionBtn.TextColor3 = Color3.fromRGB(15, 23, 42)
+			actionBtn.Text = string.format("BUY %d R$ ROBUX", item.Price)
+		end
+
+		actionBtn.MouseButton1Click:Connect(function()
+			local res = isOwned and equipAvatarItemRF:InvokeServer(item.Id) or purchaseAvatarItemRF:InvokeServer(item.Id)
+			if res and res.Message then
+				statusBanner.Text = res.Message
+			end
+		end)
+	end
+end
+
+local function toggleEditor(forceState: boolean?)
+	local nextVisible = if forceState ~= nil then forceState else not backdrop.Visible
+	backdrop.Visible = nextVisible
+	if nextVisible then
+		rebuildPreviewMannequin()
+		renderCategoryGrid()
+	end
+end
+
+rotLeftBtn.MouseButton1Click:Connect(function()
+	previewYaw -= 30
+	updateViewportCamera()
+end)
+
+rotRightBtn.MouseButton1Click:Connect(function()
+	previewYaw += 30
+	updateViewportCamera()
+end)
+
+randBtn.MouseButton1Click:Connect(function()
+	local randomPreset = AvatarCatalog.Presets[math.random(1, #AvatarCatalog.Presets)]
+	applyCharacterPresetRE:FireServer(randomPreset.Id)
+	statusBanner.Text = "Randomized Look: " .. randomPreset.Name
+end)
+
+vipBtn.MouseButton1Click:Connect(function()
+	local res = purchaseAvatarItemRF:InvokeServer(AvatarCatalog.VIPAvatarMegaBundle.Id)
+	if res and res.Message then
+		statusBanner.Text = res.Message
+	end
+end)
+
+startupToggleBtn.MouseButton1Click:Connect(function()
+	showOnStartup = not showOnStartup
+	startupToggleBtn.Text = showOnStartup and "[✓] Show Creator on Startup" or "[ ] Show Creator on Startup"
+end)
+
+closeBtn.MouseButton1Click:Connect(function()
+	applyCharacterPresetRE:FireServer("MarkCustomized")
+	toggleEditor(false)
+end)
+
+playBtn.MouseButton1Click:Connect(function()
+	applyCharacterPresetRE:FireServer("MarkCustomized")
+	toggleEditor(false)
+end)
+
+quickHudBtn.MouseButton1Click:Connect(function()
+	toggleEditor()
+end)
+
+UserInputService.InputBegan:Connect(function(input, gp)
+	if gp then return end
+	if input.KeyCode == Enum.KeyCode.C then
+		toggleEditor()
+	end
+end)
+
+player:GetAttributeChangedSignal("ToggleAvatarUI"):Connect(function()
+	toggleEditor()
+end)
+
+openAvatarEditorRE.OnClientEvent:Connect(function()
+	toggleEditor(true)
+end)
+
+avatarUpdatedRE.OnClientEvent:Connect(function(payload)
+	if payload.Loadout then currentLoadout = payload.Loadout end
+	if payload.Unlocked then unlockedItems = payload.Unlocked end
+	rebuildPreviewMannequin()
+	renderCategoryGrid()
+end)
+
+task.spawn(function()
+	local ok, data = pcall(function()
+		return getAvatarWardrobeRF:InvokeServer()
+	end)
+	if ok and data then
+		currentLoadout = data.Loadout or currentLoadout
+		unlockedItems = data.Unlocked or unlockedItems
+		rebuildPreviewMannequin()
+		renderCategoryGrid()
+		if showOnStartup and not data.HasCustomized then
+			toggleEditor(true)
+		end
+	end
+end)
+]]></ProtectedString>
+			</Properties>
+		</Item>
+		<Item class="LocalScript" referent="RBX00000019">
 			<Properties>
 				<bool name="Disabled">false</bool>
 				<string name="Name">GameHUD</string>
@@ -12965,7 +14447,7 @@ refreshHUDStats()
 ]]></ProtectedString>
 			</Properties>
 		</Item>
-		<Item class="LocalScript" referent="RBX00000017">
+		<Item class="LocalScript" referent="RBX0000001A">
 			<Properties>
 				<bool name="Disabled">false</bool>
 				<string name="Name">SpeedShopUI</string>
@@ -13530,7 +15012,7 @@ refreshUpgradesView()
 ]]></ProtectedString>
 			</Properties>
 		</Item>
-		<Item class="LocalScript" referent="RBX00000018">
+		<Item class="LocalScript" referent="RBX0000001B">
 			<Properties>
 				<bool name="Disabled">false</bool>
 				<string name="Name">TutorialAndGuideUI</string>
@@ -14716,15 +16198,15 @@ end)
 			</Properties>
 		</Item>
 	</Item>
-	<Item class="StarterPlayer" referent="RBX0000001D">
+	<Item class="StarterPlayer" referent="RBX00000020">
 		<Properties>
 			<string name="Name">StarterPlayer</string>
 		</Properties>
-		<Item class="StarterPlayerScripts" referent="RBX0000001E">
+		<Item class="StarterPlayerScripts" referent="RBX00000021">
 			<Properties>
 				<string name="Name">StarterPlayerScripts</string>
 			</Properties>
-			<Item class="LocalScript" referent="RBX0000001A">
+			<Item class="LocalScript" referent="RBX0000001D">
 				<Properties>
 					<bool name="Disabled">false</bool>
 					<string name="Name">CameraAndFXController</string>
@@ -15049,7 +16531,7 @@ end)
 ]]></ProtectedString>
 				</Properties>
 			</Item>
-			<Item class="LocalScript" referent="RBX0000001B">
+			<Item class="LocalScript" referent="RBX0000001E">
 				<Properties>
 					<bool name="Disabled">false</bool>
 					<string name="Name">OnFootController</string>
@@ -15397,7 +16879,7 @@ end)
 ]]></ProtectedString>
 				</Properties>
 			</Item>
-			<Item class="LocalScript" referent="RBX0000001C">
+			<Item class="LocalScript" referent="RBX0000001F">
 				<Properties>
 					<bool name="Disabled">false</bool>
 					<string name="Name">VehicleClientController</string>
@@ -16056,11 +17538,11 @@ end)
 				</Properties>
 			</Item>
 		</Item>
-		<Item class="StarterCharacterScripts" referent="RBX0000001F">
+		<Item class="StarterCharacterScripts" referent="RBX00000022">
 			<Properties>
 				<string name="Name">StarterCharacterScripts</string>
 			</Properties>
 		</Item>
 	</Item>
-	<Item class="SoundService" referent="RBX00000028"><Properties><string name="Name">SoundService</string></Properties></Item>
+	<Item class="SoundService" referent="RBX0000002B"><Properties><string name="Name">SoundService</string></Properties></Item>
 </roblox>
