@@ -29,13 +29,8 @@ local showOnStartup = false
 local previewYaw = 22
 local previewModel: Model? = nil
 
-local existingGui = playerGui:FindFirstChild("CharacterCreatorAndWardrobeUI")
-if existingGui then
-	existingGui:Destroy()
-end
-
 local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "CharacterCreatorAndWardrobeUI"
+screenGui.Name = "WorldOfDestructionWardrobeGui"
 screenGui.ResetOnSpawn = false
 screenGui.DisplayOrder = 28
 screenGui.IgnoreGuiInset = true

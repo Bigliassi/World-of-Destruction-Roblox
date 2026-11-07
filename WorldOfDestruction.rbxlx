@@ -39149,9 +39149,9 @@ local function showTierResistanceFeedback(propInst: Instance, requiredTier: numb
 
 	local clink = Instance.new("Sound")
 	clink.Name = "MetallicResistClink"
-	clink.SoundId = "rbxassetid://9114221580"
-	clink.Volume = 0.7
-	clink.PlaybackSpeed = 1.18
+	clink.SoundId = "rbxasset://sounds/metal.ogg"
+	clink.Volume = 0.25
+	clink.PlaybackSpeed = 1.25
 	clink.Parent = sparkHost
 	clink:Play()
 
@@ -41033,7 +41033,7 @@ local function createBillboardLabel(_parent: BasePart, _titleText: string, _subt
 end
 
 local function ensureDefaultGaragePadsInWorkspace()
-	-- First bind any existing MechanicSpot / SpeedShop instances created by world builder scripts
+	-- Bind any existing MechanicSpot / SpeedShop instances created by WorldBuilderService
 	for _, inst in ipairs(CollectionService:GetTagged("MechanicSpot")) do
 		if inst:IsA("BasePart") then
 			bindMechanicSpotPad(inst, inst.Name)
@@ -41058,56 +41058,6 @@ local function ensureDefaultGaragePadsInWorkspace()
 				bindSpeedShopPad(desc, desc.Name)
 			end
 		end
-	end
-
-	-- If no pads exist yet, spawn drive-through Mechanic Spots & Speed Shop pads in Workspace.GarageSpots
-	if next(boundPads) ~= nil then
-		return
-	end
-
-	local spotsFolder = ensureFolder(Workspace, "GarageSpots")
-
-	local mechanicLocations = {
-		{ Name = "Downtown Mechanic Bay", Position = Vector3.new(45, 0.4, -45) },
-		{ Name = "Harbor Repair Garage", Position = Vector3.new(-140, 0.4, 90) },
-		{ Name = "Uptown Pit Stop", Position = Vector3.new(160, 0.4, 130) },
-	}
-
-	for _, loc in ipairs(mechanicLocations) do
-		local pad = Instance.new("Part")
-		pad.Name = loc.Name
-		pad.Size = Vector3.new(18, 0.6, 18)
-		pad.Position = loc.Position
-		pad.Anchored = true
-		pad.CanCollide = false
-		pad.Material = Enum.Material.Neon
-		pad.Color = Color3.fromRGB(40, 235, 115)
-		pad.Transparency = 0.25
-		pad.Parent = spotsFolder
-		CollectionService:AddTag(pad, "MechanicSpot")
-		createBillboardLabel(pad, "MECHANIC SPOT", "DRIVE THROUGH FOR INSTANT REPAIR", Color3.fromRGB(60, 255, 130))
-		bindMechanicSpotPad(pad, loc.Name)
-	end
-
-	local speedShopLocations = {
-		{ Name = "Leo City Speed Shop", Position = Vector3.new(-45, 0.4, -45) },
-		{ Name = "Industrial Tuning Showroom", Position = Vector3.new(120, 0.4, -150) },
-	}
-
-	for _, loc in ipairs(speedShopLocations) do
-		local pad = Instance.new("Part")
-		pad.Name = loc.Name
-		pad.Size = Vector3.new(20, 0.6, 20)
-		pad.Position = loc.Position
-		pad.Anchored = true
-		pad.CanCollide = false
-		pad.Material = Enum.Material.Neon
-		pad.Color = Color3.fromRGB(255, 175, 35)
-		pad.Transparency = 0.25
-		pad.Parent = spotsFolder
-		CollectionService:AddTag(pad, "SpeedShop")
-		createBillboardLabel(pad, "SPEED SHOP & GARAGE", "UPGRADE ENGINE · ARMOR · NITRO · PLOW · MAGNET", Color3.fromRGB(255, 200, 50))
-		bindSpeedShopPad(pad, loc.Name)
 	end
 end
 
@@ -50062,7 +50012,7 @@ local function buildShippingContainerStack(origin: Vector3, offset: Vector3, yaw
 			if not (row == 1 and tier == 1) then
 				local spec = containerColors[((row * 2 + tier) % #containerColors) + 1]
 				local cPos = baseRot * CFrame.new((row - 0.5) * 9.2, 4.4 + tier * 8.8, 0)
-				local box = makePart(BuildingsFolder, "ShippingContainer", Vector3.new(8.4, 8.6, 22.0), cPos, spec.col, Enum.Material.CorrugatedMetal, true)
+				local box = makePart(BuildingsFolder, "ShippingContainer", Vector3.new(8.4, 8.6, 22.0), cPos, spec.col, Enum.Material.Metal, true)
 				makePart(BuildingsFolder, "ContainerCornerFrame", Vector3.new(8.8, 8.8, 1.2), cPos * CFrame.new(0, 0, -10.5), Color3.fromRGB(38, 42, 50), Enum.Material.Metal, true)
 				makePart(BuildingsFolder, "ContainerRearDoors", Vector3.new(8.8, 8.8, 1.2), cPos * CFrame.new(0, 0, 10.5), Color3.fromRGB(38, 42, 50), Enum.Material.Metal, true)
 				addSurfaceSign(box, spec.label, Color3.fromRGB(245, 248, 255), Enum.NormalId.Left)
@@ -50386,13 +50336,8 @@ local showOnStartup = false
 local previewYaw = 22
 local previewModel: Model? = nil
 
-local existingGui = playerGui:FindFirstChild("CharacterCreatorAndWardrobeUI")
-if existingGui then
-	existingGui:Destroy()
-end
-
 local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "CharacterCreatorAndWardrobeUI"
+screenGui.Name = "WorldOfDestructionWardrobeGui"
 screenGui.ResetOnSpawn = false
 screenGui.DisplayOrder = 28
 screenGui.IgnoreGuiInset = true
@@ -51916,6 +51861,34 @@ task.spawn(function()
 			showStyleCallout(callout)
 		end
 	end)
+	-- Drain all auxiliary remotes so Roblox never logs "Remote event invocation queue exhausted"
+	for _, rName in ipairs({
+		"MissionUpdate",
+		"CampaignUpdate",
+		"BossUpdate",
+		"ComboCompleted",
+		"Notification",
+		"PoliceAlert",
+		"HeatUpdate",
+		"PlayerBusted",
+		"LevelUp",
+		"XPGained",
+		"MonetizationNotification",
+		"GarageNotification",
+		"ProfileSync",
+		"WalletUpdated",
+		"VehicleEntered",
+		"VehicleExited",
+		"VehicleRepaired",
+		"StuntJumpTriggered",
+	}) do
+		connectRemote(rName, function() end)
+	end
+	for _, child in ipairs(ReplicatedStorage:GetChildren()) do
+		if child:IsA("RemoteEvent") then
+			child.OnClientEvent:Connect(function() end)
+		end
+	end
 end)
 
 UserInputService.InputBegan:Connect(function(input: InputObject, processed: boolean)
@@ -54350,7 +54323,7 @@ local function parseClaimedSet(csv: string): { [number]: boolean }
 end
 
 local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "ViralRewardsAndRebirthUI"
+screenGui.Name = "WorldOfDestructionViralRewardsGui"
 screenGui.ResetOnSpawn = false
 screenGui.IgnoreGuiInset = false
 screenGui.DisplayOrder = 12
@@ -55667,7 +55640,8 @@ local function getSpeedShopModal(): Frame?
 end
 
 local function getAvatarShopModal(): Frame?
-	local gui = playerGui:FindFirstChild("CharacterCreatorAndWardrobeUI")
+	local gui = playerGui:FindFirstChild("WorldOfDestructionWardrobeGui")
+		or playerGui:FindFirstChild("CharacterCreatorAndWardrobeUI")
 	if not gui then
 		return nil
 	end
@@ -56949,9 +56923,9 @@ local function spawnClientImpactSparks(worldPos: Vector3, isWood: boolean, playM
 	if playMetallicClink then
 		local clink = Instance.new("Sound")
 		clink.Name = "MetallicResistClink"
-		clink.SoundId = "rbxassetid://9114221580"
-		clink.Volume = 0.75
-		clink.PlaybackSpeed = 1.18
+		clink.SoundId = "rbxasset://sounds/metal.ogg"
+		clink.Volume = 0.28
+		clink.PlaybackSpeed = 1.25
 		clink.Parent = host
 		clink:Play()
 	end

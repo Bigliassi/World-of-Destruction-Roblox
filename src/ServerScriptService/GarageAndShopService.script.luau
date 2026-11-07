@@ -893,7 +893,7 @@ local function createBillboardLabel(_parent: BasePart, _titleText: string, _subt
 end
 
 local function ensureDefaultGaragePadsInWorkspace()
-	-- First bind any existing MechanicSpot / SpeedShop instances created by world builder scripts
+	-- Bind any existing MechanicSpot / SpeedShop instances created by WorldBuilderService
 	for _, inst in ipairs(CollectionService:GetTagged("MechanicSpot")) do
 		if inst:IsA("BasePart") then
 			bindMechanicSpotPad(inst, inst.Name)
@@ -918,56 +918,6 @@ local function ensureDefaultGaragePadsInWorkspace()
 				bindSpeedShopPad(desc, desc.Name)
 			end
 		end
-	end
-
-	-- If no pads exist yet, spawn drive-through Mechanic Spots & Speed Shop pads in Workspace.GarageSpots
-	if next(boundPads) ~= nil then
-		return
-	end
-
-	local spotsFolder = ensureFolder(Workspace, "GarageSpots")
-
-	local mechanicLocations = {
-		{ Name = "Downtown Mechanic Bay", Position = Vector3.new(45, 0.4, -45) },
-		{ Name = "Harbor Repair Garage", Position = Vector3.new(-140, 0.4, 90) },
-		{ Name = "Uptown Pit Stop", Position = Vector3.new(160, 0.4, 130) },
-	}
-
-	for _, loc in ipairs(mechanicLocations) do
-		local pad = Instance.new("Part")
-		pad.Name = loc.Name
-		pad.Size = Vector3.new(18, 0.6, 18)
-		pad.Position = loc.Position
-		pad.Anchored = true
-		pad.CanCollide = false
-		pad.Material = Enum.Material.Neon
-		pad.Color = Color3.fromRGB(40, 235, 115)
-		pad.Transparency = 0.25
-		pad.Parent = spotsFolder
-		CollectionService:AddTag(pad, "MechanicSpot")
-		createBillboardLabel(pad, "MECHANIC SPOT", "DRIVE THROUGH FOR INSTANT REPAIR", Color3.fromRGB(60, 255, 130))
-		bindMechanicSpotPad(pad, loc.Name)
-	end
-
-	local speedShopLocations = {
-		{ Name = "Leo City Speed Shop", Position = Vector3.new(-45, 0.4, -45) },
-		{ Name = "Industrial Tuning Showroom", Position = Vector3.new(120, 0.4, -150) },
-	}
-
-	for _, loc in ipairs(speedShopLocations) do
-		local pad = Instance.new("Part")
-		pad.Name = loc.Name
-		pad.Size = Vector3.new(20, 0.6, 20)
-		pad.Position = loc.Position
-		pad.Anchored = true
-		pad.CanCollide = false
-		pad.Material = Enum.Material.Neon
-		pad.Color = Color3.fromRGB(255, 175, 35)
-		pad.Transparency = 0.25
-		pad.Parent = spotsFolder
-		CollectionService:AddTag(pad, "SpeedShop")
-		createBillboardLabel(pad, "SPEED SHOP & GARAGE", "UPGRADE ENGINE · ARMOR · NITRO · PLOW · MAGNET", Color3.fromRGB(255, 200, 50))
-		bindSpeedShopPad(pad, loc.Name)
 	end
 end
 

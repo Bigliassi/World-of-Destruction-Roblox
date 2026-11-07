@@ -40,7 +40,7 @@ local function parseClaimedSet(csv: string): { [number]: boolean }
 end
 
 local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "ViralRewardsAndRebirthUI"
+screenGui.Name = "WorldOfDestructionViralRewardsGui"
 screenGui.ResetOnSpawn = false
 screenGui.IgnoreGuiInset = false
 screenGui.DisplayOrder = 12

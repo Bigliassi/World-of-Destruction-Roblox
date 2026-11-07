@@ -202,7 +202,8 @@ local function getSpeedShopModal(): Frame?
 end
 
 local function getAvatarShopModal(): Frame?
-	local gui = playerGui:FindFirstChild("CharacterCreatorAndWardrobeUI")
+	local gui = playerGui:FindFirstChild("WorldOfDestructionWardrobeGui")
+		or playerGui:FindFirstChild("CharacterCreatorAndWardrobeUI")
 	if not gui then
 		return nil
 	end

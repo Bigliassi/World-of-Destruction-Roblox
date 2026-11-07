@@ -850,6 +850,34 @@ task.spawn(function()
 			showStyleCallout(callout)
 		end
 	end)
+	-- Drain all auxiliary remotes so Roblox never logs "Remote event invocation queue exhausted"
+	for _, rName in ipairs({
+		"MissionUpdate",
+		"CampaignUpdate",
+		"BossUpdate",
+		"ComboCompleted",
+		"Notification",
+		"PoliceAlert",
+		"HeatUpdate",
+		"PlayerBusted",
+		"LevelUp",
+		"XPGained",
+		"MonetizationNotification",
+		"GarageNotification",
+		"ProfileSync",
+		"WalletUpdated",
+		"VehicleEntered",
+		"VehicleExited",
+		"VehicleRepaired",
+		"StuntJumpTriggered",
+	}) do
+		connectRemote(rName, function() end)
+	end
+	for _, child in ipairs(ReplicatedStorage:GetChildren()) do
+		if child:IsA("RemoteEvent") then
+			child.OnClientEvent:Connect(function() end)
+		end
+	end
 end)
 
 UserInputService.InputBegan:Connect(function(input: InputObject, processed: boolean)

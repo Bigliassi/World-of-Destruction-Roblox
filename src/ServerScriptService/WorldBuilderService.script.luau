@@ -1151,7 +1151,7 @@ local function buildShippingContainerStack(origin: Vector3, offset: Vector3, yaw
 			if not (row == 1 and tier == 1) then
 				local spec = containerColors[((row * 2 + tier) % #containerColors) + 1]
 				local cPos = baseRot * CFrame.new((row - 0.5) * 9.2, 4.4 + tier * 8.8, 0)
-				local box = makePart(BuildingsFolder, "ShippingContainer", Vector3.new(8.4, 8.6, 22.0), cPos, spec.col, Enum.Material.CorrugatedMetal, true)
+				local box = makePart(BuildingsFolder, "ShippingContainer", Vector3.new(8.4, 8.6, 22.0), cPos, spec.col, Enum.Material.Metal, true)
 				makePart(BuildingsFolder, "ContainerCornerFrame", Vector3.new(8.8, 8.8, 1.2), cPos * CFrame.new(0, 0, -10.5), Color3.fromRGB(38, 42, 50), Enum.Material.Metal, true)
 				makePart(BuildingsFolder, "ContainerRearDoors", Vector3.new(8.8, 8.8, 1.2), cPos * CFrame.new(0, 0, 10.5), Color3.fromRGB(38, 42, 50), Enum.Material.Metal, true)
 				addSurfaceSign(box, spec.label, Color3.fromRGB(245, 248, 255), Enum.NormalId.Left)

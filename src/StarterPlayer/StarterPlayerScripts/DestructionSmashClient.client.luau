@@ -327,9 +327,9 @@ local function spawnClientImpactSparks(worldPos: Vector3, isWood: boolean, playM
 	if playMetallicClink then
 		local clink = Instance.new("Sound")
 		clink.Name = "MetallicResistClink"
-		clink.SoundId = "rbxassetid://9114221580"
-		clink.Volume = 0.75
-		clink.PlaybackSpeed = 1.18
+		clink.SoundId = "rbxasset://sounds/metal.ogg"
+		clink.Volume = 0.28
+		clink.PlaybackSpeed = 1.25
 		clink.Parent = host
 		clink:Play()
 	end

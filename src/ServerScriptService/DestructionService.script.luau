@@ -261,9 +261,9 @@ local function showTierResistanceFeedback(propInst: Instance, requiredTier: numb
 
 	local clink = Instance.new("Sound")
 	clink.Name = "MetallicResistClink"
-	clink.SoundId = "rbxassetid://9114221580"
-	clink.Volume = 0.7
-	clink.PlaybackSpeed = 1.18
+	clink.SoundId = "rbxasset://sounds/metal.ogg"
+	clink.Volume = 0.25
+	clink.PlaybackSpeed = 1.25
 	clink.Parent = sparkHost
 	clink:Play()
 
