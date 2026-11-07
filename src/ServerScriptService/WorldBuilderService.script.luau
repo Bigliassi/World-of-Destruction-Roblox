@@ -57,10 +57,10 @@ local ServerEvents, RemoteEvents = ensureEvents()
 --------------------------------------------------------------------------------
 -- CONSTANTS & GRID CONFIG
 --------------------------------------------------------------------------------
-local BLOCK_SIZE = 140 -- tight 140-stud NYC metropolitan blocks for dense action & zero emptiness!
-local ROAD_WIDTH = 42 -- wide 4-lane sunlit avenues
-local SIDEWALK_WIDTH = 10 -- bright warm limestone sidewalk
-local GRID_RADIUS = 4 -- -4..4 = 9x9 full city blocks
+local BLOCK_SIZE = 180 -- spacious 180-stud NYC blocks so buildings, plazas, and 4-lane avenues never overlap!
+local ROAD_WIDTH = 38 -- 4-lane NYC avenues
+local SIDEWALK_WIDTH = 10 -- bluestone sidewalk
+local GRID_RADIUS = 3 -- -3..3 = 7x7 full city blocks (-630..630 road lines)
 
 Workspace:SetAttribute("LeoCityBlockSize", BLOCK_SIZE)
 Workspace:SetAttribute("LeoCityRoadWidth", ROAD_WIDTH)
@@ -164,17 +164,19 @@ local function weldChildrenToPrimary(model: Model, primary: BasePart)
 	model.PrimaryPart = primary
 	for _, desc in ipairs(model:GetDescendants()) do
 		if desc:IsA("BasePart") and desc ~= primary then
-			local wc = Instance.new("WeldConstraint")
-			wc.Part0 = primary
-			wc.Part1 = desc
-			wc.Parent = primary
+			local w = Instance.new("Weld")
+			w.Name = desc.Name .. "_Weld"
+			w.Part0 = primary
+			w.Part1 = desc
+			w.C0 = primary.CFrame:Inverse() * desc.CFrame
+			w.Parent = desc
 			desc.Anchored = false
 		end
 	end
 end
 
 local PROP_DEFAULT_REQUIRED_TIER: { [string]: number } = {
-	-- Tier 1: Light Street Props
+	-- Tier 1: All Everyday Street Props, Hydrants, Streetlights, Bus Stops, Billboards & Taxis (Starter Car Smashes All!)
 	Crate = 1,
 	WoodenCrate = 1,
 	JackpotCrate = 1,
@@ -188,25 +190,25 @@ local PROP_DEFAULT_REQUIRED_TIER: { [string]: number } = {
 	FoodVendorCart = 1,
 	CafePatio = 1,
 	ConstructionBarrier = 1,
-	-- Tier 2: Municipal & Traffic Props
-	FireHydrant = 2,
-	StreetLight = 2,
-	TrafficLight = 2,
-	BusStop = 2,
-	PalmTree = 2,
+	FireHydrant = 1,
+	StreetLight = 1,
+	TrafficLight = 1,
+	BusStop = 1,
+	PalmTree = 1,
+	Billboard = 1,
+	TrafficVehicle = 1,
+	-- Tier 2: Gold ATMs & Explosive Fuel Targets (Unlocked by Sedan / Muscle or Plow Lv.2)
 	GoldATM = 2,
-	TrafficVehicle = 2,
-	-- Tier 3: Industrial, Explosive & Heavy Armored Vehicles
-	GasPump = 3,
-	ExplosiveBarrel = 3,
-	Billboard = 3,
+	GasPump = 2,
+	ExplosiveBarrel = 2,
+	-- Tier 3: Heavy Armored Cash Trucks & Surveillance Towers (Unlocked by SUV / Pickup / Sports or Plow Lv.3)
 	ArmoredCashTruck = 3,
 	MegaCorpTower = 3,
-	-- Tier 4: Massive Civic Landmarks & Transit
+	-- Tier 4: Massive Civic Landmarks & Transit Buses (Unlocked by Monster Truck or Plow Lv.4)
 	CityBus = 4,
 	ConstructionCrane = 4,
 	PlazaFountain = 4,
-	-- Tier 5: Ultra-Armored End-Game Targets
+	-- Tier 5: Ultra-Armored End-Game Bank Vaults & Boss (Unlocked by Goliath Bulldozer or Plow Lv.5)
 	MegaCorpBankVault = 5,
 	BossGoliath = 5,
 }
@@ -1336,55 +1338,55 @@ local function buildLeoCity()
 
 			-- District & Landmark Assignment
 			if bx == 0 and bz == 0 then
-				-- LEO PLAZA & GRAND CENTRAL BOULEVARD:
-				-- Central avenue (X = -21..21) is wide-open for driving straight ahead!
-				-- Ornamental Circular Marble Fountain is placed in the West Plaza Courtyard (-36, 0, 10)
-				local fCenter = origin + Vector3.new(-36, 0.3, 10)
-				local fountain = makePart(LandmarksFolder, "LeoPlazaFountain", Vector3.new(3.2, 18, 18), CFrame.new(fCenter + Vector3.new(0, 1.6, 0)) * CFrame.Angles(0, 0, math.rad(90)), Color3.fromRGB(235, 238, 245), Enum.Material.Marble, true)
+				-- LEO PLAZA & GRAND CENTRAL BOULEVARD (180x180 Block):
+				-- Central avenue (X = -19..19) is wide-open for driving straight North (-Z)!
+				-- Right in front of the player's car (which spawns at (0, 3.2, 26) facing -Z), place an inviting line
+				-- of 1-hit Golden Jackpot Crates & Street Props along the avenue margins so pressing [W] immediately smashes targets!
+				spawnJackpotCrate(origin + Vector3.new(-6, 0.3, 4))
+				spawnJackpotCrate(origin + Vector3.new(6, 0.3, 4))
+				spawnCrateCluster(origin + Vector3.new(-11, 0.3, -10), 2)
+				spawnCrateCluster(origin + Vector3.new(11, 0.3, -10), 2)
+				spawnFireHydrant(origin + Vector3.new(-15, 0.3, -22))
+				spawnFireHydrant(origin + Vector3.new(15, 0.3, -22))
+				spawnJackpotCrate(origin + Vector3.new(0, 0.3, -28))
+
+				-- Ornamental Circular Marble Fountain in the West Courtyard (-46, 0, 28) — clear of buildings!
+				local fCenter = origin + Vector3.new(-46, 0.3, 28)
+				local fountain = makePart(LandmarksFolder, "LeoPlazaFountain", Vector3.new(3.2, 16, 16), CFrame.new(fCenter + Vector3.new(0, 1.6, 0)) * CFrame.Angles(0, 0, math.rad(90)), Color3.fromRGB(235, 238, 245), Enum.Material.Marble, true)
 				fountain.Shape = Enum.PartType.Cylinder
-				local tier = makePart(LandmarksFolder, "FountainWaterTier", Vector3.new(1.4, 14, 14), CFrame.new(fCenter + Vector3.new(0, 3.4, 0)) * CFrame.Angles(0, 0, math.rad(90)), Color3.fromRGB(65, 195, 245), Enum.Material.Glass, true)
+				local tier = makePart(LandmarksFolder, "FountainWaterTier", Vector3.new(1.4, 12, 12), CFrame.new(fCenter + Vector3.new(0, 3.4, 0)) * CFrame.Angles(0, 0, math.rad(90)), Color3.fromRGB(65, 195, 245), Enum.Material.Glass, true)
 				tier.Shape = Enum.PartType.Cylinder
 				tier.Transparency = 0.25
-				local spire = makePart(LandmarksFolder, "FountainWaterSpire", Vector3.new(8.5, 2.8, 2.8), CFrame.new(fCenter + Vector3.new(0, 7.2, 0)) * CFrame.Angles(0, 0, math.rad(90)), Color3.fromRGB(185, 235, 255), Enum.Material.Marble, true)
+				local spire = makePart(LandmarksFolder, "FountainWaterSpire", Vector3.new(7.5, 2.4, 2.4), CFrame.new(fCenter + Vector3.new(0, 6.8, 0)) * CFrame.Angles(0, 0, math.rad(90)), Color3.fromRGB(185, 235, 255), Enum.Material.Marble, true)
 				spire.Shape = Enum.PartType.Cylinder
 				spire.CanCollide = false
 				tagDestructible(fountain, "PlazaFountain", 500, 300, 75, false, 4)
 
-				-- Tier 1..5 Targets right in & around Leo Plaza so players immediately see why bigger cars & plows matter!
-				spawnCrateCluster(origin + Vector3.new(-24, 0.3, -8), 3)
-				spawnCrateCluster(origin + Vector3.new(24, 0.3, -8), 3)
-				spawnJackpotCrate(origin + Vector3.new(-14, 0.3, -16))
-				spawnJackpotCrate(origin + Vector3.new(14, 0.3, -16))
+				-- Tiered Heist Targets neatly arranged along the East & West Plaza Walkways (X = ±28..34, well clear of SpeedShop at X = 52!)
+				spawnFoodVendorCart(origin + Vector3.new(-26, 0.3, 14), 90, 1)
+				spawnFoodVendorCart(origin + Vector3.new(26, 0.3, 14), -90, 2)
 				spawnGoldATM(origin + Vector3.new(-26, 0.3, -2), 90)
 				spawnGoldATM(origin + Vector3.new(26, 0.3, -2), -90)
-				spawnArmoredCashTruck(origin + Vector3.new(28, 0.3, 14), 0)
-				spawnMegaCorpBankVault(origin + Vector3.new(36, 0.3, -34), -35)
-				spawnFoodVendorCart(origin + Vector3.new(-28, 0.3, 24), 90, 1)
-				spawnFoodVendorCart(origin + Vector3.new(28, 0.3, 28), -90, 2)
-				spawnCafePatio(origin + Vector3.new(34, 0.3, 6), -90)
-				spawnMegaCorpSurveillanceTower(origin + Vector3.new(-34, 0.3, -34), 35)
-				spawnBench(origin + Vector3.new(-24, 0.3, 10), 90)
-				spawnBench(origin + Vector3.new(24, 0.3, 10), -90)
-				spawnPalmTree(origin + Vector3.new(-24, 0.3, 30))
-				spawnPalmTree(origin + Vector3.new(24, 0.3, 30))
+				spawnArmoredCashTruck(origin + Vector3.new(28, 0.3, 36), 0)
+				spawnMegaCorpBankVault(origin + Vector3.new(46, 0.3, 38), -25)
 
-				-- Seamless 1-piece low-angle steel Stunt Ramp down the North end of Grand Central Boulevard & Plaza Speed Shop / Mechanic Bay on East/West flanks
-				buildStuntRamp(origin + Vector3.new(0, 0.3, -52), 0, 26, 6.2, 38, "LeoPlazaRamp")
-				buildSpeedShop(origin + Vector3.new(44, 0, -20), -90)
-				buildMechanicRepairBay(origin + Vector3.new(-44, 0, -20), 90)
+				-- Seamless 1-piece low-angle steel Stunt Ramp at (0, 0.3, -56) & Plaza Speed Shop / Mechanic Bay on East/West flanks (±52, 0, -22)
+				buildStuntRamp(origin + Vector3.new(0, 0.3, -56), 0, 24, 5.8, 34, "LeoPlazaRamp")
+				buildSpeedShop(origin + Vector3.new(52, 0, -22), -90)
+				buildMechanicRepairBay(origin + Vector3.new(-52, 0, -22), 90)
 			elseif bx == 1 and bz == 0 then
 				buildSpeedShop(origin, -90)
 				spawnBusStop(origin + Vector3.new(0, 0.3, -edge + 2), 0)
-				spawnGoldATM(origin + Vector3.new(-24, 0.3, 20), 90)
-				spawnFoodVendorCart(origin + Vector3.new(-28, 0.3, 26), 0, 3)
+				spawnGoldATM(origin + Vector3.new(-28, 0.3, 24), 90)
+				spawnFoodVendorCart(origin + Vector3.new(-32, 0.3, 32), 0, 3)
 			elseif bx == -1 and bz == 0 then
 				buildMechanicRepairBay(origin, 90)
 				spawnBusStop(origin + Vector3.new(0, 0.3, edge - 2), 180)
-				spawnGoldATM(origin + Vector3.new(24, 0.3, -20), -90)
-				spawnFoodVendorCart(origin + Vector3.new(28, 0.3, -26), 180, 1)
+				spawnGoldATM(origin + Vector3.new(28, 0.3, -24), -90)
+				spawnFoodVendorCart(origin + Vector3.new(32, 0.3, -32), 180, 1)
 			elseif bx == 0 and bz == -2 then
-				buildGasStation(origin + Vector3.new(34, 0, 0))
-				buildMechanicRepairBay(origin + Vector3.new(-34, 0, 0), 90)
+				buildGasStation(origin + Vector3.new(44, 0, 0))
+				buildMechanicRepairBay(origin + Vector3.new(-44, 0, 0), 90)
 			elseif bx == 2 and bz == 2 then
 				buildSpeedShop(origin, 180)
 			elseif bx == -2 and bz == 2 then
@@ -1399,25 +1401,25 @@ local function buildLeoCity()
 				-- SW Sector: Suburban Park & Lake
 				buildSuburbanParkBlock(origin)
 			elseif math.abs(bx) <= 1 and math.abs(bz) <= 1 then
-				-- Downtown Gotham / NYC Skyscraper Core with Tier 2 Gold ATMs, Tier 3 Armored Cash Vans & Tier 5 Golden Bank Vaults
+				-- Downtown Gotham / NYC Skyscraper Core (placed outside X = -22..22 when bx == 0 so Grand Central Avenue stays wide open!)
 				local isLeoTower = (bx == 0 and bz == -1) or (bx == 1 and bz == -1)
 				local h = if (bx == 0 and bz == -1) then 195 elseif (bx == 1 and bz == -1) then 175 else 115 + ((math.abs(bx * 3 + bz * 5) % 4) * 18)
-				local col = if isLeoTower then Color3.fromRGB(48, 56, 70) else Color3.fromRGB(62, 68, 82)
+				local col = if isLeoTower then Color3.fromRGB(58, 68, 86) else Color3.fromRGB(72, 80, 96)
 				local towerName = if (bx == 0 and bz == -1) then "LeoTower" else "DowntownTower"
-				local xOff = if bx == 0 then 34 else 22
-				buildSkyscraper(origin + Vector3.new(-xOff, 0.3, -20), 34, 34, h, col, towerName, isLeoTower)
-				buildSkyscraper(origin + Vector3.new(xOff, 0.3, 20), 32, 32, 96, Color3.fromRGB(76, 68, 62), "GlassOfficeTower", false)
+				local xOff = if bx == 0 then 44 else 28
+				buildSkyscraper(origin + Vector3.new(-xOff, 0.3, -24), 38, 38, h, col, towerName, isLeoTower)
+				buildSkyscraper(origin + Vector3.new(xOff, 0.3, 24), 36, 36, 96, Color3.fromRGB(86, 78, 72), "GlassOfficeTower", false)
 				spawnBusStop(origin + Vector3.new(-edge + 2, 0.3, 0), 90)
-				spawnCrateCluster(origin + Vector3.new(xOff, 0.3, -20), 3)
-				spawnJackpotCrate(origin + Vector3.new(xOff - 6, 0.3, -14))
-				spawnGoldATM(origin + Vector3.new(-xOff + 14, 0.3, 0), 0)
-				spawnArmoredCashTruck(origin + Vector3.new(xOff - 10, 0.3, -4), 90)
+				spawnCrateCluster(origin + Vector3.new(xOff, 0.3, -24), 3)
+				spawnJackpotCrate(origin + Vector3.new(xOff - 8, 0.3, -16))
+				spawnGoldATM(origin + Vector3.new(-xOff + 18, 0.3, 0), 0)
+				spawnArmoredCashTruck(origin + Vector3.new(xOff - 12, 0.3, -4), 90)
 				if isLeoTower then
-					spawnMegaCorpBankVault(origin + Vector3.new(xOff, 0.3, -28), 0)
+					spawnMegaCorpBankVault(origin + Vector3.new(xOff, 0.3, -32), 0)
 				end
-				spawnFoodVendorCart(origin + Vector3.new(-xOff, 0.3, 14), 0, bx + bz)
-				spawnMegaCorpSurveillanceTower(origin + Vector3.new(xOff, 0.3, -36), 180)
-				spawnBillboard(origin + Vector3.new(-xOff, 0.3, 30), 0, "SMASH MEGACORP PROPERTY!", Color3.fromRGB(255, 200, 40))
+				spawnFoodVendorCart(origin + Vector3.new(-xOff, 0.3, 18), 0, bx + bz)
+				spawnMegaCorpSurveillanceTower(origin + Vector3.new(xOff, 0.3, -42), 180)
+				spawnBillboard(origin + Vector3.new(-xOff, 0.3, 36), 0, "SMASH FOR CASH!", Color3.fromRGB(255, 200, 40))
 			else
 				-- Mixed Commercial / Midtown Storefront blocks
 				buildMidRiseCommercialBlock(origin, bx * 5 + bz * 11)

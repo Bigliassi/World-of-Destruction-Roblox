@@ -99,9 +99,6 @@ local function createDefaultProfile(): PlayerProfile
 		SelectedPaint = 1,
 		UnlockedVehicles = {
 			Compact = true,
-			Sedan = true,
-			sports = true,
-			sedan = true,
 			hatchback = true,
 		},
 		Upgrades = {

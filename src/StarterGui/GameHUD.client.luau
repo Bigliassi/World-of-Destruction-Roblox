@@ -653,6 +653,36 @@ end
 
 local isGarageReadyState = false
 
+local tutorialRingPart: Part? = nil
+local function updateTutorial3DRing(targetPos: Vector3?)
+	if not targetPos or player:GetAttribute("HomeMenuActive") == true then
+		if tutorialRingPart then
+			tutorialRingPart.Transparency = 1
+		end
+		return
+	end
+	if not tutorialRingPart or not tutorialRingPart.Parent then
+		local p = Instance.new("Part")
+		p.Name = "WODTutorialTargetRing"
+		p.Shape = Enum.PartType.Cylinder
+		p.Size = Vector3.new(0.28, 12, 12)
+		p.Color = Color3.fromRGB(65, 255, 130)
+		p.Material = Enum.Material.Neon
+		p.Anchored = true
+		p.CanCollide = false
+		p.CanQuery = false
+		p.CanTouch = false
+		p.CastShadow = false
+		p.Transparency = 0.35
+		p.Parent = Workspace
+		tutorialRingPart = p
+	end
+	if tutorialRingPart then
+		tutorialRingPart.Transparency = 0.35
+		tutorialRingPart.CFrame = CFrame.new(targetPos.X, 0.72, targetPos.Z) * CFrame.Angles(0, 0, math.rad(90))
+	end
+end
+
 local function refreshHUDStats()
 	local currentCash = readCashValue()
 	if lastCash >= 0 and currentCash > lastCash then
@@ -664,6 +694,8 @@ local function refreshHUDStats()
 	cashLabel.Text = "$" .. formatNumber(currentCash)
 	local level = tonumber(player:GetAttribute("Level")) or 1
 	local smashTier = computeCurrentSmashTier()
+	local plowLvl = tonumber(player:GetAttribute("PlowLevel") or player:GetAttribute("Upgrade_Plow")) or 1
+	local destCount = tonumber(player:GetAttribute("TotalDestructions")) or 0
 	smashTierBadge.Text = string.format("SMASH TIER %d • LV. %d", smashTier, level)
 
 	-- Top-Center Row 1: JACKPOT SPIN ([ 7 | 7 | 7 ]) + glowing gold progress bar (0..100%)
@@ -688,16 +720,47 @@ local function refreshHUDStats()
 		campaignBarText.Text = string.format("JACKPOT SPIN • %d%%", math.floor(jackpotCharge))
 	end
 
-	-- Top-Center Row 2: NEXT CAR UNLOCK + target reason OR pulsing emerald button when Cash >= Cost
+	-- Top-Center Row 2: Interactive 3-Step Tutorial -> seamlessly transitions into Next Car Unlock Goal!
 	local nextSpec = getNextLockedCarSpec()
-	if nextSpec then
+	local hasUpgradedCarOrPlow = (smashTier >= 2) or (plowLvl >= 2)
+
+	if not hasUpgradedCarOrPlow and destCount < 5 and currentCash < 1500 then
+		-- Tutorial Step 1: Smash 5 objects right ahead on Grand Central Ave
+		isGarageReadyState = false
+		nextRideBarFill.Size = UDim2.fromScale(math.clamp(destCount / 5, 0.08, 1), 1)
+		nextRideBarFill.BackgroundColor3 = Color3.fromRGB(45, 205, 110)
+		nextRideStroke.Color = Color3.fromRGB(85, 255, 145)
+		nextRideBarText.Text = string.format("STEP 1/3: PRESS [W] & SMASH 5 OBJECTS AHEAD! (%d/5)", destCount)
+		updateTutorial3DRing(Vector3.new(0, 0.72, 4))
+	elseif not hasUpgradedCarOrPlow and destCount < 10 and currentCash < 1500 then
+		-- Tutorial Step 2: Hold Shift Nitro & hit the Grand Ave Ramp ahead (or smash 10 props)
+		isGarageReadyState = false
+		nextRideBarFill.Size = UDim2.fromScale(math.clamp(destCount / 10, 0.15, 1), 1)
+		nextRideBarFill.BackgroundColor3 = Color3.fromRGB(45, 165, 245)
+		nextRideStroke.Color = Color3.fromRGB(95, 215, 255)
+		nextRideBarText.Text = string.format("STEP 2/3: HOLD [SHIFT] NITRO & HIT RAMP AHEAD! (%d/10)", destCount)
+		updateTutorial3DRing(Vector3.new(0, 0.72, -56))
+	elseif not hasUpgradedCarOrPlow and (destCount >= 10 or currentCash >= 400) then
+		-- Tutorial Step 3: Open Garage [B] to upgrade Plow or buy Tier 2 Sedan
+		isGarageReadyState = true
+		nextRideBarFill.Size = UDim2.fromScale(1, 1)
+		nextRideBarFill.BackgroundColor3 = Color3.fromRGB(28, 225, 105)
+		nextRideStroke.Color = Color3.fromRGB(80, 255, 145)
+		if currentCash >= 1500 then
+			nextRideBarText.Text = "STEP 3/3: PRESS [B] OR CLICK HERE TO BUY TIER 2 SEDAN ($1,500)!"
+		else
+			nextRideBarText.Text = "STEP 3/3: PRESS [B] OR CLICK HERE TO UPGRADE YOUR PLOW ($400)!"
+		end
+		updateTutorial3DRing(Vector3.new(52, 0.72, -38))
+	elseif nextSpec then
+		updateTutorial3DRing(nil)
 		local ratio = math.clamp(currentCash / math.max(1, nextSpec.cost), 0, 1)
 		nextRideBarFill.Size = UDim2.fromScale(ratio, 1)
 		if currentCash >= nextSpec.cost then
 			isGarageReadyState = true
 			nextRideBarFill.BackgroundColor3 = Color3.fromRGB(28, 225, 105)
 			nextRideStroke.Color = Color3.fromRGB(80, 255, 145)
-			nextRideBarText.Text = "GARAGE READY! UNLOCK NEW CAR [PRESS B]"
+			nextRideBarText.Text = "GARAGE READY! UNLOCK " .. nextSpec.shortName .. " [PRESS B]"
 		else
 			isGarageReadyState = false
 			nextRideBarFill.BackgroundColor3 = Color3.fromRGB(36, 145, 225)
@@ -710,6 +773,7 @@ local function refreshHUDStats()
 			)
 		end
 	else
+		updateTutorial3DRing(nil)
 		isGarageReadyState = false
 		nextRideBarFill.Size = UDim2.fromScale(1, 1)
 		nextRideBarFill.BackgroundColor3 = Color3.fromRGB(235, 180, 35)

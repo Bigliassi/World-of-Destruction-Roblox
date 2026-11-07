@@ -677,9 +677,9 @@ def build_leo_city_edit_preview_xml(ref: RefGen) -> str:
     zero-flicker Y elevations, and Tier 1..5 destruction targets) in front of the viewport camera.
     Replaced cleanly at runtime by WorldBuilderService.script.luau.
     """
-    block_size = 140.0
-    road_width = 42.0
-    grid_radius = 4
+    block_size = 180.0
+    road_width = 38.0
+    grid_radius = 3
     usable = block_size - road_width
     total_span = (grid_radius * 2 + 1) * block_size + 240.0
     grid_extent = (grid_radius + 1) * block_size

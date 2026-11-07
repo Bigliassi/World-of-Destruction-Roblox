@@ -647,10 +647,12 @@ local function spawnBossGoliathConvoy(): Model
 	beacon.Parent = m
 
 	for _, child in ipairs({ goldTrim, plow, beacon }) do
-		local wc = Instance.new("WeldConstraint")
-		wc.Part0 = hull
-		wc.Part1 = child
-		wc.Parent = hull
+		local w = Instance.new("Weld")
+		w.Name = child.Name .. "_Weld"
+		w.Part0 = hull
+		w.Part1 = child
+		w.C0 = hull.CFrame:Inverse() * child.CFrame
+		w.Parent = child
 	end
 
 	-- 3D Floating Boss Health Bar BillboardGui

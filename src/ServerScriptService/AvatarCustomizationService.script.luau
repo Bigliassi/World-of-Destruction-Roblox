@@ -316,7 +316,7 @@ applyCharacterPresetRE.OnServerEvent:Connect(function(player: Player, presetId: 
 	end
 end)
 
--- Spawn Leo City Fashion & Gear Boutique Kiosk near Spawn Plaza
+-- Spawn Leo City Fashion & Gear Boutique Kiosk in South-West Plaza Courtyard (no screen-cluttering BillboardGui)
 local function buildAvatarBoutiqueKiosk()
 	if Workspace:FindFirstChild("LeoAvatarBoutiqueKiosk") then
 		return
@@ -326,42 +326,45 @@ local function buildAvatarBoutiqueKiosk()
 
 	local pad = Instance.new("Part")
 	pad.Name = "BoutiquePlatform"
-	pad.Size = Vector3.new(12, 0.8, 12)
-	pad.Position = Vector3.new(-32, 0.5, 28)
+	pad.Size = Vector3.new(10, 0.24, 10)
+	pad.Position = Vector3.new(-52, 0.58, 52)
 	pad.Anchored = true
+	pad.CanCollide = false
 	pad.Material = Enum.Material.Neon
-	pad.Color = Color3.fromRGB(236, 72, 153)
+	pad.Transparency = 0.25
+	pad.Color = Color3.fromRGB(168, 85, 247)
 	pad.Parent = model
 
 	local pedestal = Instance.new("Part")
 	pedestal.Name = "BoutiqueKioskTower"
-	pedestal.Size = Vector3.new(5, 8, 2.5)
-	pedestal.Position = Vector3.new(-32, 4.9, 24)
+	pedestal.Size = Vector3.new(6, 7.5, 2.0)
+	pedestal.Position = Vector3.new(-52, 4.2, 57)
 	pedestal.Anchored = true
-	pedestal.Material = Enum.Material.SmoothPlastic
-	pedestal.Color = Color3.fromRGB(15, 23, 42)
+	pedestal.Material = Enum.Material.Metal
+	pedestal.Color = Color3.fromRGB(18, 24, 38)
 	pedestal.Parent = model
 
-	local bb = Instance.new("BillboardGui")
-	bb.Size = UDim2.fromOffset(260, 74)
-	bb.StudsOffset = Vector3.new(0, 6.2, 0)
-	bb.AlwaysOnTop = true
-	bb.Parent = pedestal
+	for _, face in ipairs({ Enum.NormalId.Front, Enum.NormalId.Back }) do
+		local sg = Instance.new("SurfaceGui")
+		sg.Face = face
+		sg.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+		sg.PixelsPerStud = 24
+		sg.LightInfluence = 0
+		sg.Parent = pedestal
 
-	local title = Instance.new("TextLabel")
-	title.Size = UDim2.fromScale(1, 1)
-	title.BackgroundColor3 = Color3.fromRGB(15, 23, 42)
-	title.BackgroundTransparency = 0.15
-	title.TextColor3 = Color3.fromRGB(250, 204, 21)
-	title.Font = Enum.Font.GothamBlack
-	title.TextScaled = true
-	title.Text = "LEO FASHION & ROBUX GEAR\n[Customize Character]"
-	title.Parent = bb
-	Instance.new("UICorner", title).CornerRadius = UDim.new(0, 8)
+		local title = Instance.new("TextLabel")
+		title.Size = UDim2.fromScale(1, 1)
+		title.BackgroundTransparency = 1
+		title.TextColor3 = Color3.fromRGB(250, 204, 21)
+		title.Font = Enum.Font.GothamBlack
+		title.TextScaled = true
+		title.Text = "AVATAR & GEAR\n[PRESS C]"
+		title.Parent = sg
+	end
 
 	local prompt = Instance.new("ProximityPrompt")
-	prompt.ObjectText = "Leo Fashion & Gear Boutique"
-	prompt.ActionText = "Customize Character [C]"
+	prompt.ObjectText = "Avatar & Gear Shop"
+	prompt.ActionText = "Customize [C]"
 	prompt.HoldDuration = 0
 	prompt.MaxActivationDistance = 16
 	prompt.Parent = pedestal

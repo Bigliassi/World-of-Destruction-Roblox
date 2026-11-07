@@ -157,46 +157,36 @@ local function resolveVehicleAndDriver(hitPart: BasePart): (Player?, Model?, num
 	return player, vehicleModel, tier
 end
 
-local function attachBillboard(parent: BasePart, titleText: string, subText: string, accent: Color3, heightOffset: number)
-	local bb = Instance.new("BillboardGui")
-	bb.Name = "ZoneBillboard"
-	bb.Size = UDim2.fromOffset(260, 56)
-	bb.StudsOffset = Vector3.new(0, heightOffset, 0)
-	bb.AlwaysOnTop = false
-	bb.MaxDistance = 260
-	bb.Parent = parent
+local function attachBillboard(parent: BasePart, titleText: string, subText: string, accent: Color3, _heightOffset: number)
+	for _, face in ipairs({ Enum.NormalId.Front, Enum.NormalId.Back }) do
+		local sg = Instance.new("SurfaceGui")
+		sg.Name = "ZoneSurfaceSign_" .. face.Name
+		sg.Face = face
+		sg.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+		sg.PixelsPerStud = 24
+		sg.LightInfluence = 0
+		sg.Parent = parent
 
-	local frame = Instance.new("Frame")
-	frame.Size = UDim2.fromScale(1, 1)
-	frame.BackgroundColor3 = Color3.fromRGB(14, 18, 26)
-	frame.BackgroundTransparency = 0.15
-	frame.BorderSizePixel = 0
-	frame.Parent = bb
-	Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 8)
-	local stroke = Instance.new("UIStroke")
-	stroke.Color = accent
-	stroke.Thickness = 2
-	stroke.Parent = frame
+		local title = Instance.new("TextLabel")
+		title.Size = UDim2.new(1, -8, 0.6, 0)
+		title.Position = UDim2.fromOffset(4, 0)
+		title.BackgroundTransparency = 1
+		title.Font = Enum.Font.GothamBlack
+		title.Text = titleText
+		title.TextColor3 = accent
+		title.TextScaled = true
+		title.Parent = sg
 
-	local title = Instance.new("TextLabel")
-	title.Size = UDim2.new(1, -8, 0.55, 0)
-	title.Position = UDim2.fromOffset(4, 2)
-	title.BackgroundTransparency = 1
-	title.Font = Enum.Font.GothamBlack
-	title.Text = titleText
-	title.TextColor3 = accent
-	title.TextScaled = true
-	title.Parent = frame
-
-	local sub = Instance.new("TextLabel")
-	sub.Size = UDim2.new(1, -8, 0.4, 0)
-	sub.Position = UDim2.new(0, 4, 0.55, 0)
-	sub.BackgroundTransparency = 1
-	sub.Font = Enum.Font.GothamBold
-	sub.Text = subText
-	sub.TextColor3 = Color3.fromRGB(240, 245, 255)
-	sub.TextScaled = true
-	sub.Parent = frame
+		local sub = Instance.new("TextLabel")
+		sub.Size = UDim2.new(1, -8, 0.4, 0)
+		sub.Position = UDim2.new(0, 4, 0.58, 0)
+		sub.BackgroundTransparency = 1
+		sub.Font = Enum.Font.GothamBold
+		sub.Text = subText
+		sub.TextColor3 = Color3.fromRGB(240, 245, 255)
+		sub.TextScaled = true
+		sub.Parent = sg
+	end
 end
 
 local function registerBreakableLoot(part: BasePart, requiredTier: number, cashBonus: number, labelText: string)
@@ -286,9 +276,9 @@ local function buildViralZones()
 	root.Name = "LeoCityViralZones"
 	root.Parent = Workspace
 
-	-- Zone 1: BRONZE ALLEY [TIER 1 — FREE CAR]
-	local z1Center = Vector3.new(-30, 0.3, -42)
-	local z1 = buildArchZone(root, "BronzeAlleyZone", z1Center, Color3.fromRGB(46, 204, 113), "BRONZE ALLEY [TIER 1 — FREE CAR]", "SMASH GOLD CRATES FOR +$150 EACH!", nil)
+	-- Zone 1: BRONZE ALLEY [TIER 1 — FREE CAR] (South-West Courtyard, clear of Mechanic Bay)
+	local z1Center = Vector3.new(-48, 0.3, 145)
+	local z1 = buildArchZone(root, "BronzeAlleyZone", z1Center, Color3.fromRGB(46, 204, 113), "BRONZE ALLEY [TIER 1]", "SMASH GOLD CRATES +$150", nil)
 	for i = 1, 6 do
 		local col = ((i - 1) % 3) - 1
 		local row = math.floor((i - 1) / 3)
@@ -303,9 +293,9 @@ local function buildViralZones()
 		registerBreakableLoot(crate, 1, 150, "BRONZE CRATE")
 	end
 
-	-- Zone 2: GOLD BANK PLAZA [NEED TIER 2 CAR]
-	local z2Center = Vector3.new(30, 0.3, -42)
-	local z2 = buildArchZone(root, "GoldBankPlazaZone", z2Center, Color3.fromRGB(255, 200, 45), "GOLD BANK PLAZA [NEED TIER 2 CAR]", "BREAK LASER GATE FOR $600 GOLD STACKS!", 2)
+	-- Zone 2: GOLD BANK PLAZA [NEED TIER 2 CAR] (South-East Courtyard, clear of Speed Shop)
+	local z2Center = Vector3.new(48, 0.3, 145)
+	local z2 = buildArchZone(root, "GoldBankPlazaZone", z2Center, Color3.fromRGB(255, 200, 45), "GOLD PLAZA [TIER 2]", "$600 GOLD BULLION STACKS", 2)
 	for i = 1, 6 do
 		local col = ((i - 1) % 3) - 1
 		local row = math.floor((i - 1) / 3)
@@ -320,23 +310,24 @@ local function buildViralZones()
 		registerBreakableLoot(stack, 2, 600, "GOLD BULLION")
 	end
 
-	-- Zone 3: DIAMOND VAULT [NEED TIER 4 CAR]
-	local z3Center = Vector3.new(0, 0.3, -105)
-	local z3 = buildArchZone(root, "DiamondVaultZone", z3Center, Color3.fromRGB(0, 230, 255), "DIAMOND VAULT [NEED TIER 4 CAR]", "SMASH GATE FOR $5,000 SPINNING DIAMOND SAFE!", 4)
+	-- Zone 3: DIAMOND VAULT [NEED TIER 4 CAR] (North-East Downtown Courtyard, off the road)
+	local z3Center = Vector3.new(48, 0.3, -145)
+	local z3 = buildArchZone(root, "DiamondVaultZone", z3Center, Color3.fromRGB(0, 230, 255), "DIAMOND VAULT [TIER 4]", "$5,000 DIAMOND SAFE", 4)
 	local diamondSafe = Instance.new("Part")
 	diamondSafe.Name = "SpinningDiamondSafe"
-	diamondSafe.Size = Vector3.new(7, 7, 7)
-	diamondSafe.Position = z3Center + Vector3.new(0, 4.8, -9)
+	diamondSafe.Size = Vector3.new(6.5, 6.5, 6.5)
+	diamondSafe.Position = z3Center + Vector3.new(0, 4.5, -9)
 	diamondSafe.Anchored = true
-	diamondSafe.Material = Enum.Material.Neon
-	diamondSafe.Color = Color3.fromRGB(0, 240, 255)
+	diamondSafe.Material = Enum.Material.Metal
+	diamondSafe.Reflectance = 0.35
+	diamondSafe.Color = Color3.fromRGB(85, 215, 255)
 	diamondSafe.Parent = z3
-	attachBillboard(diamondSafe, "DIAMOND VAULT SAFE", "+$5,000 JACKPOT SMASH", Color3.fromRGB(165, 94, 234), 5.2)
+	attachBillboard(diamondSafe, "DIAMOND SAFE", "+$5,000 JACKPOT", Color3.fromRGB(255, 225, 65), 5.2)
 	registerBreakableLoot(diamondSafe, 4, 5000, "DIAMOND SAFE JACKPOT")
 	table.insert(rotatingParts, { Part = diamondSafe, Speed = 1.4, Axis = "Y" })
 
-	-- Car Crushers 2 Style MEGA SHREDDER PIT at (52, 0.3, 28)
-	local shredCenter = Vector3.new(52, 0.3, 28)
+	-- Car Crushers 2 Style MEGA SHREDDER PIT at (-48, 0.3, -145)
+	local shredCenter = Vector3.new(-48, 0.3, -145)
 	local shredModel = Instance.new("Model")
 	shredModel.Name = "MegaShredderPit"
 	shredModel.Parent = root

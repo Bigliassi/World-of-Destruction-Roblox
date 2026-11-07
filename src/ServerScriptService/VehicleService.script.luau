@@ -102,65 +102,54 @@ local lastDamageAt: { [Model]: number } = {}
 local MECHANIC_HEAL_RADIUS = (GameConfig and GameConfig.City and GameConfig.City.MechanicHealRadius) or 28
 local MECHANIC_COOLDOWN = (GameConfig and GameConfig.City and GameConfig.City.RepairCooldown) or 4.5
 
--- Default Mechanic & Service bay coordinates in Leo City
+-- Default Mechanic & Service bay coordinates in Leo City (aligned with WorldBuilderService 180-stud grid)
 local DEFAULT_MECHANIC_SPOTS: { { Name: string, Position: Vector3 } } = {
-	{ Name = "Leo Plaza Mechanic Garage", Position = Vector3.new(0, 2, -25) },
-	{ Name = "Speed Shop Service Bay", Position = Vector3.new(180, 2, -180) },
-	{ Name = "Hideout SafeHouse Garage", Position = Vector3.new(-180, 2, 180) },
-	{ Name = "Octane Fuel Service Bay", Position = Vector3.new(-180, 2, -180) },
+	{ Name = "Leo Plaza Mechanic Garage", Position = Vector3.new(-52, 2, -22) },
+	{ Name = "West Midtown Service Bay", Position = Vector3.new(-180, 2, 0) },
+	{ Name = "North Gas & Service Bay", Position = Vector3.new(-44, 2, -360) },
 }
 
--- Curated parked vehicle spawn spots around Leo City landmarks & avenues
+-- Curated parked vehicle spawn spots along Leo City curbs (clear of Grand Central Ave driving lanes)
 local PARKED_SPAWN_SPOTS: { { Archetype: string, CFrame: CFrame, Color: Color3? } } = {
 	{
 		Archetype = "Sports",
-		CFrame = CFrame.new(24, 3.5, 16) * CFrame.Angles(0, math.rad(25), 0),
+		CFrame = CFrame.new(34, 3.2, 48) * CFrame.Angles(0, math.rad(15), 0),
 		Color = VehicleCatalog.PlayerPalette.ElectricBlue,
 	},
 	{
 		Archetype = "Muscle",
-		CFrame = CFrame.new(-18, 3.5, 16) * CFrame.Angles(0, math.rad(-25), 0),
+		CFrame = CFrame.new(-34, 3.2, 48) * CFrame.Angles(0, math.rad(-15), 0),
 		Color = VehicleCatalog.PlayerPalette.SolarOrange,
 	},
 	{
 		Archetype = "SUV",
-		CFrame = CFrame.new(36, 4.0, 42) * CFrame.Angles(0, math.rad(90), 0),
+		CFrame = CFrame.new(76, 3.5, 42) * CFrame.Angles(0, 0, 0),
 		Color = VehicleCatalog.PlayerPalette.ToxicGreen,
 	},
 	{
 		Archetype = "Pickup",
-		CFrame = CFrame.new(-36, 4.0, 42) * CFrame.Angles(0, math.rad(-90), 0),
+		CFrame = CFrame.new(-76, 3.5, 42) * CFrame.Angles(0, 0, 0),
 		Color = VehicleCatalog.PlayerPalette.CrimsonRed,
 	},
 	{
 		Archetype = "Sedan",
-		CFrame = CFrame.new(95, 3.5, 22) * CFrame.Angles(0, math.rad(180), 0),
+		CFrame = CFrame.new(104, 3.2, 22) * CFrame.Angles(0, math.rad(180), 0),
 		Color = nil,
 	},
 	{
 		Archetype = "Compact",
-		CFrame = CFrame.new(-95, 3.5, -22) * CFrame.Angles(0, 0, 0),
+		CFrame = CFrame.new(-104, 3.2, -22) * CFrame.Angles(0, 0, 0),
 		Color = nil,
 	},
 	{
 		Archetype = "MonsterTruck",
-		CFrame = CFrame.new(-335, 5.5, 24) * CFrame.Angles(0, math.rad(-45), 0),
+		CFrame = CFrame.new(-254, 5.2, 24) * CFrame.Angles(0, 0, 0),
 		Color = VehicleCatalog.PlayerPalette.CyberPurple,
 	},
 	{
 		Archetype = "Bulldozer",
-		CFrame = CFrame.new(-155, 4.8, -155) * CFrame.Angles(0, math.rad(135), 0),
+		CFrame = CFrame.new(-254, 4.5, -155) * CFrame.Angles(0, 0, 0),
 		Color = VehicleCatalog.PlayerPalette.GoldRush,
-	},
-	{
-		Archetype = "Sports",
-		CFrame = CFrame.new(162, 3.5, -155) * CFrame.Angles(0, math.rad(45), 0),
-		Color = VehicleCatalog.PlayerPalette.PearlWhite,
-	},
-	{
-		Archetype = "Muscle",
-		CFrame = CFrame.new(165, 3.5, 160) * CFrame.Angles(0, math.rad(-135), 0),
-		Color = VehicleCatalog.PlayerPalette.CrimsonRed,
 	},
 }
 
@@ -1033,17 +1022,15 @@ end)
 --------------------------------------------------------------------------------
 local function onPlayerAdded(player: Player)
 	player.CharacterAdded:Connect(function(character: Model)
-		task.wait(0.35)
+		task.wait(0.25)
 		if not player.Parent or player.Character ~= character then
 			return
 		end
 		local hrp = character:FindFirstChild("HumanoidRootPart") :: BasePart?
 		if hrp then
-			-- Spawn the player's personal vehicle on the open Grand Central Avenue in front of them
-			-- (CFrame.new(0, 3.2, -10) facing North -Z, or snapped to clear road space) so it is never wedged against a fountain or pad!
 			local spawnCF: CFrame
-			if math.abs(hrp.Position.X) < 28 and math.abs(hrp.Position.Z - 25) < 32 then
-				spawnCF = CFrame.new(0, 3.2, -10)
+			if math.abs(hrp.Position.X) < 32 and math.abs(hrp.Position.Z - 22) < 36 then
+				spawnCF = CFrame.new(0, 3.2, 22)
 			else
 				local look = hrp.CFrame.LookVector
 				local flatLook = Vector3.new(look.X, 0, look.Z)
@@ -1052,10 +1039,11 @@ local function onPlayerAdded(player: Player)
 				else
 					flatLook = flatLook.Unit
 				end
-				local spawnPos = Vector3.new(hrp.Position.X, 3.2, hrp.Position.Z) + flatLook * 14
+				local spawnPos = Vector3.new(hrp.Position.X, 3.2, hrp.Position.Z)
 				spawnCF = CFrame.lookAt(spawnPos, spawnPos + flatLook)
 			end
-			local veh = SpawnPlayerVehicle(player, nil, spawnCF, false)
+			-- Auto-seat the player in their vehicle on spawn so pressing [W] immediately drives!
+			local veh = SpawnPlayerVehicle(player, nil, spawnCF, true)
 			if veh then
 				setModelNetworkOwner(veh, player)
 			end
@@ -1072,7 +1060,7 @@ local function onPlayerAdded(player: Player)
 		end)
 	end
 
-	-- Respawn/swap vehicle when EquippedVehicle changes in Speed Shop
+	-- Respawn/swap vehicle when EquippedVehicle changes in Speed Shop and auto-sit the player!
 	player:GetAttributeChangedSignal("EquippedVehicle"):Connect(function()
 		local newType = getPlayerEquippedArchetype(player)
 		local currentVeh = playerVehicles[player.UserId]
@@ -1081,9 +1069,10 @@ local function onPlayerAdded(player: Player)
 			if currentType ~= newType then
 				local chassis = currentVeh.PrimaryPart
 				local cf = if chassis then chassis.CFrame else nil
-				local wasDriving = getDriverFromVehicle(currentVeh) == player
-				SpawnPlayerVehicle(player, newType, cf, wasDriving)
+				SpawnPlayerVehicle(player, newType, cf, true)
 			end
+		else
+			SpawnPlayerVehicle(player, newType, nil, true)
 		end
 	end)
 end

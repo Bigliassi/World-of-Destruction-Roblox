@@ -226,6 +226,7 @@ rebirthBtn.Parent = rebirthBar
 Instance.new("UICorner", rebirthBtn).CornerRadius = UDim.new(0, 8)
 
 local function refreshUI()
+	screenGui.Enabled = (player:GetAttribute("HomeMenuActive") ~= true)
 	local playSec = tonumber(player:GetAttribute("PlaytimeSeconds")) or 0
 	local claimedCSV = tostring(player:GetAttribute("ClaimedGiftsCSV") or "")
 	local claimed = parseClaimedSet(claimedCSV)

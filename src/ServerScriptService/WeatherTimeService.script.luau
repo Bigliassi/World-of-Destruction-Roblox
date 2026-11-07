@@ -20,12 +20,12 @@ if not atmosphere then
 	atmosphere = Instance.new("Atmosphere")
 	atmosphere.Parent = Lighting
 end
-atmosphere.Density = 0.34
-atmosphere.Offset = 0.18
-atmosphere.Color = Color3.fromRGB(110, 124, 145)
-atmosphere.Decay = Color3.fromRGB(68, 78, 96)
-atmosphere.Glare = 0.08
-atmosphere.Haze = 1.65
+atmosphere.Density = 0.19
+atmosphere.Offset = 0.12
+atmosphere.Color = Color3.fromRGB(138, 152, 175)
+atmosphere.Decay = Color3.fromRGB(88, 100, 120)
+atmosphere.Glare = 0.06
+atmosphere.Haze = 0.85
 
 local bloom = Lighting:FindFirstChildOfClass("BloomEffect")
 if not bloom then
@@ -33,9 +33,9 @@ if not bloom then
 	bloom.Parent = Lighting
 end
 bloom.Enabled = true
-bloom.Intensity = 0.24
+bloom.Intensity = 0.22
 bloom.Size = 16
-bloom.Threshold = 1.85
+bloom.Threshold = 1.90
 
 local colorCorrection = Lighting:FindFirstChildOfClass("ColorCorrectionEffect")
 if not colorCorrection then
@@ -43,10 +43,10 @@ if not colorCorrection then
 	colorCorrection.Parent = Lighting
 end
 colorCorrection.Enabled = true
-colorCorrection.Brightness = 0.01
-colorCorrection.Contrast = 0.16
-colorCorrection.Saturation = -0.08
-colorCorrection.TintColor = Color3.fromRGB(232, 238, 248)
+colorCorrection.Brightness = 0.02
+colorCorrection.Contrast = 0.14
+colorCorrection.Saturation = 0.08
+colorCorrection.TintColor = Color3.fromRGB(242, 246, 255)
 
 --------------------------------------------------------------------------------
 -- WEATHER & TIME PRESETS (NYC WINTER OVERCAST / SNOWY & RAINY DUSK)
@@ -81,77 +81,77 @@ local PRESETS: { WeatherPreset } = {
 	{
 		name = "Snowstorm",
 		displayName = "NYC Snowy Flurries",
-		clockTime = 16.4,
-		brightness = 1.85,
-		ambient = Color3.fromRGB(78, 88, 105),
-		outdoorAmbient = Color3.fromRGB(95, 108, 128),
-		fogColor = Color3.fromRGB(85, 96, 115),
-		colorShiftTop = Color3.fromRGB(165, 182, 210),
-		atmosphereDensity = 0.34,
-		atmosphereOffset = 0.18,
-		atmosphereGlare = 0.08,
-		atmosphereHaze = 1.65,
-		atmosphereColor = Color3.fromRGB(110, 124, 145),
-		atmosphereDecay = Color3.fromRGB(68, 78, 96),
+		clockTime = 14.8,
+		brightness = 2.65,
+		ambient = Color3.fromRGB(115, 125, 142),
+		outdoorAmbient = Color3.fromRGB(145, 158, 178),
+		fogColor = Color3.fromRGB(125, 138, 158),
+		colorShiftTop = Color3.fromRGB(185, 202, 228),
+		atmosphereDensity = 0.19,
+		atmosphereOffset = 0.12,
+		atmosphereGlare = 0.06,
+		atmosphereHaze = 0.85,
+		atmosphereColor = Color3.fromRGB(138, 152, 175),
+		atmosphereDecay = Color3.fromRGB(88, 100, 120),
 		roadReflectance = 0.14,
 		roadMaterial = Enum.Material.Asphalt,
 		gripMultiplier = 0.94,
 		isSnowing = true,
-		isRaining = true,
-		snowRate = 420,
-		rainRate = 180,
+		isRaining = false,
+		snowRate = 320,
+		rainRate = 0,
 		hasLightning = false,
-		bloomIntensity = 0.24,
+		bloomIntensity = 0.22,
 	},
 	{
 		name = "Rainstorm",
 		displayName = "NYC Rainy Overcast",
-		clockTime = 16.4,
-		brightness = 1.85,
-		ambient = Color3.fromRGB(78, 88, 105),
-		outdoorAmbient = Color3.fromRGB(95, 108, 128),
-		fogColor = Color3.fromRGB(85, 96, 115),
-		colorShiftTop = Color3.fromRGB(152, 172, 202),
-		atmosphereDensity = 0.34,
-		atmosphereOffset = 0.18,
-		atmosphereGlare = 0.08,
-		atmosphereHaze = 1.65,
-		atmosphereColor = Color3.fromRGB(110, 124, 145),
-		atmosphereDecay = Color3.fromRGB(68, 78, 96),
+		clockTime = 15.2,
+		brightness = 2.45,
+		ambient = Color3.fromRGB(108, 118, 136),
+		outdoorAmbient = Color3.fromRGB(135, 148, 168),
+		fogColor = Color3.fromRGB(118, 130, 150),
+		colorShiftTop = Color3.fromRGB(172, 190, 218),
+		atmosphereDensity = 0.21,
+		atmosphereOffset = 0.14,
+		atmosphereGlare = 0.06,
+		atmosphereHaze = 0.95,
+		atmosphereColor = Color3.fromRGB(130, 145, 168),
+		atmosphereDecay = Color3.fromRGB(82, 94, 114),
 		roadReflectance = 0.18,
 		roadMaterial = Enum.Material.Asphalt,
 		gripMultiplier = 0.92,
-		isSnowing = true,
+		isSnowing = false,
 		isRaining = true,
-		snowRate = 180,
-		rainRate = 480,
+		snowRate = 0,
+		rainRate = 360,
 		hasLightning = true,
-		bloomIntensity = 0.24,
+		bloomIntensity = 0.22,
 	},
 	{
 		name = "CloudyNYC",
-		displayName = "NYC Cloudy Dusk",
-		clockTime = 16.4,
-		brightness = 1.85,
-		ambient = Color3.fromRGB(78, 88, 105),
-		outdoorAmbient = Color3.fromRGB(95, 108, 128),
-		fogColor = Color3.fromRGB(85, 96, 115),
-		colorShiftTop = Color3.fromRGB(165, 182, 210),
-		atmosphereDensity = 0.34,
-		atmosphereOffset = 0.18,
-		atmosphereGlare = 0.08,
-		atmosphereHaze = 1.65,
-		atmosphereColor = Color3.fromRGB(110, 124, 145),
-		atmosphereDecay = Color3.fromRGB(68, 78, 96),
+		displayName = "NYC Winter Flurries",
+		clockTime = 14.5,
+		brightness = 2.75,
+		ambient = Color3.fromRGB(122, 132, 148),
+		outdoorAmbient = Color3.fromRGB(152, 164, 184),
+		fogColor = Color3.fromRGB(132, 144, 164),
+		colorShiftTop = Color3.fromRGB(192, 208, 232),
+		atmosphereDensity = 0.18,
+		atmosphereOffset = 0.10,
+		atmosphereGlare = 0.06,
+		atmosphereHaze = 0.75,
+		atmosphereColor = Color3.fromRGB(145, 158, 182),
+		atmosphereDecay = Color3.fromRGB(94, 106, 126),
 		roadReflectance = 0.14,
 		roadMaterial = Enum.Material.Asphalt,
 		gripMultiplier = 0.96,
 		isSnowing = true,
-		isRaining = true,
-		snowRate = 240,
-		rainRate = 140,
+		isRaining = false,
+		snowRate = 220,
+		rainRate = 0,
 		hasLightning = false,
-		bloomIntensity = 0.24,
+		bloomIntensity = 0.22,
 	},
 }
 

@@ -371,8 +371,7 @@ end
 local function getUnlockedVehiclesMap(player: Player): { [string]: boolean }
 	local unlocked: { [string]: boolean } = {
 		Compact = true,
-		sports = true,
-		sedan = true,
+		hatchback = true,
 	}
 	local rawJson = player:GetAttribute("UnlockedVehicles")
 	if type(rawJson) == "string" and rawJson ~= "" then
@@ -537,12 +536,9 @@ local function recomputeAndApplyStats(player: Player, fullHeal: boolean?)
 
 		local seat = vehicleModel:FindFirstChildOfClass("VehicleSeat")
 		if seat then
-			local baseStudsSpeed = tonumber(seat:GetAttribute("BaseMaxSpeed")) or 85
-			local baseTorque = tonumber(seat:GetAttribute("BaseTorque")) or 25000
-			seat:SetAttribute("BaseMaxSpeed", baseStudsSpeed)
-			seat:SetAttribute("BaseTorque", baseTorque)
-			seat.MaxSpeed = baseStudsSpeed * topSpeedMult
-			seat.Torque = baseTorque * accelMult
+			-- Keep legacy VehicleSeat torque at 0 so VehicleClientController drives smoothly without solver conflict
+			seat.MaxSpeed = 0
+			seat.Torque = 0
 		end
 	end
 end

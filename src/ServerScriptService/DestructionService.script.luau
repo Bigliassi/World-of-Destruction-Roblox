@@ -107,7 +107,7 @@ local VEHICLE_CLASS_BASE_TIER: { [string]: number } = {
 }
 
 local PROP_REQUIRED_TIER: { [string]: number } = {
-	-- Tier 1: Light Street Props
+	-- Tier 1: All Everyday Street Props, Hydrants, Streetlights, Bus Stops, Billboards & Taxis (Starter Car Smashes All!)
 	Crate = 1,
 	WoodenCrate = 1,
 	JackpotCrate = 1,
@@ -116,34 +116,35 @@ local PROP_REQUIRED_TIER: { [string]: number } = {
 	Bench = 1,
 	StreetBench = 1,
 	TrashCan = 1,
+	RecyclingBin = 1,
 	Mailbox = 1,
 	NewspaperBox = 1,
 	FoodVendorCart = 1,
 	CafePatio = 1,
 	ConstructionBarrier = 1,
+	FireHydrant = 1,
+	StreetLight = 1,
+	TrafficLight = 1,
+	BusStop = 1,
+	PalmTree = 1,
+	Billboard = 1,
+	TrafficVehicle = 1,
 
-	-- Tier 2: Municipal & Traffic Props
-	FireHydrant = 2,
-	StreetLight = 2,
-	TrafficLight = 2,
-	BusStop = 2,
-	PalmTree = 2,
+	-- Tier 2: Gold ATMs & Explosive Fuel Targets (Unlocked by Sedan / Muscle or Plow Lv.2)
 	GoldATM = 2,
-	TrafficVehicle = 2,
+	GasPump = 2,
+	ExplosiveBarrel = 2,
 
-	-- Tier 3: Industrial, Explosive & Heavy Armored Vehicles
-	GasPump = 3,
-	ExplosiveBarrel = 3,
-	Billboard = 3,
+	-- Tier 3: Heavy Armored Cash Trucks & Surveillance Towers (Unlocked by SUV / Pickup / Sports or Plow Lv.3)
 	ArmoredCashTruck = 3,
 	MegaCorpTower = 3,
 
-	-- Tier 4: Massive Civic Landmarks & Transit
+	-- Tier 4: Massive Civic Landmarks & Transit Buses (Unlocked by Monster Truck or Plow Lv.4)
 	CityBus = 4,
 	ConstructionCrane = 4,
 	PlazaFountain = 4,
 
-	-- Tier 5: Ultra-Armored End-Game Targets
+	-- Tier 5: Ultra-Armored End-Game Targets (Unlocked by Goliath Bulldozer or Plow Lv.5)
 	MegaCorpBankVault = 5,
 	BossGoliath = 5,
 }
@@ -203,7 +204,7 @@ local function getPropRequiredTier(inst: Instance): number
 	end
 
 	if CollectionService:HasTag(inst, "AITrafficVehicle") or CollectionService:HasTag(inst, "TrafficVehicle") then
-		return 2
+		return 1
 	end
 
 	local lower = string.lower(propType)
@@ -211,23 +212,9 @@ local function getPropRequiredTier(inst: Instance): number
 		return 5
 	elseif string.find(lower, "citybus") or string.find(lower, "crane") or string.find(lower, "fountain") then
 		return 4
-	elseif
-		string.find(lower, "gaspump")
-		or string.find(lower, "barrel")
-		or string.find(lower, "billboard")
-		or string.find(lower, "cashtruck")
-		or string.find(lower, "megacorptower")
-	then
+	elseif string.find(lower, "cashtruck") or string.find(lower, "megacorptower") then
 		return 3
-	elseif
-		string.find(lower, "hydrant")
-		or string.find(lower, "streetlight")
-		or string.find(lower, "trafficlight")
-		or string.find(lower, "busstop")
-		or string.find(lower, "palmtree")
-		or string.find(lower, "atm")
-		or string.find(lower, "traffic")
-	then
+	elseif string.find(lower, "atm") or string.find(lower, "gaspump") or string.find(lower, "barrel") then
 		return 2
 	end
 
