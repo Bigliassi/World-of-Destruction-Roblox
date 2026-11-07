@@ -16,11 +16,11 @@ local Workspace = game:GetService("Workspace")
 --------------------------------------------------------------------------------
 -- WAIT FOR CITY & CONFIG
 --------------------------------------------------------------------------------
-local BLOCK_SIZE = (Workspace:GetAttribute("LeoCityBlockSize") :: number?) or 180
-local ROAD_WIDTH = (Workspace:GetAttribute("LeoCityRoadWidth") :: number?) or 36
-local GRID_RADIUS = (Workspace:GetAttribute("LeoCityGridRadius") :: number?) or 3
-local LANE_OFFSET = 8.5
-local SIDEWALK_OFFSET = ROAD_WIDTH * 0.5 + 6.5
+local BLOCK_SIZE = (Workspace:GetAttribute("LeoCityBlockSize") :: number?) or 200
+local ROAD_WIDTH = (Workspace:GetAttribute("LeoCityRoadWidth") :: number?) or 42
+local GRID_RADIUS = (Workspace:GetAttribute("LeoCityGridRadius") :: number?) or 4
+local LANE_OFFSET = 10.5
+local SIDEWALK_OFFSET = ROAD_WIDTH * 0.5 + 7.5
 
 local AIFolder = Instance.new("Folder")
 AIFolder.Name = "LeoCityAI"
@@ -430,13 +430,14 @@ local function shouldStopForRedLight(car: AICar): boolean
 end
 
 --------------------------------------------------------------------------------
--- 3. SIDEWALK NPC PEDESTRIANS (WITH COMICAL DODGE & EXCLAMATION BUBBLE)
+-- 3. SIDEWALK NPC PEDESTRIANS (WITH ROLES, AMBIENT CHATTER & COMICAL DODGE)
 --------------------------------------------------------------------------------
 type AIPed = {
 	model: Model,
 	root: BasePart,
 	bubbleGui: BillboardGui,
 	bubbleLabel: TextLabel,
+	roleName: string,
 	axis: string,
 	dir: number,
 	roadLine: number,
@@ -444,27 +445,49 @@ type AIPed = {
 	posAlong: number,
 	walkSpeed: number,
 	dodgeCooldown: number,
+	chatterTimer: number,
 	leapOffset: Vector3,
 	phase: number,
 }
 
 local aiPeds: { AIPed } = {}
-local OUTFIT_COLORS = {
-	Color3.fromRGB(45, 95, 185),
-	Color3.fromRGB(190, 55, 65),
-	Color3.fromRGB(50, 150, 95),
-	Color3.fromRGB(145, 90, 190),
-	Color3.fromRGB(220, 135, 45),
+local NPC_ROLES = {
+	{ Role = "HotdogChef", Color = Color3.fromRGB(235, 65, 55), Speed = 7.2 },
+	{ Role = "BusinessExecutive", Color = Color3.fromRGB(42, 68, 128), Speed = 8.4 },
+	{ Role = "ConstructionWorker", Color = Color3.fromRGB(245, 165, 35), Speed = 7.8 },
+	{ Role = "StreetSkater", Color = Color3.fromRGB(50, 185, 115), Speed = 11.2 },
+	{ Role = "Tourist", Color = Color3.fromRGB(165, 85, 215), Speed = 7.0 },
+	{ Role = "Jogger", Color = Color3.fromRGB(35, 195, 235), Speed = 10.4 },
+}
+
+local AMBIENT_CHATTER_LINES = {
+	"Best hotdogs in Leo City!",
+	"Late for my meeting at Leo Tower!",
+	"Did you hear that V8?!",
+	"MegaCorp put barriers everywhere!",
+	"Check out the Pier Stunt Jump!",
+	"Sunny day in Leo City!",
+}
+
+local PANIC_CALLOUT_LINES = {
+	"MY TACOS!!",
+	"WATCH THE SUIT!",
+	"RADICAL JUMP!",
+	"CALL THE MAYOR!",
+	"WHOA! CRAZY DRIVER!",
+	"MY GELATO!!",
 }
 
 local function buildPedestrian(idx: number): AIPed
+	local roleSpec = NPC_ROLES[((idx - 1) % #NPC_ROLES) + 1]
 	local m = Instance.new("Model")
-	m.Name = "CitizenNPC"
+	m.Name = "CitizenNPC_" .. roleSpec.Role
+	m:SetAttribute("NPCRole", roleSpec.Role)
 
 	local root = Instance.new("Part")
 	root.Name = "Torso"
 	root.Size = Vector3.new(2.0, 2.6, 1.1)
-	root.Color = OUTFIT_COLORS[(idx % #OUTFIT_COLORS) + 1]
+	root.Color = roleSpec.Color
 	root.Material = Enum.Material.SmoothPlastic
 	root.Anchored = true
 	root.CanCollide = false
@@ -498,27 +521,28 @@ local function buildPedestrian(idx: number): AIPed
 		wc.Parent = root
 	end
 
-	-- Exclamation Bubble UI (hidden until startled)
+	-- Chatter & Panic Bubble UI
 	local bb = Instance.new("BillboardGui")
 	bb.Name = "AlertBubble"
-	bb.Size = UDim2.fromOffset(52, 52)
+	bb.Size = UDim2.fromOffset(145, 42)
 	bb.StudsOffset = Vector3.new(0, 3.8, 0)
 	bb.AlwaysOnTop = true
+	bb.MaxDistance = 120
 	bb.Enabled = false
 	bb.Parent = head
 
 	local lbl = Instance.new("TextLabel")
 	lbl.Size = UDim2.fromScale(1, 1)
-	lbl.BackgroundColor3 = Color3.fromRGB(255, 235, 60)
-	lbl.BackgroundTransparency = 0.1
+	lbl.BackgroundColor3 = Color3.fromRGB(255, 238, 75)
+	lbl.BackgroundTransparency = 0.08
 	lbl.Text = "!"
-	lbl.TextColor3 = Color3.fromRGB(220, 25, 25)
+	lbl.TextColor3 = Color3.fromRGB(25, 28, 36)
 	lbl.TextScaled = true
 	lbl.Font = Enum.Font.GothamBlack
 	lbl.Parent = bb
 
 	local corner = Instance.new("UICorner")
-	corner.CornerRadius = UDim.new(1, 0)
+	corner.CornerRadius = UDim.new(0, 10)
 	corner.Parent = lbl
 
 	m.PrimaryPart = root
@@ -536,13 +560,15 @@ local function buildPedestrian(idx: number): AIPed
 		root = root,
 		bubbleGui = bb,
 		bubbleLabel = lbl,
+		roleName = roleSpec.Role,
 		axis = axis,
 		dir = dir,
 		roadLine = roadLine,
 		side = side,
 		posAlong = posAlong,
-		walkSpeed = 7.5 + (idx % 4) * 1.2,
+		walkSpeed = roleSpec.Speed,
 		dodgeCooldown = 0,
+		chatterTimer = 4.0 + (idx % 9) * 1.8,
 		leapOffset = Vector3.zero,
 		phase = idx * 1.1,
 	}
@@ -554,14 +580,16 @@ local function triggerPedestrianDodge(ped: AIPed, threatPos: Vector3)
 	end
 	ped.dodgeCooldown = 3.2
 	ped.bubbleGui.Enabled = true
-	ped.bubbleLabel.Text = if math.random() < 0.5 then "!" else "WHOA!"
+	ped.bubbleLabel.BackgroundColor3 = Color3.fromRGB(255, 225, 55)
+	ped.bubbleLabel.TextColor3 = Color3.fromRGB(215, 25, 25)
+	ped.bubbleLabel.Text = PANIC_CALLOUT_LINES[math.random(1, #PANIC_CALLOUT_LINES)]
 
 	local away = (ped.root.Position - threatPos)
 	local flatAway = Vector3.new(away.X, 0, away.Z)
 	local dodgeDir = if flatAway.Magnitude > 0.1 then flatAway.Unit else Vector3.new(1, 0, 0)
 	ped.leapOffset = dodgeDir * 7.5 + Vector3.new(0, 3.6, 0)
 
-	task.delay(1.8, function()
+	task.delay(2.0, function()
 		if ped.bubbleGui then
 			ped.bubbleGui.Enabled = false
 		end
@@ -602,8 +630,8 @@ end
 --------------------------------------------------------------------------------
 -- MAIN HEARTBEAT AI UPDATE LOOP
 --------------------------------------------------------------------------------
-spawnTrafficCars(18)
-spawnPedestrians(28)
+spawnTrafficCars(32)
+spawnPedestrians(45)
 
 RunService.Heartbeat:Connect(function(dt: number)
 	local clampedDt = math.min(dt, 0.1)
@@ -694,6 +722,20 @@ RunService.Heartbeat:Connect(function(dt: number)
 		ped.phase += clampedDt * 8
 		if ped.dodgeCooldown > 0 then
 			ped.dodgeCooldown = math.max(0, ped.dodgeCooldown - clampedDt)
+		else
+			ped.chatterTimer -= clampedDt
+			if ped.chatterTimer <= 0 then
+				ped.chatterTimer = 11.0 + math.random() * 9.0
+				ped.bubbleGui.Enabled = true
+				ped.bubbleLabel.BackgroundColor3 = Color3.fromRGB(248, 250, 255)
+				ped.bubbleLabel.TextColor3 = Color3.fromRGB(22, 28, 42)
+				ped.bubbleLabel.Text = AMBIENT_CHATTER_LINES[math.random(1, #AMBIENT_CHATTER_LINES)]
+				task.delay(2.4, function()
+					if ped.bubbleGui and ped.dodgeCooldown <= 0 then
+						ped.bubbleGui.Enabled = false
+					end
+				end)
+			end
 		end
 		ped.leapOffset = ped.leapOffset:Lerp(Vector3.zero, math.min(1, clampedDt * 6))
 

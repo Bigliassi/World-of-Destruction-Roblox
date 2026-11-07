@@ -62,7 +62,7 @@ local function runDiagnostics()
 		if sharedFolder then "Found Shared module container" else "Missing ReplicatedStorage.Shared"
 	)
 
-	local expectedSharedModules = { "GameConfig", "Types", "Remotes", "VehicleCatalog" }
+	local expectedSharedModules = { "AvatarCatalog", "GameConfig", "Types", "Remotes", "VehicleCatalog" }
 	for _, modName in ipairs(expectedSharedModules) do
 		local mod = if sharedFolder then sharedFolder:FindFirstChild(modName) else nil
 		if mod and mod:IsA("ModuleScript") then
@@ -84,18 +84,20 @@ local function runDiagnostics()
 	recordCheck(
 		"REMOTES",
 		"ReplicatedStorage.Remotes",
-		remotesFolder ~= nil and remoteCount >= 6,
+		remotesFolder ~= nil and remoteCount >= 10,
 		string.format("%d Remote instances registered", remoteCount)
 	)
 
 	-- 3. Verify Workspace.LeoCity & Destructibles & Vehicles
 	local leoCity = Workspace:FindFirstChild("LeoCity")
 	local descCount = if leoCity then #leoCity:GetDescendants() else #Workspace:GetDescendants()
+	local gridRadius = tonumber(Workspace:GetAttribute("LeoCityGridRadius")) or 4
+	local blockSize = tonumber(Workspace:GetAttribute("LeoCityBlockSize")) or 200
 	recordCheck(
 		"WORLD",
 		"Leo City Map & Geometry",
-		descCount > 25,
-		string.format("Active (%d world instances)", descCount)
+		descCount > 25 and gridRadius >= 4 and blockSize >= 200,
+		string.format("Active (%d world instances, %dx%d grid @ %d studs/block)", descCount, gridRadius * 2 + 1, gridRadius * 2 + 1, blockSize)
 	)
 
 	local beacons = (if leoCity then leoCity:FindFirstChild("CityNavigationBeacons") else nil)
@@ -174,12 +176,12 @@ local function runDiagnostics()
 	local hasCC = Lighting:FindFirstChildOfClass("ColorCorrectionEffect") ~= nil
 	recordCheck(
 		"GRAPHICS",
-		"Lighting & Post-Processing Pipeline",
-		hasAtmo and hasBloom and hasCC,
-		"Atmosphere, Bloom, ColorCorrection, SunRays & DepthOfField active"
+		"Sunlit Lighting & Post-Processing",
+		hasAtmo and hasBloom and hasCC and Lighting.Brightness >= 3.0,
+		string.format("ClockTime=%.1f, Brightness=%.1f, Atmosphere + Bloom + ColorCorrection active", Lighting.ClockTime, Lighting.Brightness)
 	)
 
-	-- 7. Verify Connected Players (if running in Play Solo)
+	-- 7. Verify Connected Players & 5-Act Campaign (if running in Play Solo)
 	local connectedPlayers = Players:GetPlayers()
 	if #connectedPlayers > 0 then
 		local p = connectedPlayers[1]
@@ -188,13 +190,15 @@ local function runDiagnostics()
 		local hasCash = if ls then ls:FindFirstChild("Cash") ~= nil else false
 		recordCheck(
 			"PLAYER",
-			string.format("Player '%s' Leaderstats & Profile", p.Name),
+			string.format("Player '%s' Leaderstats & Campaign", p.Name),
 			ls ~= nil and hasLevel and hasCash,
 			string.format(
-				"Cash=$%s, Level=%s (%s)",
+				"Cash=$%s, Lv.%s (%s), Act=%s/%s",
 				tostring(p:GetAttribute("Cash") or 500),
 				tostring(p:GetAttribute("Level") or 1),
-				tostring(p:GetAttribute("RankTitle") or "Street Rookie")
+				tostring(p:GetAttribute("RankTitle") or "Street Rookie"),
+				tostring(p:GetAttribute("CampaignAct") or 1),
+				tostring(p:GetAttribute("CampaignTotalActs") or 5)
 			)
 		)
 	end

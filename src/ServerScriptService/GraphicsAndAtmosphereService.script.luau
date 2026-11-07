@@ -39,42 +39,46 @@ local function ensurePostEffect<T>(className: string, name: string): any
 end
 
 local function configureCrispLighting()
-	-- Core Lighting properties tuned for vibrant Forza-style arcade clarity
+	-- Core Lighting properties tuned for vibrant sunlit Los Angeles / Miami arcade clarity
 	Lighting.GlobalShadows = true
-	Lighting.ShadowSoftness = 0.18
-	Lighting.EnvironmentDiffuseScale = 0.85
-	Lighting.EnvironmentSpecularScale = 0.90
-	Lighting.Brightness = math.max(Lighting.Brightness, 2.5)
+	Lighting.ShadowSoftness = 0.16
+	Lighting.EnvironmentDiffuseScale = 0.92
+	Lighting.EnvironmentSpecularScale = 0.95
+	Lighting.ClockTime = 13.5
+	Lighting.Brightness = 3.6
+	Lighting.Ambient = Color3.fromRGB(155, 162, 175)
+	Lighting.OutdoorAmbient = Color3.fromRGB(185, 192, 205)
+	Lighting.ColorShift_Top = Color3.fromRGB(255, 252, 240)
 
-	-- Atmosphere
+	-- Atmosphere (crystal clear sunlit horizon)
 	local atmosphere: Atmosphere = ensurePostEffect("Atmosphere", "WoDAtmosphere")
-	atmosphere.Density = 0.28
-	atmosphere.Offset = 0.15
-	atmosphere.Color = Color3.fromRGB(198, 218, 245)
-	atmosphere.Decay = Color3.fromRGB(145, 165, 200)
-	atmosphere.Glare = 0.18
-	atmosphere.Haze = 1.15
+	atmosphere.Density = 0.16
+	atmosphere.Offset = 0.10
+	atmosphere.Color = Color3.fromRGB(205, 228, 255)
+	atmosphere.Decay = Color3.fromRGB(165, 190, 225)
+	atmosphere.Glare = 0.05
+	atmosphere.Haze = 0.4
 
 	-- Sky
 	local sky: Sky = ensurePostEffect("Sky", "WoDSky")
 	sky.CelestialBodiesShown = true
-	sky.SunAngularSize = 14
+	sky.SunAngularSize = 15
 	sky.MoonAngularSize = 11
 	sky.StarCount = 3000
 
 	-- BloomEffect (subtle, clean glow that never blows out neon into blurry blobs)
 	local bloom: BloomEffect = ensurePostEffect("BloomEffect", "WoDBloom")
 	bloom.Enabled = true
-	bloom.Intensity = 0.32
+	bloom.Intensity = 0.30
 	bloom.Size = 18
-	bloom.Threshold = 1.65
+	bloom.Threshold = 1.70
 
 	-- ColorCorrectionEffect (saturated, warm sunlit arcade palette)
 	local cc: ColorCorrectionEffect = ensurePostEffect("ColorCorrectionEffect", "WoDColorCorrection")
 	cc.Enabled = true
-	cc.Brightness = 0.02
+	cc.Brightness = 0.04
 	cc.Contrast = 0.14
-	cc.Saturation = 0.16
+	cc.Saturation = 0.18
 	cc.TintColor = Color3.fromRGB(255, 252, 246)
 
 	-- SunRaysEffect (volumetric rays between skyscrapers)
@@ -86,9 +90,9 @@ local function configureCrispLighting()
 	-- Subtle DepthOfFieldEffect (keeps foreground razor-sharp, softens far horizon)
 	local dof: DepthOfFieldEffect = ensurePostEffect("DepthOfFieldEffect", "WoDDepthOfField")
 	dof.Enabled = true
-	dof.FarIntensity = 0.10
-	dof.FocusDistance = 160
-	dof.InFocusRadius = 220
+	dof.FarIntensity = 0.08
+	dof.FocusDistance = 180
+	dof.InFocusRadius = 260
 	dof.NearIntensity = 0
 
 	Lighting:SetAttribute("GraphicsConfiguredV1", true)
@@ -114,7 +118,7 @@ local LANDMARK_BEACONS: { LandmarkBeaconSpec } = {
 		Id = "SpeedShopPlaza",
 		Title = "SPEED SHOP [B]",
 		Subtitle = "VEHICLE DEALER & GARAGE",
-		Position = Vector3.new(54, 0, -24),
+		Position = Vector3.new(58, 0, -24),
 		Color = Color3.fromRGB(0, 225, 255),
 		PillarHeight = 0,
 		RingRadius = 11,
@@ -123,7 +127,7 @@ local LANDMARK_BEACONS: { LandmarkBeaconSpec } = {
 		Id = "SpeedShopEast",
 		Title = "SPEED SHOP [B]",
 		Subtitle = "VEHICLE DEALER & GARAGE",
-		Position = Vector3.new(180, 0, 0),
+		Position = Vector3.new(200, 0, 0),
 		Color = Color3.fromRGB(0, 225, 255),
 		PillarHeight = 0,
 		RingRadius = 13,
@@ -132,7 +136,7 @@ local LANDMARK_BEACONS: { LandmarkBeaconSpec } = {
 		Id = "MechanicBayPlaza",
 		Title = "REPAIR BAY [R]",
 		Subtitle = "100% REPAIR & NITRO",
-		Position = Vector3.new(-54, 0, -24),
+		Position = Vector3.new(-58, 0, -24),
 		Color = Color3.fromRGB(60, 245, 130),
 		PillarHeight = 0,
 		RingRadius = 11,
@@ -141,7 +145,7 @@ local LANDMARK_BEACONS: { LandmarkBeaconSpec } = {
 		Id = "MechanicBayWest",
 		Title = "REPAIR BAY [R]",
 		Subtitle = "100% REPAIR & NITRO",
-		Position = Vector3.new(-180, 0, 0),
+		Position = Vector3.new(-200, 0, 0),
 		Color = Color3.fromRGB(60, 245, 130),
 		PillarHeight = 0,
 		RingRadius = 13,
@@ -150,16 +154,16 @@ local LANDMARK_BEACONS: { LandmarkBeaconSpec } = {
 		Id = "LeoPlazaMegaRamp",
 		Title = "MEGA-RAMP",
 		Subtitle = "2X STUNT AIR BONUS",
-		Position = Vector3.new(0, 0, -68),
+		Position = Vector3.new(0, 0, -72),
 		Color = Color3.fromRGB(255, 155, 40),
 		PillarHeight = 0,
-		RingRadius = 10,
+		RingRadius = 12,
 	},
 	{
 		Id = "BoardwalkMegaRamp",
 		Title = "PIER STUNT JUMP",
 		Subtitle = "BOARDWALK LAUNCH",
-		Position = Vector3.new(550, 0, 0),
+		Position = Vector3.new(810, 0, 0),
 		Color = Color3.fromRGB(255, 155, 40),
 		PillarHeight = 0,
 		RingRadius = 12,
@@ -168,7 +172,7 @@ local LANDMARK_BEACONS: { LandmarkBeaconSpec } = {
 		Id = "LeoTowerIcon",
 		Title = "LEO TOWER",
 		Subtitle = "DOWNTOWN SKYLINE",
-		Position = Vector3.new(-32, 0, -206),
+		Position = Vector3.new(-48, 0, -226),
 		Color = Color3.fromRGB(255, 215, 55),
 		PillarHeight = 0,
 		RingRadius = 12,
@@ -177,7 +181,7 @@ local LANDMARK_BEACONS: { LandmarkBeaconSpec } = {
 		Id = "BoomGasStation",
 		Title = "BOOM GAS & NITRO",
 		Subtitle = "EXPLOSIVE COMBO ZONE",
-		Position = Vector3.new(0, 0, -324),
+		Position = Vector3.new(44, 0, -400),
 		Color = Color3.fromRGB(255, 95, 70),
 		PillarHeight = 0,
 		RingRadius = 14,

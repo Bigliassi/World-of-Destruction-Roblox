@@ -76,10 +76,14 @@ local function spawnShapedLayer(params: {
 	highGain: number?,
 	pitchOctave: number?,
 })
+	local sfxScale = tonumber(player:GetAttribute("SFXVolume")) or 1.0
+	if sfxScale <= 0.001 then
+		return
+	end
 	local sound = Instance.new("Sound")
 	sound.Name = params.name
 	sound.SoundId = params.soundId
-	sound.Volume = params.volume
+	sound.Volume = params.volume * sfxScale
 	sound.PlaybackSpeed = math.max(0.35, params.speed)
 	if params.timePosition and params.timePosition > 0 then
 		sound.TimePosition = params.timePosition
@@ -624,8 +628,10 @@ RunService.RenderStepped:Connect(function(dt: number)
 	currentFov = currentFov + (targetFov - currentFov) * math.min(1, dt * 8)
 	cam.FieldOfView = currentFov
 
-	-- Subtle Continuous Vehicle Engine Hum/Purr & Drift Audio
-	if isSeatedInVehicle then
+	-- Subtle Continuous Vehicle Engine Hum/Purr & Drift Audio (respects EngineSoundEnabled & SFXVolume)
+	local engineEnabled = player:GetAttribute("EngineSoundEnabled") ~= false
+	local sfxScale = tonumber(player:GetAttribute("SFXVolume")) or 1.0
+	if isSeatedInVehicle and engineEnabled and sfxScale > 0.001 then
 		if not engineSound.IsPlaying then
 			engineSound:Play()
 		end
@@ -680,14 +686,24 @@ RunService.RenderStepped:Connect(function(dt: number)
 		end
 	end
 
-	-- Trauma-Based 3D Rotational & Positional Camera Shake
-	if trauma > 0.001 then
-		local shake = trauma * trauma
+	-- Trauma-Based 3D Rotational & Positional Camera Shake (scaled by Settings CameraShakeScale)
+	local shakeScale = tonumber(player:GetAttribute("CameraShakeScale")) or 1.0
+	if trauma > 0.001 and shakeScale > 0 then
+		local shake = trauma * trauma * shakeScale
 		local dx = math.noise(noiseClock, 1.3) * 1.6 * shake
 		local dy = math.noise(1.3, noiseClock) * 1.6 * shake
 		local roll = math.noise(noiseClock, noiseClock) * math.rad(5.5) * shake
 		cam.CFrame = cam.CFrame * CFrame.new(dx, dy, 0) * CFrame.Angles(dy * 0.02, dx * 0.02, roll)
 		trauma = math.max(0, trauma - dt * 1.45)
+	elseif trauma > 0.001 then
+		trauma = 0
+	end
+
+	-- Home Menu Aerial Orbit Camera over sunlit Leo Plaza & Leo Tower when HomeMenuActive == true
+	if player:GetAttribute("HomeMenuActive") == true or player:GetAttribute("HomeMenuCameraActive") == true then
+		local orbitAngle = os.clock() * 0.22
+		local orbitPos = Vector3.new(math.cos(orbitAngle) * 115, 62, math.sin(orbitAngle) * 115 + 25)
+		cam.CFrame = CFrame.lookAt(orbitPos, Vector3.new(0, 18, -30))
 	end
 
 	-- Police Siren Screen Vignette at High Heat

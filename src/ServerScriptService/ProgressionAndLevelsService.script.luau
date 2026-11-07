@@ -656,6 +656,23 @@ local function setupPlayerProgression(player: Player)
 		end
 	end))
 
+	-- 5. Watch CampaignAct & CampaignCompleted for generous Campaign Story XP milestones!
+	local trackedAct = tonumber(player:GetAttribute("CampaignAct")) or 1
+	table.insert(conns, player:GetAttributeChangedSignal("CampaignAct"):Connect(function()
+		local currentAct = tonumber(player:GetAttribute("CampaignAct")) or 1
+		if currentAct > trackedAct then
+			local actsGained = currentAct - trackedAct
+			trackedAct = currentAct
+			awardXP(player, actsGained * 650, "CampaignActCompleted")
+		end
+	end))
+
+	table.insert(conns, player:GetAttributeChangedSignal("CampaignCompleted"):Connect(function()
+		if player:GetAttribute("CampaignCompleted") == true then
+			awardXP(player, 1500, "CampaignFinaleVictory")
+		end
+	end))
+
 	playerConnections[player.UserId] = conns
 end
 

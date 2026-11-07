@@ -124,11 +124,11 @@ VehicleCatalog.Archetypes = {
 
 		MaxHealth = 100,
 		Mass = 950,
-		MaxSpeed = 82,
-		ReverseSpeed = 38,
-		Acceleration = 68,
-		BrakeDecel = 115,
-		TurnSpeed = 3.2,
+		MaxSpeed = 58,
+		ReverseSpeed = 26,
+		Acceleration = 26,
+		BrakeDecel = 95,
+		TurnSpeed = 2.5,
 		DriftFactor = 1.35,
 		RamMultiplier = 0.95,
 		NitroCapacity = 4.0,
@@ -156,11 +156,11 @@ VehicleCatalog.Archetypes = {
 
 		MaxHealth = 125,
 		Mass = 1150,
-		MaxSpeed = 88,
-		ReverseSpeed = 40,
-		Acceleration = 64,
-		BrakeDecel = 110,
-		TurnSpeed = 2.85,
+		MaxSpeed = 64,
+		ReverseSpeed = 28,
+		Acceleration = 28,
+		BrakeDecel = 95,
+		TurnSpeed = 2.4,
 		DriftFactor = 1.20,
 		RamMultiplier = 1.08,
 		NitroCapacity = 4.2,
@@ -188,11 +188,11 @@ VehicleCatalog.Archetypes = {
 
 		MaxHealth = 140,
 		Mass = 1350,
-		MaxSpeed = 98,
-		ReverseSpeed = 42,
-		Acceleration = 78,
-		BrakeDecel = 112,
-		TurnSpeed = 2.95,
+		MaxSpeed = 72,
+		ReverseSpeed = 28,
+		Acceleration = 32,
+		BrakeDecel = 98,
+		TurnSpeed = 2.35,
 		DriftFactor = 1.55,
 		RamMultiplier = 1.25,
 		NitroCapacity = 4.8,
@@ -222,11 +222,11 @@ VehicleCatalog.Archetypes = {
 
 		MaxHealth = 175,
 		Mass = 1650,
-		MaxSpeed = 84,
-		ReverseSpeed = 38,
-		Acceleration = 60,
-		BrakeDecel = 105,
-		TurnSpeed = 2.65,
+		MaxSpeed = 62,
+		ReverseSpeed = 26,
+		Acceleration = 27,
+		BrakeDecel = 92,
+		TurnSpeed = 2.2,
 		DriftFactor = 1.10,
 		RamMultiplier = 1.40,
 		NitroCapacity = 4.5,
@@ -255,11 +255,11 @@ VehicleCatalog.Archetypes = {
 
 		MaxHealth = 185,
 		Mass = 1750,
-		MaxSpeed = 86,
-		ReverseSpeed = 40,
-		Acceleration = 62,
-		BrakeDecel = 108,
-		TurnSpeed = 2.60,
+		MaxSpeed = 64,
+		ReverseSpeed = 26,
+		Acceleration = 28,
+		BrakeDecel = 94,
+		TurnSpeed = 2.2,
 		DriftFactor = 1.18,
 		RamMultiplier = 1.50,
 		NitroCapacity = 4.6,
@@ -288,11 +288,11 @@ VehicleCatalog.Archetypes = {
 
 		MaxHealth = 130,
 		Mass = 1100,
-		MaxSpeed = 116,
-		ReverseSpeed = 46,
-		Acceleration = 88,
-		BrakeDecel = 130,
-		TurnSpeed = 3.15,
+		MaxSpeed = 82,
+		ReverseSpeed = 30,
+		Acceleration = 36,
+		BrakeDecel = 110,
+		TurnSpeed = 2.6,
 		DriftFactor = 1.42,
 		RamMultiplier = 1.15,
 		NitroCapacity = 5.5,
@@ -322,11 +322,11 @@ VehicleCatalog.Archetypes = {
 
 		MaxHealth = 250,
 		Mass = 2600,
-		MaxSpeed = 90,
-		ReverseSpeed = 42,
-		Acceleration = 70,
-		BrakeDecel = 105,
-		TurnSpeed = 2.50,
+		MaxSpeed = 60,
+		ReverseSpeed = 26,
+		Acceleration = 29,
+		BrakeDecel = 92,
+		TurnSpeed = 2.1,
 		DriftFactor = 1.15,
 		RamMultiplier = 2.10,
 		NitroCapacity = 5.2,
@@ -356,11 +356,11 @@ VehicleCatalog.Archetypes = {
 
 		MaxHealth = 380,
 		Mass = 4200,
-		MaxSpeed = 76,
-		ReverseSpeed = 36,
-		Acceleration = 58,
-		BrakeDecel = 125,
-		TurnSpeed = 2.35,
+		MaxSpeed = 50,
+		ReverseSpeed = 22,
+		Acceleration = 24,
+		BrakeDecel = 105,
+		TurnSpeed = 1.95,
 		DriftFactor = 0.95,
 		RamMultiplier = 3.00,
 		NitroCapacity = 5.0,
@@ -828,7 +828,7 @@ function VehicleCatalog.BuildVehicle(vehicleType: string?, options: BuildOptions
 	seat.Parent = model
 
 	local seatZ = if cfg.HasTruckBed then -len * 0.08 elseif cfg.HasBulldozerBlade then len * 0.06 else -len * 0.02
-	placeAndWeld(chassis, seat, CFrame.new(0, h * 0.22, seatZ))
+	placeAndWeld(chassis, seat, CFrame.new(0, -h * 0.42, seatZ))
 
 	-- ProximityPrompt on DriveSeat for quick E enter / hijack on foot
 	local prompt = Instance.new("ProximityPrompt")
@@ -992,7 +992,7 @@ function VehicleCatalog.BuildVehicle(vehicleType: string?, options: BuildOptions
 	-- 4. Cabin / Greenhouse, Angled Front WedgePart Windshield with A-Pillars, Painted Roof Panel & Sloped Rear WedgePart Fastback
 	local glassColor = Color3.fromRGB(38, 52, 72)
 	local cabW = w * 0.84
-	local cabH = if cfg.Id == "Sports" then h * 0.72 elseif cfg.Id == "Bulldozer" then h * 1.05 else h * 0.86
+	local cabH = math.max(3.4 * scale, h * 1.38)
 	local cabLen = if cfg.HasTruckBed then len * 0.32 elseif cfg.Id == "Compact" or cfg.Id == "SUV" then len * 0.48 else len * 0.38
 	local cabCenterZ = if cfg.HasTruckBed then -len * 0.06 elseif cfg.Id == "Compact" or cfg.Id == "SUV" then len * 0.06 else 0.0
 	local cabBaseY = h * 0.5 + cabH * 0.5 - 0.08 * scale
@@ -1009,6 +1009,65 @@ function VehicleCatalog.BuildVehicle(vehicleType: string?, options: BuildOptions
 	)
 	placeAndWeld(chassis, cabin, CFrame.new(0, cabBaseY, cabCenterZ))
 
+	-- Sleek dark-tinted Driver Silhouette Helmet/Headrest inside the cabin at cabin-eye level
+	-- so from outside the car you see a cool driver silhouette inside the glass instead of a blocky head clipping through the roof
+	local silhouetteColor = Color3.fromRGB(18, 22, 28)
+	local headrest = makePart(
+		"DriverHeadrest",
+		Vector3.new(1.55 * scale, 1.35 * scale, 0.42 * scale),
+		Color3.fromRGB(24, 28, 36),
+		Enum.Material.SmoothPlastic,
+		model
+	)
+	placeAndWeld(
+		chassis,
+		headrest,
+		CFrame.new(0, h * 0.5 + cabH * 0.34, seatZ + 0.72 * scale) * CFrame.Angles(math.rad(-10), 0, 0)
+	)
+
+	local driverTorso = makePart(
+		"DriverSilhouetteTorso",
+		Vector3.new(1.75 * scale, cabH * 0.42, 0.85 * scale),
+		silhouetteColor,
+		Enum.Material.SmoothPlastic,
+		model
+	)
+	placeAndWeld(
+		chassis,
+		driverTorso,
+		CFrame.new(0, h * 0.5 + cabH * 0.24, seatZ + 0.08 * scale) * CFrame.Angles(math.rad(-8), 0, 0)
+	)
+
+	local driverHelmet = makePart(
+		"DriverSilhouetteHelmet",
+		Vector3.new(1.22 * scale, 1.24 * scale, 1.28 * scale),
+		silhouetteColor,
+		Enum.Material.SmoothPlastic,
+		model,
+		false,
+		true,
+		0,
+		Enum.PartType.Ball
+	)
+	placeAndWeld(
+		chassis,
+		driverHelmet,
+		CFrame.new(0, h * 0.5 + cabH * 0.56, seatZ + 0.04 * scale)
+	)
+
+	local driverVisor = makePart(
+		"DriverHelmetVisor",
+		Vector3.new(1.06 * scale, 0.34 * scale, 0.36 * scale),
+		accentColor,
+		Enum.Material.Neon,
+		model
+	)
+	placeAndWeld(
+		chassis,
+		driverVisor,
+		CFrame.new(0, h * 0.5 + cabH * 0.58, seatZ - 0.48 * scale)
+	)
+
 	-- Painted roof panel
 	local roofCap = makePart(
 		"RoofCap",
@@ -1020,7 +1079,7 @@ function VehicleCatalog.BuildVehicle(vehicleType: string?, options: BuildOptions
 	placeAndWeld(chassis, roofCap, CFrame.new(0, h * 0.5 + cabH, cabCenterZ))
 
 	-- Angled front WedgePart windshield with left/right sculpted A-pillars
-	local wsSlopeLen = cabH * 1.05
+	local wsSlopeLen = math.min(cabH * 0.65, len * 0.16)
 	local windshield = makeWedge(
 		"Windshield",
 		Vector3.new(cabW * 0.96, cabH, wsSlopeLen),
@@ -1039,7 +1098,7 @@ function VehicleCatalog.BuildVehicle(vehicleType: string?, options: BuildOptions
 		local pillarTag = if sx < 0 then "L" else "R"
 		local aPillar = makePart(
 			"APillar" .. pillarTag,
-			Vector3.new(0.22 * scale, cabH * 1.28, 0.24 * scale),
+			Vector3.new(0.22 * scale, math.sqrt(cabH * cabH + wsSlopeLen * wsSlopeLen), 0.24 * scale),
 			primaryColor,
 			Enum.Material.SmoothPlastic,
 			model
@@ -1048,7 +1107,7 @@ function VehicleCatalog.BuildVehicle(vehicleType: string?, options: BuildOptions
 			chassis,
 			aPillar,
 			CFrame.new(sx * (cabW * 0.48), cabBaseY, cabCenterZ - cabLen * 0.5 - wsSlopeLen * 0.5)
-				* CFrame.Angles(math.rad(42), 0, 0)
+				* CFrame.Angles(math.atan2(wsSlopeLen, cabH), 0, 0)
 		)
 
 		-- Left/Right aerodynamic side-view mirrors + mirror glass
@@ -1081,7 +1140,7 @@ function VehicleCatalog.BuildVehicle(vehicleType: string?, options: BuildOptions
 	end
 
 	-- Sloped rear WedgePart fastback / rear window (rotated 180 deg around Y so slope faces +Z)
-	local rwSlopeLen = if cfg.Id == "Sports" or cfg.Id == "Muscle" then cabH * 1.35 else cabH * 0.85
+	local rwSlopeLen = math.min(cabH * (if cfg.Id == "Sports" or cfg.Id == "Muscle" then 0.78 else 0.52), len * 0.16)
 	local rearWindow = makeWedge(
 		"RearWindow",
 		Vector3.new(cabW * 0.94, cabH * 0.96, rwSlopeLen),

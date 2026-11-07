@@ -995,6 +995,10 @@ RunService.RenderStepped:Connect(function()
 	if tutorialCompleted then
 		return
 	end
+	if localPlayer:GetAttribute("HomeMenuActive") == true or localPlayer:GetAttribute("ShowWaypointBeam") == false then
+		setWaypointVisible(false)
+		return
+	end
 
 	local character = localPlayer.Character
 	local rootPart = if character then character:FindFirstChild("HumanoidRootPart") :: BasePart? else nil

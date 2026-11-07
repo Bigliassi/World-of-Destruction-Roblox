@@ -281,14 +281,83 @@ def build_stunt_ramp_preview(
     label_text: str,
     indent: int = 4,
 ) -> str:
+    ramp_width = max(width, 26.0)
+    total_len = max(length, 32.0)
+    len1 = total_len * 0.36
+    len2 = total_len * 0.34
+    len3 = total_len * 0.30
+    h1 = len1 * math.tan(math.radians(10.0))
+    h2 = len2 * math.tan(math.radians(17.0))
+    h3 = len3 * math.tan(math.radians(23.0))
+    y0 = -0.2
+    y1 = y0 + h1
+    y2 = y1 + h2
+    y3 = y2 + h3
+    z_start = total_len * 0.5
+    z1_center = z_start - len1 * 0.5
+    z1_end = z_start - len1
+    z2_center = z1_end - len2 * 0.5
+    z2_end = z1_end - len2
+    z3_center = z2_end - len3 * 0.5
+
     parts: List[str] = []
     parts.append(
         make_part_xml(
             ref,
             "RampWedge",
-            (width, height, length),
-            rotate_offset(pos, yaw_deg, (0.0, height * 0.5, 0.0)),
-            (50, 55, 68),
+            (ramp_width, h1, len1),
+            rotate_offset(pos, yaw_deg, (0.0, y0 + h1 * 0.5, z1_center)),
+            (132, 138, 152),
+            MAT_CONCRETE,
+            yaw_deg,
+            class_name="WedgePart",
+            indent=indent + 1,
+        )
+    )
+    parts.append(
+        make_part_xml(
+            ref,
+            "MidSupportBase",
+            (ramp_width, max(0.2, y1), len2 - 0.1),
+            rotate_offset(pos, yaw_deg, (0.0, y1 * 0.5, z2_center - 0.05)),
+            (118, 125, 140),
+            MAT_CONCRETE,
+            yaw_deg,
+            indent=indent + 1,
+        )
+    )
+    parts.append(
+        make_part_xml(
+            ref,
+            "MidRampWedge",
+            (ramp_width, h2, len2),
+            rotate_offset(pos, yaw_deg, (0.0, y1 + h2 * 0.5, z2_center)),
+            (118, 125, 140),
+            MAT_CONCRETE,
+            yaw_deg,
+            class_name="WedgePart",
+            indent=indent + 1,
+        )
+    )
+    parts.append(
+        make_part_xml(
+            ref,
+            "LipSupportBase",
+            (ramp_width, max(0.2, y2), len3 - 0.1),
+            rotate_offset(pos, yaw_deg, (0.0, y2 * 0.5, z3_center - 0.05)),
+            (106, 114, 130),
+            MAT_CONCRETE,
+            yaw_deg,
+            indent=indent + 1,
+        )
+    )
+    parts.append(
+        make_part_xml(
+            ref,
+            "LaunchLipWedge",
+            (ramp_width, h3, len3),
+            rotate_offset(pos, yaw_deg, (0.0, y2 + h3 * 0.5, z3_center)),
+            (106, 114, 130),
             MAT_CONCRETE,
             yaw_deg,
             class_name="WedgePart",
@@ -299,11 +368,12 @@ def build_stunt_ramp_preview(
         make_part_xml(
             ref,
             "LeftRail",
-            (0.8, height + 1.0, length),
-            rotate_offset(pos, yaw_deg, (-width * 0.5 + 0.4, height * 0.5, 0.0)),
-            (255, 145, 20),
+            (0.8, y3 + 0.8, total_len),
+            rotate_offset(pos, yaw_deg, (-ramp_width * 0.5 + 0.4, y3 * 0.5, 0.0)),
+            (255, 155, 25),
             MAT_NEON,
             yaw_deg,
+            can_collide=False,
             indent=indent + 1,
         )
     )
@@ -311,11 +381,12 @@ def build_stunt_ramp_preview(
         make_part_xml(
             ref,
             "RightRail",
-            (0.8, height + 1.0, length),
-            rotate_offset(pos, yaw_deg, (width * 0.5 - 0.4, height * 0.5, 0.0)),
-            (255, 145, 20),
+            (0.8, y3 + 0.8, total_len),
+            rotate_offset(pos, yaw_deg, (ramp_width * 0.5 - 0.4, y3 * 0.5, 0.0)),
+            (255, 155, 25),
             MAT_NEON,
             yaw_deg,
+            can_collide=False,
             indent=indent + 1,
         )
     )
@@ -323,8 +394,8 @@ def build_stunt_ramp_preview(
         make_part_xml(
             ref,
             "JumpLipGlow",
-            (width, 1.2, 3.0),
-            rotate_offset(pos, yaw_deg, (0.0, height + 0.6, -length * 0.5 + 1.5)),
+            (ramp_width, 1.2, 3.0),
+            rotate_offset(pos, yaw_deg, (0.0, y3 + 0.6, -total_len * 0.5 + 1.5)),
             (255, 220, 40),
             MAT_NEON,
             yaw_deg,
@@ -613,12 +684,12 @@ def build_skyscraper_preview(
 def build_leo_city_edit_preview_xml(ref: RefGen) -> str:
     """
     Builds Workspace.LeoCity_EditPreview so that opening WorldOfDestruction.rbxlx in Roblox Studio
-    Edit Mode immediately displays the full 3D Leo City in front of the viewport camera.
-    Replaced cleanly at runtime by WorldBuilderService.script.luau when Play is pressed.
+    Edit Mode immediately displays the full 3D sunlit Leo City (9x9 blocks, 2,200x2,200 studs) in front
+    of the viewport camera. Replaced cleanly at runtime by WorldBuilderService.script.luau when Play is pressed.
     """
-    block_size = 180.0
-    road_width = 36.0
-    grid_radius = 3
+    block_size = 200.0
+    road_width = 42.0
+    grid_radius = 4
     usable = block_size - road_width
     total_span = (grid_radius * 2 + 1) * block_size + 240.0
     grid_extent = (grid_radius + 1) * block_size
@@ -629,16 +700,16 @@ def build_leo_city_edit_preview_xml(ref: RefGen) -> str:
             "CityBaseplate",
             (total_span, 4.0, total_span),
             (0.0, -2.0, 0.0),
-            (36, 40, 48),
+            (138, 144, 155),
             MAT_CONCRETE,
             indent=4,
         ),
         make_part_xml(
             ref,
             "OceanWater",
-            (360.0, 3.6, total_span),
+            (380.0, 3.6, total_span),
             ((grid_radius + 1.2) * block_size, -1.6, 0.0),
-            (28, 125, 210),
+            (38, 158, 238),
             MAT_GLASS,
             indent=4,
         ),
@@ -656,7 +727,7 @@ def build_leo_city_edit_preview_xml(ref: RefGen) -> str:
             "GrandCentralAveNS",
             (road_width, 0.34, grid_extent * 2.0),
             (0.0, 0.17, 0.0),
-            (26, 28, 35),
+            (62, 66, 76),
             MAT_ASPHALT,
             indent=4,
         )
@@ -668,7 +739,7 @@ def build_leo_city_edit_preview_xml(ref: RefGen) -> str:
                 "RoadNS",
                 (road_width, 0.3, grid_extent * 2.0),
                 (rx, 0.15, 0.0),
-                (28, 30, 38),
+                (64, 68, 78),
                 MAT_ASPHALT,
                 indent=4,
             )
@@ -680,7 +751,7 @@ def build_leo_city_edit_preview_xml(ref: RefGen) -> str:
                     "LaneDashNS",
                     (0.8, 0.34, 14.0),
                     (rx, 0.17, float(z)),
-                    (240, 195, 50),
+                    (250, 210, 60),
                     MAT_SMOOTH_PLASTIC,
                     indent=4,
                 )
@@ -693,7 +764,7 @@ def build_leo_city_edit_preview_xml(ref: RefGen) -> str:
                 "RoadEW",
                 (grid_extent * 2.0, 0.32, road_width),
                 (0.0, 0.16, rz),
-                (28, 30, 38),
+                (64, 68, 78),
                 MAT_ASPHALT,
                 indent=4,
             )
@@ -705,15 +776,15 @@ def build_leo_city_edit_preview_xml(ref: RefGen) -> str:
                     "LaneDashEW",
                     (14.0, 0.35, 0.8),
                     (float(x), 0.175, rz),
-                    (240, 195, 50),
+                    (250, 210, 60),
                     MAT_SMOOTH_PLASTIC,
                     indent=4,
                 )
             )
 
     # Crosswalks around the central Downtown & Leo Plaza intersections
-    for rx in (-270.0, -90.0, 90.0, 270.0):
-        for rz in (-270.0, -90.0, 90.0, 270.0):
+    for rx in (-300.0, -100.0, 100.0, 300.0):
+        for rz in (-300.0, -100.0, 100.0, 300.0):
             for s in (-2, -1, 1, 2):
                 roads_items.append(
                     make_part_xml(
@@ -721,7 +792,7 @@ def build_leo_city_edit_preview_xml(ref: RefGen) -> str:
                         "CrosswalkN",
                         (3.2, 0.36, 1.2),
                         (rx + s * 5.5, 0.18, rz - road_width * 0.5 - 2.0),
-                        (220, 225, 235),
+                        (242, 245, 250),
                         MAT_SMOOTH_PLASTIC,
                         indent=4,
                     )
@@ -732,7 +803,7 @@ def build_leo_city_edit_preview_xml(ref: RefGen) -> str:
                         "CrosswalkE",
                         (1.2, 0.36, 3.2),
                         (rx + road_width * 0.5 + 2.0, 0.18, rz + s * 5.5),
-                        (220, 225, 235),
+                        (242, 245, 250),
                         MAT_SMOOTH_PLASTIC,
                         indent=4,
                     )
@@ -749,7 +820,7 @@ def build_leo_city_edit_preview_xml(ref: RefGen) -> str:
                         "SidewalkBlock",
                         (usable, 0.26, usable),
                         (ox, 0.13, oz),
-                        (78, 84, 96),
+                        (192, 188, 178),
                         MAT_CONCRETE,
                         indent=4,
                     )
@@ -762,7 +833,7 @@ def build_leo_city_edit_preview_xml(ref: RefGen) -> str:
                         "SidewalkBlockW",
                         (side_w, 0.26, usable),
                         (ox - (road_width * 0.5 + side_w * 0.5), 0.13, oz),
-                        (78, 84, 96),
+                        (192, 188, 178),
                         MAT_CONCRETE,
                         indent=4,
                     )
@@ -773,7 +844,7 @@ def build_leo_city_edit_preview_xml(ref: RefGen) -> str:
                         "SidewalkBlockE",
                         (side_w, 0.26, usable),
                         (ox + (road_width * 0.5 + side_w * 0.5), 0.13, oz),
-                        (78, 84, 96),
+                        (192, 188, 178),
                         MAT_CONCRETE,
                         indent=4,
                     )
@@ -966,14 +1037,15 @@ def build_leo_city_edit_preview_xml(ref: RefGen) -> str:
                     h = 175.0
                 else:
                     h = 110.0 + ((abs(bx * 3 + bz * 5) % 4) * 18.0)
-                col = (28, 38, 62) if is_leo else (42, 48, 64)
+                col = (182, 206, 232) if is_leo else (210, 220, 235)
                 t_name = "LeoTower" if (bx == 0 and bz == -1) else "DowntownTower"
+                x_off = 44.0 if bx == 0 else 28.0
                 buildings_items.append(
                     build_skyscraper_preview(
                         ref,
-                        (ox - 26.0, 0.6, oz - 26.0),
-                        44.0,
-                        44.0,
+                        (ox - x_off, 0.6, oz - 26.0),
+                        40.0,
+                        40.0,
                         h,
                         col,
                         t_name,
@@ -985,11 +1057,11 @@ def build_leo_city_edit_preview_xml(ref: RefGen) -> str:
                     zones_items.append(
                         build_stunt_ramp_preview(
                             ref,
-                            (ox - 26.0, 0.6 + h, oz - 26.0 - 44.0 * 0.3),
+                            (ox - x_off, 0.6 + h, oz - 26.0 - 40.0 * 0.3),
                             0.0,
-                            18.0,
+                            26.0,
                             8.0,
-                            24.0,
+                            32.0,
                             "RooftopMegaJump",
                             indent=4,
                         )
@@ -997,11 +1069,11 @@ def build_leo_city_edit_preview_xml(ref: RefGen) -> str:
                 buildings_items.append(
                     build_skyscraper_preview(
                         ref,
-                        (ox + 26.0, 0.6, oz + 26.0),
+                        (ox + x_off, 0.6, oz + 26.0),
                         38.0,
                         38.0,
-                        88.0,
-                        (52, 58, 72),
+                        92.0,
+                        (226, 218, 204),
                         "GlassOfficeTower",
                         is_leo_tower=False,
                         indent=4,
@@ -1011,11 +1083,11 @@ def build_leo_city_edit_preview_xml(ref: RefGen) -> str:
                 buildings_items.append(
                     build_skyscraper_preview(
                         ref,
-                        (ox - 24.0, 0.6, oz - 24.0),
-                        34.0,
-                        34.0,
+                        (ox - 26.0, 0.6, oz - 24.0),
+                        36.0,
+                        36.0,
                         48.0,
-                        (64, 54, 58),
+                        (228, 178, 152),
                         "CityBlockBuilding",
                         is_leo_tower=False,
                         indent=4,
@@ -1024,11 +1096,11 @@ def build_leo_city_edit_preview_xml(ref: RefGen) -> str:
                 buildings_items.append(
                     build_skyscraper_preview(
                         ref,
-                        (ox + 24.0, 0.6, oz + 24.0),
-                        32.0,
-                        32.0,
+                        (ox + 26.0, 0.6, oz + 24.0),
+                        34.0,
+                        34.0,
                         38.0,
-                        (54, 62, 74),
+                        (195, 215, 232),
                         "CommercialStore",
                         is_leo_tower=False,
                         indent=4,
@@ -1104,27 +1176,27 @@ def build_lighting_xml(ref: RefGen) -> str:
     return f"""\t<Item class="Lighting" referent="{ref.next()}">
 \t\t<Properties>
 \t\t\t<string name="Name">Lighting</string>
-\t\t\t<float name="Brightness">2.5</float>
-\t\t\t<float name="ClockTime">15.5</float>
+\t\t\t<float name="Brightness">3.6</float>
+\t\t\t<float name="ClockTime">13.5</float>
 \t\t\t<float name="GeographicLatitude">34</float>
 \t\t\t<bool name="GlobalShadows">true</bool>
-\t\t\t<Color3 name="Ambient"><R>0.22</R><G>0.24</G><B>0.28</B></Color3>
-\t\t\t<Color3 name="OutdoorAmbient"><R>0.42</R><G>0.45</G><B>0.52</B></Color3>
+\t\t\t<Color3 name="Ambient"><R>0.6078</R><G>0.6353</G><B>0.6863</B></Color3>
+\t\t\t<Color3 name="OutdoorAmbient"><R>0.7255</R><G>0.7529</G><B>0.8039</B></Color3>
 \t\t</Properties>
 \t\t<Item class="Atmosphere" referent="{ref.next()}">
 \t\t\t<Properties>
 \t\t\t\t<string name="Name">Atmosphere</string>
-\t\t\t\t<float name="Density">0.32</float>
-\t\t\t\t<float name="Offset">0.15</float>
+\t\t\t\t<float name="Density">0.16</float>
+\t\t\t\t<float name="Offset">0.10</float>
 \t\t\t</Properties>
 \t\t</Item>
 \t\t<Item class="BloomEffect" referent="{ref.next()}">
 \t\t\t<Properties>
 \t\t\t\t<string name="Name">Bloom</string>
 \t\t\t\t<bool name="Enabled">true</bool>
-\t\t\t\t<float name="Intensity">0.4</float>
-\t\t\t\t<float name="Size">24</float>
-\t\t\t\t<float name="Threshold">0.95</float>
+\t\t\t\t<float name="Intensity">0.30</float>
+\t\t\t\t<float name="Size">18</float>
+\t\t\t\t<float name="Threshold">1.70</float>
 \t\t\t</Properties>
 \t\t</Item>
 \t</Item>"""

@@ -24,10 +24,12 @@
 	  "Survive 3-Star Heat for 45s!") with automatic rotation and payouts.
 ]]
 
+local Debris = game:GetService("Debris")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local ServerStorage = game:GetService("ServerStorage")
+local Workspace = game:GetService("Workspace")
 
 --------------------------------------------------------------------------------
 -- Constants & Tuning
@@ -58,8 +60,84 @@ local WANTED_BOUNTY_MULTIPLIER: { [number]: number } = {
 }
 
 --------------------------------------------------------------------------------
--- Live Chaos Missions / Timed Challenges Catalog
+-- 5-Act Story Campaign ("OPERATION: TAKE BACK LEO CITY") + Live Chaos Missions
 --------------------------------------------------------------------------------
+export type CampaignActDefinition = {
+	Act: number,
+	Id: string,
+	ActBadge: string,
+	Title: string,
+	StoryText: string,
+	ObjectiveText: string,
+	Goal: number,
+	RewardCash: number,
+	RewardChaos: number,
+	Kind: "PropsCount" | "HydrantsOrProps" | "DamageValue" | "StuntsAndCops" | "BossFinale",
+}
+
+local CAMPAIGN_ACTS: { CampaignActDefinition } = {
+	{
+		Act = 1,
+		Id = "act_1_break_out",
+		ActBadge = "ACT 1/5: BREAK OUT OF LEO PLAZA",
+		Title = "ACT 1/5: BREAK OUT OF LEO PLAZA",
+		StoryText = "Mayor Vance & MegaCorp have locked down Leo Plaza with surveillance barriers. Spark the uprising!",
+		ObjectiveText = "Smash 12 MegaCorp Props or Barriers to spark the uprising!",
+		Goal = 12,
+		RewardCash = 2500,
+		RewardChaos = 3500,
+		Kind = "PropsCount",
+	},
+	{
+		Act = 2,
+		Id = "act_2_midtown_grid",
+		ActBadge = "ACT 2/5: FLOOD THE MIDTOWN GRID",
+		Title = "ACT 2/5: FLOOD THE MIDTOWN GRID",
+		StoryText = "Cut off MegaCorp's downtown surveillance grid by wrecking hydrants and street power poles!",
+		ObjectiveText = "Smash 6 Fire Hydrants or Streetlights & reach a 3x Chaos Combo!",
+		Goal = 6,
+		RewardCash = 5000,
+		RewardChaos = 7500,
+		Kind = "HydrantsOrProps",
+	},
+	{
+		Act = 3,
+		Id = "act_3_industrial_sabotage",
+		ActBadge = "ACT 3/5: INDUSTRIAL SABOTAGE",
+		Title = "ACT 3/5: INDUSTRIAL SABOTAGE",
+		StoryText = "Cripple MegaCorp's supply depots and fuel reserves across the industrial sector!",
+		ObjectiveText = "Cause $15,000 in Destruction Value or detonate Boom Gas Station!",
+		Goal = 15000,
+		RewardCash = 10000,
+		RewardChaos = 15000,
+		Kind = "DamageValue",
+	},
+	{
+		Act = 4,
+		Id = "act_4_break_blockade",
+		ActBadge = "ACT 4/5: BREAK THE BLOCKADE",
+		Title = "ACT 4/5: BREAK THE BLOCKADE",
+		StoryText = "MegaCorp Enforcers have blockaded the avenues! Launch over their traps and wreck their cruisers!",
+		ObjectiveText = "Land 2 Stunt Jumps or Drifts & Wreck 1 Enforcer Cruiser!",
+		Goal = 3,
+		RewardCash = 18000,
+		RewardChaos = 25000,
+		Kind = "StuntsAndCops",
+	},
+	{
+		Act = 5,
+		Id = "act_5_goliath_finale",
+		ActBadge = "ACT 5/5 FINALE: DEFEAT MAYOR VANCE'S GOLIATH CONVOY",
+		Title = "ACT 5/5: DEFEAT MAYOR VANCE'S GOLIATH CONVOY",
+		StoryText = "FINAL SHOWDOWN! Mayor Vance's armored Boss Goliath is patrolling Grand Central Ave. Ram it to liberate Leo City!",
+		ObjectiveText = "Ram & Destroy Mayor Vance's Boss Goliath Convoy on Grand Central Ave!",
+		Goal = 1000,
+		RewardCash = 50000,
+		RewardChaos = 75000,
+		Kind = "BossFinale",
+	},
+}
+
 export type MissionDefinition = {
 	Id: string,
 	Title: string,
@@ -211,6 +289,10 @@ local ReportStuntRemote = ensureRemoteEvent(remotesFolder, "ReportStunt")
 local StyleCalloutRemote = ensureRemoteEvent(remotesFolder, "StyleCallout")
 local ComboCompletedRemote = ensureRemoteEvent(remotesFolder, "ComboCompleted")
 local MissionUpdateRemote = ensureRemoteEvent(remotesFolder, "MissionUpdate")
+local CampaignUpdateRemote = ensureRemoteEvent(remotesFolder, "CampaignUpdate")
+local BossUpdateRemote = ensureRemoteEvent(remotesFolder, "BossUpdate")
+local ReportBossImpactRemote = ensureRemoteEvent(remotesFolder, "ReportBossImpact")
+local NotificationRemote = ensureRemoteEvent(remotesFolder, "Notification")
 local SkipMissionRemote = ensureRemoteEvent(remotesFolder, "SkipMission")
 
 -- Root aliases in ReplicatedStorage for broad compatibility
@@ -228,12 +310,16 @@ type PlayerChaosState = {
 	ComboTimer: number,
 	UnbankedComboCash: number,
 	CurrentStreakName: string,
+	CampaignAct: number,
+	CampaignProgress: number,
+	CampaignCompleted: boolean,
 	MissionIndex: number,
 	MissionProgress: number,
 	MissionTimeRemaining: number,
 	MissionIntermission: number,
 	HeatSurvivalAccumulator: number,
 	LastClientReportAt: number,
+	LastBossHitAt: number,
 }
 
 local playerStates: { [number]: PlayerChaosState } = {}
@@ -395,6 +481,367 @@ local function addChaosScore(player: Player, points: number)
 end
 
 --------------------------------------------------------------------------------
+-- 5-Act Campaign & Act 5 Boss Goliath Convoy Management
+--------------------------------------------------------------------------------
+local BOSS_MAX_HEALTH = 1000
+local activeBossModel: Model? = nil
+local activeBossHull: BasePart? = nil
+local activeBossHpFill: Frame? = nil
+local activeBossHpLabel: TextLabel? = nil
+local activeBossHealth = BOSS_MAX_HEALTH
+local bossPatrolPhase = 0
+
+local function getCampaignActDef(actNum: number): CampaignActDefinition
+	local clamped = math.clamp(math.floor(actNum), 1, #CAMPAIGN_ACTS)
+	return CAMPAIGN_ACTS[clamped]
+end
+
+local function spawnBossGoliathConvoy(): Model
+	if activeBossModel and activeBossModel.Parent then
+		return activeBossModel
+	end
+
+	local existing = Workspace:FindFirstChild("MegaCorpBossConvoy")
+	if existing and existing:IsA("Model") then
+		existing:Destroy()
+	end
+
+	local m = Instance.new("Model")
+	m.Name = "MegaCorpBossConvoy"
+	m:SetAttribute("IsBossConvoy", true)
+	m:SetAttribute("BossMaxHealth", BOSS_MAX_HEALTH)
+	m:SetAttribute("BossHealth", BOSS_MAX_HEALTH)
+	activeBossHealth = BOSS_MAX_HEALTH
+
+	local hull = Instance.new("Part")
+	hull.Name = "GoliathHull"
+	hull.Size = Vector3.new(9.5, 6.2, 22.0)
+	hull.CFrame = CFrame.new(0, 3.8, -80)
+	hull.Color = Color3.fromRGB(22, 24, 32)
+	hull.Material = Enum.Material.Metal
+	hull.Anchored = true
+	hull.CanCollide = true
+	hull.TopSurface = Enum.SurfaceType.Smooth
+	hull.BottomSurface = Enum.SurfaceType.Smooth
+	hull.Parent = m
+
+	local goldTrim = Instance.new("Part")
+	goldTrim.Name = "GoldArmorBelt"
+	goldTrim.Size = Vector3.new(9.9, 1.4, 22.4)
+	goldTrim.CFrame = hull.CFrame * CFrame.new(0, 0.4, 0)
+	goldTrim.Color = Color3.fromRGB(255, 200, 45)
+	goldTrim.Material = Enum.Material.Metal
+	goldTrim.Anchored = false
+	goldTrim.CanCollide = false
+	goldTrim.Parent = m
+
+	local plow = Instance.new("WedgePart")
+	plow.Name = "GoliathRamPlow"
+	plow.Size = Vector3.new(10.4, 3.8, 4.2)
+	plow.CFrame = hull.CFrame * CFrame.new(0, -1.0, -12.6)
+	plow.Color = Color3.fromRGB(255, 185, 35)
+	plow.Material = Enum.Material.DiamondPlate
+	plow.Anchored = false
+	plow.CanCollide = false
+	plow.Parent = m
+
+	local beacon = Instance.new("Part")
+	beacon.Name = "BossBeacon"
+	beacon.Shape = Enum.PartType.Cylinder
+	beacon.Size = Vector3.new(12.0, 2.2, 2.2)
+	beacon.CFrame = hull.CFrame * CFrame.new(0, 9.0, 0) * CFrame.Angles(0, 0, math.rad(90))
+	beacon.Color = Color3.fromRGB(255, 45, 55)
+	beacon.Material = Enum.Material.Neon
+	beacon.Transparency = 0.25
+	beacon.Anchored = false
+	beacon.CanCollide = false
+	beacon.Parent = m
+
+	for _, child in ipairs({ goldTrim, plow, beacon }) do
+		local wc = Instance.new("WeldConstraint")
+		wc.Part0 = hull
+		wc.Part1 = child
+		wc.Parent = hull
+	end
+
+	-- 3D Floating Boss Health Bar BillboardGui
+	local bb = Instance.new("BillboardGui")
+	bb.Name = "BossHealthBillboard"
+	bb.Size = UDim2.fromOffset(260, 64)
+	bb.StudsOffset = Vector3.new(0, 8.5, 0)
+	bb.AlwaysOnTop = true
+	bb.MaxDistance = 450
+	bb.Parent = hull
+
+	local card = Instance.new("Frame")
+	card.Size = UDim2.fromScale(1, 1)
+	card.BackgroundColor3 = Color3.fromRGB(16, 18, 28)
+	card.BackgroundTransparency = 0.1
+	card.BorderSizePixel = 0
+	card.Parent = bb
+
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0, 10)
+	corner.Parent = card
+
+	local stroke = Instance.new("UIStroke")
+	stroke.Color = Color3.fromRGB(255, 200, 45)
+	stroke.Thickness = 2.5
+	stroke.Parent = card
+
+	local titleLbl = Instance.new("TextLabel")
+	titleLbl.Size = UDim2.new(1, -12, 0, 26)
+	titleLbl.Position = UDim2.fromOffset(6, 4)
+	titleLbl.BackgroundTransparency = 1
+	titleLbl.Font = Enum.Font.GothamBlack
+	titleLbl.Text = "MAYOR VANCE • BOSS GOLIATH [RAM ME!]"
+	titleLbl.TextColor3 = Color3.fromRGB(255, 215, 55)
+	titleLbl.TextScaled = true
+	titleLbl.Parent = card
+
+	local barBg = Instance.new("Frame")
+	barBg.Size = UDim2.new(1, -16, 0, 20)
+	barBg.Position = UDim2.fromOffset(8, 34)
+	barBg.BackgroundColor3 = Color3.fromRGB(36, 20, 24)
+	barBg.BorderSizePixel = 0
+	barBg.Parent = card
+
+	local barCorner = Instance.new("UICorner")
+	barCorner.CornerRadius = UDim.new(0, 6)
+	barCorner.Parent = barBg
+
+	local barFill = Instance.new("Frame")
+	barFill.Name = "Fill"
+	barFill.Size = UDim2.fromScale(1, 1)
+	barFill.BackgroundColor3 = Color3.fromRGB(255, 55, 65)
+	barFill.BorderSizePixel = 0
+	barFill.Parent = barBg
+
+	local fillCorner = Instance.new("UICorner")
+	fillCorner.CornerRadius = UDim.new(0, 6)
+	fillCorner.Parent = barFill
+
+	local hpText = Instance.new("TextLabel")
+	hpText.Size = UDim2.fromScale(1, 1)
+	hpText.BackgroundTransparency = 1
+	hpText.Font = Enum.Font.GothamBlack
+	hpText.Text = string.format("HP: %d / %d", BOSS_MAX_HEALTH, BOSS_MAX_HEALTH)
+	hpText.TextColor3 = Color3.fromRGB(255, 255, 255)
+	hpText.TextScaled = true
+	hpText.Parent = barBg
+
+	m.PrimaryPart = hull
+	m.Parent = Workspace
+
+	activeBossModel = m
+	activeBossHull = hull
+	activeBossHpFill = barFill
+	activeBossHpLabel = hpText
+	return m
+end
+
+local function spawnGoldCashCrateDrop(pos: Vector3)
+	local crate = Instance.new("Part")
+	crate.Name = "BossGoldCrate"
+	crate.Size = Vector3.new(2.6, 2.6, 2.6)
+	crate.Position = pos + Vector3.new((math.random() - 0.5) * 8, 4.5, (math.random() - 0.5) * 8)
+	crate.Color = Color3.fromRGB(255, 210, 45)
+	crate.Material = Enum.Material.Neon
+	crate.Anchored = false
+	crate.CanCollide = false
+	crate.Parent = Workspace
+	crate.AssemblyLinearVelocity = Vector3.new((math.random() - 0.5) * 28, 22, (math.random() - 0.5) * 28)
+	Debris:AddItem(crate, 2.5)
+end
+
+local function syncCampaignAttributesToPlayer(player: Player, state: PlayerChaosState)
+	local actDef = getCampaignActDef(state.CampaignAct)
+	local bossPos = if activeBossHull and activeBossHull.Parent then activeBossHull.Position else Vector3.new(0, 3.8, -80)
+	local isBossAct = (state.CampaignAct == 5 and not state.CampaignCompleted)
+
+	player:SetAttribute("CampaignAct", state.CampaignAct)
+	player:SetAttribute("CampaignTotalActs", #CAMPAIGN_ACTS)
+	player:SetAttribute("CampaignActTitle", actDef.Title)
+	player:SetAttribute("CampaignStoryText", actDef.StoryText)
+	player:SetAttribute("CampaignObjectiveText", actDef.ObjectiveText)
+	player:SetAttribute("CampaignProgress", math.min(actDef.Goal, math.floor(state.CampaignProgress)))
+	player:SetAttribute("CampaignGoal", actDef.Goal)
+	player:SetAttribute("CampaignRewardCash", actDef.RewardCash)
+	player:SetAttribute("CampaignCompleted", state.CampaignCompleted)
+
+	player:SetAttribute("BossActive", isBossAct)
+	player:SetAttribute("BossHealth", if isBossAct then math.max(0, math.floor(activeBossHealth)) else 0)
+	player:SetAttribute("BossMaxHealth", BOSS_MAX_HEALTH)
+	player:SetAttribute("BossPosition", bossPos)
+
+	-- Keep Mission* attributes synced to Campaign Act while Campaign is in progress so HUD works seamlessly
+	if not state.CampaignCompleted then
+		player:SetAttribute("MissionId", actDef.Id)
+		player:SetAttribute("MissionTitle", actDef.Title .. " — " .. actDef.ObjectiveText)
+		player:SetAttribute("MissionDescription", actDef.StoryText)
+		player:SetAttribute("MissionProgress", math.min(actDef.Goal, math.floor(state.CampaignProgress)))
+		player:SetAttribute("MissionGoal", actDef.Goal)
+		player:SetAttribute("MissionReward", actDef.RewardCash)
+	end
+
+	CampaignUpdateRemote:FireClient(player, {
+		Act = state.CampaignAct,
+		TotalActs = #CAMPAIGN_ACTS,
+		ActTitle = actDef.Title,
+		StoryText = actDef.StoryText,
+		ObjectiveText = actDef.ObjectiveText,
+		Progress = math.min(actDef.Goal, math.floor(state.CampaignProgress)),
+		Goal = actDef.Goal,
+		RewardCash = actDef.RewardCash,
+		Completed = state.CampaignCompleted,
+		BossActive = isBossAct,
+		BossHealth = activeBossHealth,
+		BossMaxHealth = BOSS_MAX_HEALTH,
+		BossPosition = bossPos,
+	})
+end
+
+local function advanceCampaignProgress(player: Player, eventKind: string, amount: number)
+	local state = playerStates[player.UserId]
+	if not state or state.CampaignCompleted then
+		return
+	end
+
+	local actDef = getCampaignActDef(state.CampaignAct)
+	local matched = false
+
+	if actDef.Kind == "PropsCount" and (eventKind == "PropsCount" or eventKind == "Hydrants") then
+		state.CampaignProgress += amount
+		matched = true
+	elseif actDef.Kind == "HydrantsOrProps" and (eventKind == "Hydrants" or eventKind == "PropsCount" or eventKind == "Combo3x") then
+		state.CampaignProgress += amount
+		matched = true
+	elseif actDef.Kind == "DamageValue" and (eventKind == "DamageValue" or eventKind == "GasExplosion") then
+		state.CampaignProgress += amount
+		matched = true
+	elseif actDef.Kind == "StuntsAndCops" and (eventKind == "Stunt" or eventKind == "CopTakedowns" or eventKind == "PropsCount") then
+		state.CampaignProgress += amount
+		matched = true
+	elseif actDef.Kind == "BossFinale" and (eventKind == "BossDamage" or eventKind == "DamageValue") then
+		state.CampaignProgress += amount
+		matched = true
+	end
+
+	if not matched then
+		return
+	end
+
+	if state.CampaignProgress >= actDef.Goal then
+		-- Act Completed!
+		local magnetMult = getMagnetMultiplier(player)
+		local rewardCash = math.floor(actDef.RewardCash * magnetMult)
+		local rewardChaos = math.floor(actDef.RewardChaos * magnetMult)
+		addCash(player, rewardCash, "CampaignAct" .. tostring(state.CampaignAct))
+		addChaosScore(player, rewardChaos)
+
+		if state.CampaignAct < #CAMPAIGN_ACTS then
+			local completedActNum = state.CampaignAct
+			state.CampaignAct += 1
+			state.CampaignProgress = 0
+			if state.CampaignAct == 5 then
+				spawnBossGoliathConvoy()
+			end
+			syncCampaignAttributesToPlayer(player, state)
+
+			local nextActDef = getCampaignActDef(state.CampaignAct)
+			local bannerMsg = string.format("ACT %d COMPLETE! +$%d • NEXT: %s", completedActNum, rewardCash, nextActDef.Title)
+			StyleCalloutRemote:FireClient(player, {
+				Callout = bannerMsg,
+				Multiplier = state.ComboMultiplier,
+				ComboCount = state.ComboCount,
+				CashAwarded = rewardCash,
+				ChaosAwarded = rewardChaos,
+				IsMissionBanner = true,
+			})
+			NotificationRemote:FireClient(player, bannerMsg, "Campaign")
+		else
+			-- ACT 5 GRAND FINALE VICTORY!
+			state.CampaignProgress = actDef.Goal
+			state.CampaignCompleted = true
+			activeBossHealth = 0
+			if activeBossModel and activeBossModel.Parent then
+				activeBossModel:Destroy()
+				activeBossModel = nil
+				activeBossHull = nil
+			end
+			syncCampaignAttributesToPlayer(player, state)
+
+			-- Award 5,000 XP via DestructionBindable / XPGained if available
+			local xpEvent = ServerStorage:FindFirstChild("AwardXPEvent")
+			if xpEvent and xpEvent:IsA("BindableEvent") then
+				xpEvent:Fire(player, 5000, "CampaignVictory")
+			end
+
+			local victoryMsg = "VICTORY! LEO CITY LIBERATED! +$50,000"
+			StyleCalloutRemote:FireClient(player, {
+				Callout = victoryMsg,
+				Multiplier = 10,
+				IsOverdrive = true,
+				ComboCount = state.ComboCount,
+				CashAwarded = rewardCash,
+				ChaosAwarded = rewardChaos,
+				IsMissionBanner = true,
+			})
+			NotificationRemote:FireClient(player, victoryMsg, "Victory")
+		end
+	else
+		syncCampaignAttributesToPlayer(player, state)
+	end
+end
+
+local function damageBossConvoy(player: Player, rawDamage: number)
+	local state = playerStates[player.UserId]
+	if not state or state.CampaignCompleted or state.CampaignAct ~= 5 then
+		return
+	end
+	local now = os.clock()
+	if now - state.LastBossHitAt < 0.45 then
+		return
+	end
+	state.LastBossHitAt = now
+
+	local dmg = math.clamp(math.floor(rawDamage), 200, 350)
+	activeBossHealth = math.max(0, activeBossHealth - dmg)
+	if activeBossModel then
+		activeBossModel:SetAttribute("BossHealth", activeBossHealth)
+	end
+	if activeBossHpFill then
+		activeBossHpFill.Size = UDim2.fromScale(math.clamp(activeBossHealth / BOSS_MAX_HEALTH, 0, 1), 1)
+	end
+	if activeBossHpLabel then
+		activeBossHpLabel.Text = string.format("HP: %d / %d", activeBossHealth, BOSS_MAX_HEALTH)
+	end
+	if activeBossHull then
+		spawnGoldCashCrateDrop(activeBossHull.Position)
+	end
+
+	addCash(player, 450, "BossGoliathHit")
+	StyleCalloutRemote:FireClient(player, {
+		Callout = string.format("GOLIATH HIT! -%d HP (+$450)", dmg),
+		Multiplier = state.ComboMultiplier,
+		ComboCount = state.ComboCount,
+		CashAwarded = 450,
+	})
+	BossUpdateRemote:FireClient(player, {
+		BossHealth = activeBossHealth,
+		BossMaxHealth = BOSS_MAX_HEALTH,
+		DamageDealt = dmg,
+	})
+
+	advanceCampaignProgress(player, "BossDamage", dmg)
+end
+
+ReportBossImpactRemote.OnServerEvent:Connect(function(player: Player, impactSpeed: any)
+	local spd = math.clamp(tonumber(impactSpeed) or 65, 20, 160)
+	damageBossConvoy(player, math.clamp(spd * 3.8, 220, 350))
+end)
+
+--------------------------------------------------------------------------------
 -- Live Chaos Missions Management
 --------------------------------------------------------------------------------
 local function getActiveMissionDef(state: PlayerChaosState): MissionDefinition
@@ -404,6 +851,11 @@ end
 
 local function syncMissionToPlayer(player: Player, state: PlayerChaosState, status: string?)
 	local def = getActiveMissionDef(state)
+	-- While the 5-Act Story Campaign is active, keep MissionTitle/Progress/Goal synced to the Campaign Act!
+	if not state.CampaignCompleted then
+		syncCampaignAttributesToPlayer(player, state)
+		return
+	end
 	player:SetAttribute("MissionId", def.Id)
 	player:SetAttribute("MissionTitle", def.Title)
 	player:SetAttribute("MissionDescription", def.Description)
@@ -564,9 +1016,13 @@ local function registerComboAction(
 
 	syncComboAttributes(player, state)
 
-	-- Advance active missions that track damage dollar value or combo multiplier
+	-- Advance active missions & 5-Act Story Campaign
 	advanceMissionProgress(player, "DamageValue", awardedCash * 15)
 	advanceMissionProgress(player, "ComboMultiplier", state.ComboMultiplier)
+	advanceCampaignProgress(player, "DamageValue", awardedCash * 18)
+	if state.ComboMultiplier >= 3 then
+		advanceCampaignProgress(player, "Combo3x", 1)
+	end
 
 	-- Broadcast Heat increase to PoliceHeatService
 	if heatDelta > 0 then
@@ -643,7 +1099,11 @@ local function handleDestructionEvent(
 	local baseCash = tonumber(baseCashReward) or 25
 	local pos = if typeof(worldPos) == "Vector3" then worldPos else nil
 	local isChainExplosion = false
-	local heatGenerated = 8 -- base heat progress points (0..100 per star)
+	-- Paced Police Heat per prop:
+	-- Small/medium street props (Crate, Fence, Bench, TrashCan, Mailbox, Cone): 3.5 heat (~28 small props to trigger 1 Star!)
+	-- Streetlights / Hydrants / Bus Stops / Billboards: 5.0 heat
+	-- Gas Pumps / Explosive Barrels: 14.0 heat
+	local heatGenerated = 3.5
 
 	if type(objectTypeOrInfo) == "table" then
 		objectType = tostring(objectTypeOrInfo.Type or objectTypeOrInfo.propType or objectTypeOrInfo.Category or objectTypeOrInfo.Name or "Prop")
@@ -654,9 +1114,6 @@ local function handleDestructionEvent(
 			pos = objectTypeOrInfo.position
 		end
 		isChainExplosion = objectTypeOrInfo.IsExplosion == true or objectTypeOrInfo.isExplosion == true or objectTypeOrInfo.ChainExplosion == true
-		if type(objectTypeOrInfo.Heat) == "number" then
-			heatGenerated = objectTypeOrInfo.Heat
-		end
 	elseif type(objectTypeOrInfo) == "string" then
 		objectType = objectTypeOrInfo
 	elseif typeof(objectTypeOrInfo) == "Instance" then
@@ -677,6 +1134,11 @@ local function handleDestructionEvent(
 		end
 	end
 
+	local upperType = string.upper(objectType)
+	if string.find(upperType, "LIGHT") or string.find(upperType, "HYDRANT") or string.find(upperType, "BUS") or string.find(upperType, "BILLBOARD") or string.find(upperType, "TOWER") then
+		heatGenerated = 5.0
+	end
+
 	baseCash = math.clamp(math.floor(baseCash), 5, 2500)
 	local baseChaos = baseCash * 3
 
@@ -687,22 +1149,33 @@ local function handleDestructionEvent(
 	if callout == "CHAIN EXPLOSION!" then
 		baseCash = math.floor(baseCash * 1.6)
 		baseChaos = math.floor(baseChaos * 1.8)
-		heatGenerated = math.max(heatGenerated, 18)
+		heatGenerated = 14.0
+		advanceCampaignProgress(player, "GasExplosion", 5000)
 	elseif callout == "HYDRO BLAST!" then
 		baseCash = math.floor(baseCash * 1.35)
 		baseChaos = math.floor(baseChaos * 1.4)
-		heatGenerated = math.max(heatGenerated, 12)
+		heatGenerated = 5.0
 		advanceMissionProgress(player, "Hydrants", 1)
+		advanceCampaignProgress(player, "Hydrants", 1)
 	elseif callout == "COP TAKEDOWN!" then
 		baseCash = math.max(baseCash, 150)
 		baseChaos = math.max(baseChaos, 500)
-		heatGenerated = math.max(heatGenerated, 25)
+		heatGenerated = 18.0
 		advanceMissionProgress(player, "CopTakedowns", 1)
+		advanceCampaignProgress(player, "CopTakedowns", 1)
 	end
 
 	local totalDest = (tonumber(player:GetAttribute("TotalDestructions")) or 0) + 1
 	player:SetAttribute("TotalDestructions", totalDest)
 	advanceMissionProgress(player, "PropsCount", 1)
+	advanceCampaignProgress(player, "PropsCount", 1)
+
+	-- If player is in Act 5 and smashes props near the Boss Convoy, deal bonus collateral damage to Goliath!
+	if state and state.CampaignAct == 5 and not state.CampaignCompleted then
+		if pos and activeBossHull and (pos - activeBossHull.Position).Magnitude <= 85 then
+			damageBossConvoy(player, 200)
+		end
+	end
 
 	registerComboAction(player, baseCash, baseChaos, callout, heatGenerated, pos)
 end
@@ -720,22 +1193,25 @@ local function handleStuntEvent(player: Player, stuntType: string, rawValue: num
 		local clampedAir = math.clamp(val, 0.4, 12.0)
 		local baseCash = math.floor(35 * clampedAir)
 		local baseChaos = math.floor(120 * clampedAir)
-		registerComboAction(player, baseCash, baseChaos, "MEGA AIR!", 4, pos)
+		registerComboAction(player, baseCash, baseChaos, "MEGA AIR!", 2.5, pos)
 		advanceMissionProgress(player, "DriftScore", baseChaos)
 		advanceMissionProgress(player, "Airtime", math.ceil(clampedAir))
+		advanceCampaignProgress(player, "Stunt", 1)
 	elseif string.find(kind, "DRIFT") then
 		-- Drift score (val = drift duration seconds or drift score points)
 		local normalized = if val > 25 then math.clamp(val / 100, 0.5, 10) else math.clamp(val, 0.5, 10)
 		local baseCash = math.floor(30 * normalized)
 		local baseChaos = math.floor(110 * normalized)
-		registerComboAction(player, baseCash, baseChaos, "DRIFT KING!", 3, pos)
+		registerComboAction(player, baseCash, baseChaos, "DRIFT KING!", 2.0, pos)
 		advanceMissionProgress(player, "DriftScore", baseChaos)
+		advanceCampaignProgress(player, "Stunt", 1)
 	elseif string.find(kind, "NEAR") or string.find(kind, "MISS") then
 		-- High-speed traffic/police near-miss
 		local baseCash = 40
 		local baseChaos = 125
-		registerComboAction(player, baseCash, baseChaos, "NEAR MISS!", 2, pos)
+		registerComboAction(player, baseCash, baseChaos, "NEAR MISS!", 1.5, pos)
 		advanceMissionProgress(player, "DriftScore", baseChaos)
+		advanceCampaignProgress(player, "Stunt", 1)
 	end
 end
 
@@ -752,7 +1228,8 @@ local function handlePoliceTakedown(player: Player, unitType: string?, worldPos:
 	player:SetAttribute("CopTakedowns", takedowns)
 
 	advanceMissionProgress(player, "CopTakedowns", 1)
-	registerComboAction(player, baseCash, baseChaos, "COP TAKEDOWN!", 22, pos)
+	advanceCampaignProgress(player, "CopTakedowns", 1)
+	registerComboAction(player, baseCash, baseChaos, "COP TAKEDOWN!", 18, pos)
 
 	-- Persist milestone update
 	UpdatePlayerDataBindable:Fire(player, {
@@ -889,14 +1366,19 @@ local function onPlayerAdded(player: Player)
 		ComboTimer = 0,
 		UnbankedComboCash = 0,
 		CurrentStreakName = "",
+		CampaignAct = 1,
+		CampaignProgress = 0,
+		CampaignCompleted = false,
 		MissionIndex = 1,
 		MissionProgress = 0,
 		MissionTimeRemaining = LIVE_CHAOS_MISSIONS[1].Duration,
 		MissionIntermission = 0,
 		HeatSurvivalAccumulator = 0,
 		LastClientReportAt = 0,
+		LastBossHitAt = 0,
 	}
 	playerStates[player.UserId] = state
+	syncCampaignAttributesToPlayer(player, state)
 
 	-- Mirror HeatStars attribute to leaderstats.HeatLevel automatically
 	player:GetAttributeChangedSignal("HeatStars"):Connect(function()
@@ -907,9 +1389,10 @@ local function onPlayerAdded(player: Player)
 		end
 	end)
 
-	-- Start first Live Chaos Mission shortly after join
+	-- Start first Live Chaos Mission / Campaign Act shortly after join
 	task.delay(1.5, function()
 		if player.Parent and playerStates[player.UserId] == state then
+			syncCampaignAttributesToPlayer(player, state)
 			startMission(player, state, 1)
 		end
 	end)
@@ -935,6 +1418,32 @@ RunService.Heartbeat:Connect(function(dt: number)
 	local shouldBroadcastMission = missionSyncAccumulator >= 1.0
 	if shouldBroadcastMission then
 		missionSyncAccumulator = 0
+	end
+
+	-- Update Act 5 Boss Goliath Convoy patrol along Grand Central Avenue ((-140 <-> 140)) & check player ramming
+	if activeBossHull and activeBossHull.Parent and activeBossHealth > 0 then
+		bossPatrolPhase += dt * 0.45
+		local zPos = math.sin(bossPatrolPhase) * 140
+		local dirZ = math.cos(bossPatrolPhase)
+		local yaw = if dirZ >= 0 then math.pi else 0
+		activeBossHull.CFrame = CFrame.new(0, 3.8, zPos) * CFrame.Angles(0, yaw, 0)
+
+		for _, plr in ipairs(Players:GetPlayers()) do
+			local st = playerStates[plr.UserId]
+			if st and st.CampaignAct == 5 and not st.CampaignCompleted then
+				plr:SetAttribute("BossPosition", activeBossHull.Position)
+				local char = plr.Character
+				local hum = char and char:FindFirstChildOfClass("Humanoid")
+				local refPart: BasePart? = if hum and hum.SeatPart then hum.SeatPart else (char and char:FindFirstChild("HumanoidRootPart") :: BasePart?)
+				if refPart then
+					local dist = (refPart.Position - activeBossHull.Position).Magnitude
+					local spd = refPart.AssemblyLinearVelocity.Magnitude
+					if dist <= 22.0 and spd >= 24.0 then
+						damageBossConvoy(plr, math.clamp(spd * 4.0, 220, 350))
+					end
+				end
+			end
+		end
 	end
 
 	for _, player in ipairs(Players:GetPlayers()) do

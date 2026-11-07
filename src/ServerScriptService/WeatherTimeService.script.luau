@@ -46,6 +46,8 @@ type WeatherPreset = {
 	outdoorAmbient: Color3,
 	colorShiftTop: Color3,
 	atmosphereDensity: number,
+	atmosphereGlare: number,
+	atmosphereHaze: number,
 	atmosphereColor: Color3,
 	atmosphereDecay: Color3,
 	roadReflectance: number,
@@ -54,76 +56,89 @@ type WeatherPreset = {
 	isRaining: boolean,
 	hasLightning: boolean,
 	bloomIntensity: number,
+	requiresNightCycle: boolean,
 }
 
 local PRESETS: { WeatherPreset } = {
 	{
 		name = "Sunny",
 		clockTime = 13.5,
-		brightness = 3.0,
-		ambient = Color3.fromRGB(115, 125, 140),
-		outdoorAmbient = Color3.fromRGB(145, 155, 175),
-		colorShiftTop = Color3.fromRGB(255, 250, 235),
-		atmosphereDensity = 0.26,
-		atmosphereColor = Color3.fromRGB(190, 220, 255),
-		atmosphereDecay = Color3.fromRGB(120, 155, 200),
+		brightness = 3.6,
+		ambient = Color3.fromRGB(155, 162, 175),
+		outdoorAmbient = Color3.fromRGB(185, 192, 205),
+		colorShiftTop = Color3.fromRGB(255, 252, 240),
+		atmosphereDensity = 0.16,
+		atmosphereGlare = 0.05,
+		atmosphereHaze = 0.4,
+		atmosphereColor = Color3.fromRGB(205, 228, 255),
+		atmosphereDecay = Color3.fromRGB(165, 190, 225),
 		roadReflectance = 0.04,
 		roadMaterial = Enum.Material.Asphalt,
 		gripMultiplier = 1.0,
 		isRaining = false,
 		hasLightning = false,
-		bloomIntensity = 0.65,
+		bloomIntensity = 0.30,
+		requiresNightCycle = false,
 	},
 	{
-		name = "GoldenHourSunset",
-		clockTime = 17.8,
-		brightness = 2.4,
-		ambient = Color3.fromRGB(125, 85, 70),
-		outdoorAmbient = Color3.fromRGB(175, 110, 85),
-		colorShiftTop = Color3.fromRGB(255, 165, 95),
-		atmosphereDensity = 0.34,
-		atmosphereColor = Color3.fromRGB(255, 150, 95),
-		atmosphereDecay = Color3.fromRGB(130, 65, 85),
-		roadReflectance = 0.12,
+		name = "GoldenAfternoon",
+		clockTime = 15.5,
+		brightness = 3.35,
+		ambient = Color3.fromRGB(162, 155, 150),
+		outdoorAmbient = Color3.fromRGB(195, 182, 172),
+		colorShiftTop = Color3.fromRGB(255, 232, 195),
+		atmosphereDensity = 0.18,
+		atmosphereGlare = 0.06,
+		atmosphereHaze = 0.45,
+		atmosphereColor = Color3.fromRGB(255, 215, 175),
+		atmosphereDecay = Color3.fromRGB(185, 145, 135),
+		roadReflectance = 0.06,
 		roadMaterial = Enum.Material.Asphalt,
-		gripMultiplier = 0.98,
+		gripMultiplier = 1.0,
 		isRaining = false,
 		hasLightning = false,
-		bloomIntensity = 0.95,
+		bloomIntensity = 0.35,
+		requiresNightCycle = false,
 	},
 	{
 		name = "NeonNight",
 		clockTime = 0.5,
-		brightness = 1.2,
-		ambient = Color3.fromRGB(38, 46, 72),
-		outdoorAmbient = Color3.fromRGB(52, 64, 98),
-		colorShiftTop = Color3.fromRGB(95, 135, 255),
-		atmosphereDensity = 0.38,
-		atmosphereColor = Color3.fromRGB(28, 36, 62),
-		atmosphereDecay = Color3.fromRGB(16, 22, 42),
+		brightness = 1.6,
+		ambient = Color3.fromRGB(58, 68, 96),
+		outdoorAmbient = Color3.fromRGB(75, 88, 122),
+		colorShiftTop = Color3.fromRGB(115, 155, 255),
+		atmosphereDensity = 0.28,
+		atmosphereGlare = 0.10,
+		atmosphereHaze = 0.75,
+		atmosphereColor = Color3.fromRGB(38, 48, 78),
+		atmosphereDecay = Color3.fromRGB(24, 32, 54),
 		roadReflectance = 0.18,
 		roadMaterial = Enum.Material.SmoothPlastic,
 		gripMultiplier = 0.95,
 		isRaining = false,
 		hasLightning = false,
-		bloomIntensity = 1.35,
+		bloomIntensity = 0.85,
+		requiresNightCycle = true,
 	},
 	{
 		name = "Rainstorm",
 		clockTime = 22.0,
-		brightness = 0.95,
-		ambient = Color3.fromRGB(32, 42, 62),
-		outdoorAmbient = Color3.fromRGB(45, 58, 82),
-		colorShiftTop = Color3.fromRGB(120, 160, 220),
-		atmosphereDensity = 0.48,
-		atmosphereColor = Color3.fromRGB(35, 45, 68),
-		atmosphereDecay = Color3.fromRGB(20, 26, 44),
-		roadReflectance = 0.38,
+		brightness = 1.35,
+		ambient = Color3.fromRGB(52, 64, 88),
+		outdoorAmbient = Color3.fromRGB(68, 82, 110),
+		colorShiftTop = Color3.fromRGB(135, 175, 230),
+		atmosphereDensity = 0.36,
+		atmosphereGlare = 0.12,
+		atmosphereHaze = 0.95,
+		atmosphereColor = Color3.fromRGB(48, 60, 86),
+		atmosphereDecay = Color3.fromRGB(28, 36, 58),
+		roadReflectance = 0.32,
 		roadMaterial = Enum.Material.Glass,
 		gripMultiplier = 0.85,
 		isRaining = true,
 		hasLightning = true,
-		bloomIntensity = 1.45,
+		bloomIntensity = 0.95,
+		requiresNightCycle = true,
 	},
 }
 
@@ -132,7 +147,7 @@ local PRESETS: { WeatherPreset } = {
 --------------------------------------------------------------------------------
 local rainPart = Instance.new("Part")
 rainPart.Name = "LeoCityRainCanopy"
-rainPart.Size = Vector3.new(1400, 2, 1400)
+rainPart.Size = Vector3.new(2200, 2, 2200)
 rainPart.Position = Vector3.new(0, 190, 0)
 rainPart.Anchored = true
 rainPart.CanCollide = false
@@ -158,7 +173,7 @@ local function updateRoadWetness(reflectance: number, material: Enum.Material)
 		return
 	end
 	for _, part in ipairs(roads:GetChildren()) do
-		if part:IsA("BasePart") and (part.Name == "RoadNS" or part.Name == "RoadEW") then
+		if part:IsA("BasePart") and (part.Name == "RoadNS" or part.Name == "RoadEW" or part.Name == "GrandCentralAveNS") then
 			part.Reflectance = reflectance
 			part.Material = material
 		end
@@ -171,8 +186,8 @@ end
 local function triggerLightningStrike()
 	Workspace:SetAttribute("LightningFlash", true)
 
-	local strikeX = math.random(-520, 520)
-	local strikeZ = math.random(-520, 520)
+	local strikeX = math.random(-820, 820)
+	local strikeZ = math.random(-820, 820)
 
 	local boltModel = Instance.new("Model")
 	boltModel.Name = "LightningBolt"
@@ -211,11 +226,15 @@ end
 --------------------------------------------------------------------------------
 -- APPLY WEATHER & CYCLE LOOP
 --------------------------------------------------------------------------------
-local DWELL_DURATION = 55.0
+local DWELL_DURATION = 65.0
 local TRANSITION_DURATION = 8.0
 local currentPresetIndex = 1
 
-local function applyPreset(preset: WeatherPreset)
+if Workspace:GetAttribute("AllowNightWeatherCycle") == nil then
+	Workspace:SetAttribute("AllowNightWeatherCycle", false)
+end
+
+local function applyPreset(preset: WeatherPreset, instant: boolean?)
 	Workspace:SetAttribute("CurrentWeather", preset.name)
 	Workspace:SetAttribute("WeatherState", preset.name)
 	Workspace:SetAttribute("TimeOfDayState", preset.name)
@@ -223,35 +242,63 @@ local function applyPreset(preset: WeatherPreset)
 	Workspace:SetAttribute("IsRaining", preset.isRaining)
 	Workspace:SetAttribute("ClockTime", preset.clockTime)
 
-	local tweenInfo = TweenInfo.new(TRANSITION_DURATION, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
-	TweenService:Create(Lighting, tweenInfo, {
-		ClockTime = preset.clockTime,
-		Brightness = preset.brightness,
-		Ambient = preset.ambient,
-		OutdoorAmbient = preset.outdoorAmbient,
-		ColorShift_Top = preset.colorShiftTop,
-	}):Play()
-
-	if atmosphere then
-		TweenService:Create(atmosphere, tweenInfo, {
-			Density = preset.atmosphereDensity,
-			Color = preset.atmosphereColor,
-			Decay = preset.atmosphereDecay,
+	if instant then
+		Lighting.ClockTime = preset.clockTime
+		Lighting.Brightness = preset.brightness
+		Lighting.Ambient = preset.ambient
+		Lighting.OutdoorAmbient = preset.outdoorAmbient
+		Lighting.ColorShift_Top = preset.colorShiftTop
+		if atmosphere then
+			atmosphere.Density = preset.atmosphereDensity
+			atmosphere.Glare = preset.atmosphereGlare
+			atmosphere.Haze = preset.atmosphereHaze
+			atmosphere.Color = preset.atmosphereColor
+			atmosphere.Decay = preset.atmosphereDecay
+		end
+		if bloom then
+			bloom.Intensity = preset.bloomIntensity
+		end
+	else
+		local tweenInfo = TweenInfo.new(TRANSITION_DURATION, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
+		TweenService:Create(Lighting, tweenInfo, {
+			ClockTime = preset.clockTime,
+			Brightness = preset.brightness,
+			Ambient = preset.ambient,
+			OutdoorAmbient = preset.outdoorAmbient,
+			ColorShift_Top = preset.colorShiftTop,
 		}):Play()
-	end
 
-	if bloom then
-		TweenService:Create(bloom, tweenInfo, {
-			Intensity = preset.bloomIntensity,
-		}):Play()
+		if atmosphere then
+			TweenService:Create(atmosphere, tweenInfo, {
+				Density = preset.atmosphereDensity,
+				Glare = preset.atmosphereGlare,
+				Haze = preset.atmosphereHaze,
+				Color = preset.atmosphereColor,
+				Decay = preset.atmosphereDecay,
+			}):Play()
+		end
+
+		if bloom then
+			TweenService:Create(bloom, tweenInfo, {
+				Intensity = preset.bloomIntensity,
+			}):Play()
+		end
 	end
 
 	rainEmitter.Enabled = preset.isRaining
 	updateRoadWetness(preset.roadReflectance, preset.roadMaterial)
 end
 
--- Initialize immediately with Sunny or GoldenHour, then cycle continuously
-applyPreset(PRESETS[currentPresetIndex])
+-- Initialize immediately with Bright Sunny Day (13.5 ClockTime, 3.6 Brightness)
+applyPreset(PRESETS[1], true)
+
+Workspace:GetAttributeChangedSignal("AllowNightWeatherCycle"):Connect(function()
+	local allowNight = Workspace:GetAttribute("AllowNightWeatherCycle") == true
+	if not allowNight and PRESETS[currentPresetIndex].requiresNightCycle then
+		currentPresetIndex = 1
+		applyPreset(PRESETS[currentPresetIndex], false)
+	end
+end)
 
 task.spawn(function()
 	while true do
@@ -260,13 +307,19 @@ task.spawn(function()
 		while elapsed < DWELL_DURATION do
 			task.wait(4.0)
 			elapsed += 4.0
-			if preset.hasLightning and math.random() < 0.35 then
+			if preset.hasLightning and (Workspace:GetAttribute("AllowNightWeatherCycle") == true) and math.random() < 0.35 then
 				triggerLightningStrike()
 			end
 		end
 
-		currentPresetIndex = (currentPresetIndex % #PRESETS) + 1
-		applyPreset(PRESETS[currentPresetIndex])
+		local allowNight = Workspace:GetAttribute("AllowNightWeatherCycle") == true
+		if allowNight then
+			currentPresetIndex = (currentPresetIndex % #PRESETS) + 1
+		else
+			-- Keep Leo City bright and sunlit between Sunny (13.5) and GoldenAfternoon (15.5)
+			currentPresetIndex = if currentPresetIndex == 1 then 2 else 1
+		end
+		applyPreset(PRESETS[currentPresetIndex], false)
 	end
 end)
 

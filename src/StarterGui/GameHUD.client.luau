@@ -156,10 +156,28 @@ local missionBarFill = makeFrame("MissionBarFill", UDim2.fromScale(0, 1), UDim2.
 addCorner(missionBarFill, 2)
 
 -- ==========================================
--- 2. TOP-CENTER COMBO BANNER (280x64 at (0.5, 0, 0, 14))
+-- 2A. TOP-CENTER CAMPAIGN ACT & BOSS TRACKER CARD (380x58 at (0.5, 0, 0, 14))
+-- ==========================================
+local campaignTracker = makeFrame("CampaignTrackerCard", UDim2.fromOffset(390, 58), UDim2.new(0.5, 0, 0, 14), Vector2.new(0.5, 0), Color3.fromRGB(14, 18, 30), 0.14, gui)
+addCorner(campaignTracker, 11)
+local campaignStroke = addStroke(campaignTracker, Color3.fromRGB(255, 195, 55), 1.8, 0.15)
+
+local campaignActBadge = makeLabel("CampaignActBadge", "ACT 1 OF 5 • BEGINNING", UDim2.new(0.68, -12, 0, 16), UDim2.fromOffset(10, 4), Enum.Font.GothamBlack, 11, Color3.fromRGB(255, 215, 65), Enum.TextXAlignment.Left, campaignTracker)
+local campaignRewardLabel = makeLabel("CampaignRewardLabel", "+$2,500", UDim2.new(0.32, -10, 0, 16), UDim2.new(0.68, 0, 0, 4), Enum.Font.GothamBlack, 11, Color3.fromRGB(95, 255, 140), Enum.TextXAlignment.Right, campaignTracker)
+local campaignObjLabel = makeLabel("CampaignObjective", "Smash 12 MegaCorp Props or Barriers to spark the uprising!", UDim2.new(1, -20, 0, 16), UDim2.fromOffset(10, 21), Enum.Font.GothamBold, 11, Color3.fromRGB(230, 240, 255), Enum.TextXAlignment.Left, campaignTracker)
+campaignObjLabel.TextTruncate = Enum.TextTruncate.AtEnd
+
+local campaignBarBg = makeFrame("CampaignBarBg", UDim2.new(1, -20, 0, 10), UDim2.fromOffset(10, 41), Vector2.new(0, 0), Color3.fromRGB(10, 12, 20), 0, campaignTracker)
+addCorner(campaignBarBg, 5)
+local campaignBarFill = makeFrame("CampaignBarFill", UDim2.fromScale(0, 1), UDim2.fromScale(0, 0), Vector2.new(0, 0), Color3.fromRGB(50, 225, 115), 0, campaignBarBg)
+addCorner(campaignBarFill, 5)
+local campaignBarText = makeLabel("CampaignBarText", "0 / 12", UDim2.fromScale(1, 1), UDim2.fromScale(0, 0), Enum.Font.GothamBlack, 9, Color3.fromRGB(255, 255, 255), Enum.TextXAlignment.Center, campaignBarBg)
+
+-- ==========================================
+-- 2B. TOP-CENTER COMBO BANNER (280x64 at (0.5, 0, 0, 78))
 -- Completely hidden when ComboCount == 0 and no callout is active!
 -- ==========================================
-local topCenter = makeFrame("ComboContainer", UDim2.fromOffset(280, 64), UDim2.new(0.5, 0, 0, 14), Vector2.new(0.5, 0), Color3.fromRGB(15, 15, 22), 0.22, gui)
+local topCenter = makeFrame("ComboContainer", UDim2.fromOffset(280, 64), UDim2.new(0.5, 0, 0, 78), Vector2.new(0.5, 0), Color3.fromRGB(15, 15, 22), 0.22, gui)
 topCenter.Visible = false
 addCorner(topCenter, 10)
 local comboStroke = addStroke(topCenter, Color3.fromRGB(255, 95, 35), 1.8, 0.2)
@@ -215,15 +233,15 @@ for i = 1, 8 do
 end
 
 -- ==========================================
--- 4. BOTTOM-CENTER COMPACT ACTION DOCK (420x36 at (0.5, 0, 1, -12))
+-- 4. BOTTOM-CENTER 3D TACTILE ACTION DOCK (486x44 at (0.5, 0, 1, -12))
 -- ==========================================
-local actionDock = makeFrame("BottomActionDock", UDim2.fromOffset(420, 36), UDim2.new(0.5, 0, 1, -12), Vector2.new(0.5, 1), Color3.fromRGB(14, 16, 24), 0.18, gui)
-addCorner(actionDock, 10)
-addStroke(actionDock, Color3.fromRGB(70, 95, 140), 1.2, 0.35)
+local actionDock = makeFrame("BottomActionDock", UDim2.fromOffset(486, 44), UDim2.new(0.5, 0, 1, -12), Vector2.new(0.5, 1), Color3.fromRGB(14, 16, 26), 0.14, gui)
+addCorner(actionDock, 12)
+addStroke(actionDock, Color3.fromRGB(85, 115, 170), 1.5, 0.25)
 
 local dockPadding = Instance.new("UIPadding")
-dockPadding.PaddingLeft = UDim.new(0, 5)
-dockPadding.PaddingRight = UDim.new(0, 5)
+dockPadding.PaddingLeft = UDim.new(0, 6)
+dockPadding.PaddingRight = UDim.new(0, 6)
 dockPadding.PaddingTop = UDim.new(0, 4)
 dockPadding.PaddingBottom = UDim.new(0, 4)
 dockPadding.Parent = actionDock
@@ -232,7 +250,7 @@ local dockLayout = Instance.new("UIListLayout")
 dockLayout.FillDirection = Enum.FillDirection.Horizontal
 dockLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
 dockLayout.VerticalAlignment = Enum.VerticalAlignment.Center
-dockLayout.Padding = UDim.new(0, 4)
+dockLayout.Padding = UDim.new(0, 6)
 dockLayout.Parent = actionDock
 
 local function triggerQuickAction(actionId: string)
@@ -243,6 +261,8 @@ local function triggerQuickAction(actionId: string)
 		player:SetAttribute("ToggleAvatarUI", not player:GetAttribute("ToggleAvatarUI"))
 	elseif actionId == "VIP" then
 		player:SetAttribute("ToggleVIPUI", not player:GetAttribute("ToggleVIPUI"))
+	elseif actionId == "MenuSettings" then
+		player:SetAttribute("ToggleSettingsUI", not player:GetAttribute("ToggleSettingsUI"))
 	elseif actionId == "Help" then
 		player:SetAttribute("ToggleHelpUI", not player:GetAttribute("ToggleHelpUI"))
 	elseif actionId == "SpawnCar" and remotes then
@@ -258,31 +278,86 @@ local function triggerQuickAction(actionId: string)
 	end
 end
 
+local function makeTactile3DDockButton(order: number, id: string, keyText: string, labelText: string, baseColor: Color3)
+	local lip = Instance.new("Frame")
+	lip.Name = id .. "BtnContainer"
+	lip.LayoutOrder = order
+	lip.Size = UDim2.fromOffset(74, 34)
+	lip.BackgroundColor3 = Color3.new(baseColor.R * 0.5, baseColor.G * 0.5, baseColor.B * 0.5)
+	lip.BorderSizePixel = 0
+	lip.Parent = actionDock
+	addCorner(lip, 9)
+
+	local face = Instance.new("TextButton")
+	face.Name = id .. "Btn"
+	face.Size = UDim2.new(1, 0, 1, -4)
+	face.Position = UDim2.fromOffset(0, 0)
+	face.BackgroundColor3 = baseColor
+	face.BorderSizePixel = 0
+	face.AutoButtonColor = false
+	face.Font = Enum.Font.GothamBlack
+	face.Text = "[" .. keyText .. "] " .. labelText
+	face.TextSize = 10
+	face.TextColor3 = Color3.new(1, 1, 1)
+	face.TextStrokeTransparency = 0.45
+	face.Parent = lip
+	addCorner(face, 8)
+	addStroke(face, Color3.new(math.min(1, baseColor.R + 0.22), math.min(1, baseColor.G + 0.22), math.min(1, baseColor.B + 0.22)), 1.2, 0.25)
+
+	local grad = Instance.new("UIGradient")
+	grad.Rotation = 90
+	grad.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, Color3.new(math.min(1, baseColor.R + 0.15), math.min(1, baseColor.G + 0.15), math.min(1, baseColor.B + 0.15))),
+		ColorSequenceKeypoint.new(1, Color3.new(baseColor.R * 0.85, baseColor.G * 0.85, baseColor.B * 0.85)),
+	})
+	grad.Parent = face
+
+	local sheen = Instance.new("Frame")
+	sheen.Name = "GlossSheen"
+	sheen.Size = UDim2.new(1, -4, 0.38, 0)
+	sheen.Position = UDim2.fromOffset(2, 1)
+	sheen.BackgroundColor3 = Color3.new(1, 1, 1)
+	sheen.BackgroundTransparency = 0.84
+	sheen.BorderSizePixel = 0
+	sheen.Parent = face
+	addCorner(sheen, 6)
+
+	face.MouseEnter:Connect(function()
+		TweenService:Create(face, TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+			Position = UDim2.fromOffset(0, -1),
+		}):Play()
+	end)
+	face.MouseLeave:Connect(function()
+		TweenService:Create(face, TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+			Position = UDim2.fromOffset(0, 0),
+		}):Play()
+	end)
+	face.MouseButton1Down:Connect(function()
+		TweenService:Create(face, TweenInfo.new(0.06, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+			Position = UDim2.fromOffset(0, 3),
+		}):Play()
+	end)
+	face.MouseButton1Up:Connect(function()
+		TweenService:Create(face, TweenInfo.new(0.08, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+			Position = UDim2.fromOffset(0, 0),
+		}):Play()
+	end)
+	face.MouseButton1Click:Connect(function()
+		triggerQuickAction(id)
+	end)
+end
+
 local dockButtons = {
-	{ id = "SpawnCar", text = "[V] Spawn Car", color = Color3.fromRGB(40, 165, 95) },
-	{ id = "Shop", text = "[B] Garage", color = Color3.fromRGB(45, 125, 220) },
-	{ id = "Avatar", text = "[C] Avatar", color = Color3.fromRGB(135, 75, 215) },
-	{ id = "Repair", text = "[R] Repair", color = Color3.fromRGB(215, 130, 35) },
-	{ id = "VIP", text = "[M] VIP", color = Color3.fromRGB(205, 160, 35) },
-	{ id = "Help", text = "[H] Guide", color = Color3.fromRGB(70, 85, 115) },
+	{ id = "SpawnCar", key = "V", text = "Car", color = Color3.fromRGB(36, 175, 95) },
+	{ id = "Shop", key = "B", text = "Garage", color = Color3.fromRGB(42, 128, 225) },
+	{ id = "Avatar", key = "C", text = "Avatar", color = Color3.fromRGB(138, 75, 220) },
+	{ id = "Repair", key = "R", text = "Repair", color = Color3.fromRGB(220, 132, 35) },
+	{ id = "Help", key = "H", text = "Guide", color = Color3.fromRGB(68, 115, 165) },
+	{ id = "MenuSettings", key = "P", text = "Settings", color = Color3.fromRGB(195, 145, 38) },
 }
 
 for idx, info in ipairs(dockButtons) do
-	local btn = Instance.new("TextButton")
-	btn.Name = info.id .. "Btn"
-	btn.LayoutOrder = idx
-	btn.Size = UDim2.fromOffset(65, 28)
-	btn.BackgroundColor3 = info.color
-	btn.BackgroundTransparency = 0.15
-	btn.Font = Enum.Font.GothamBold
-	btn.Text = info.text
-	btn.TextSize = 10
-	btn.TextColor3 = Color3.new(1, 1, 1)
-	btn.Parent = actionDock
-	addCorner(btn, 6)
-	btn.MouseButton1Click:Connect(function()
-		triggerQuickAction(info.id)
-	end)
+	makeTactile3DDockButton(idx, info.id, info.key, info.text, info.color)
 end
 
 -- ==========================================
@@ -436,12 +511,56 @@ local function refreshHUDStats()
 	levelLabel.Text = string.format("LV.%d • %s", level, string.upper(rankTitle))
 	xpBarFill.Size = UDim2.fromScale(xpRatio, 1)
 
-	local mTitle = tostring(player:GetAttribute("MissionTitle") or "Smash 10 Hydrants")
+	local mTitle = tostring(player:GetAttribute("MissionTitle") or "Smash 12 MegaCorp Props")
 	local mProg = tonumber(player:GetAttribute("MissionProgress")) or 0
-	local mGoal = math.max(1, tonumber(player:GetAttribute("MissionGoal")) or 10)
-	local mRew = tonumber(player:GetAttribute("MissionReward")) or 1000
+	local mGoal = math.max(1, tonumber(player:GetAttribute("MissionGoal")) or 12)
+	local mRew = tonumber(player:GetAttribute("MissionReward")) or 2500
 	missionRowLabel.Text = string.format("%s: %d/%d • $%s", mTitle, math.floor(mProg), math.floor(mGoal), formatNumber(mRew))
 	missionBarFill.Size = UDim2.fromScale(math.clamp(mProg / mGoal, 0, 1), 1)
+
+	-- Update Top-Center 5-Act Campaign & Boss Goliath Tracker Bar
+	local cAct = math.clamp(tonumber(player:GetAttribute("CampaignAct")) or 1, 1, 5)
+	local cTotal = tonumber(player:GetAttribute("CampaignTotalActs")) or 5
+	local cDone = player:GetAttribute("CampaignCompleted") == true
+	local bossActive = player:GetAttribute("BossActive") == true
+	if bossActive then
+		local bHp = tonumber(player:GetAttribute("BossHealth")) or 1000
+		local bMax = math.max(1, tonumber(player:GetAttribute("BossMaxHealth")) or 1000)
+		campaignActBadge.Text = "ACT 5 FINALE • MEGACORP BOSS GOLIATH"
+		campaignActBadge.TextColor3 = Color3.fromRGB(255, 85, 85)
+		campaignRewardLabel.Text = "+$50,000 JACKPOT"
+		campaignObjLabel.Text = "Ram Mayor Vance's Armored Boss Goliath on Grand Central Ave!"
+		campaignBarFill.BackgroundColor3 = Color3.fromRGB(255, 60, 70)
+		campaignBarFill.Size = UDim2.fromScale(math.clamp(bHp / bMax, 0, 1), 1)
+		campaignBarText.Text = string.format("BOSS GOLIATH HP: %d / %d", math.floor(bHp), math.floor(bMax))
+		campaignStroke.Color = Color3.fromRGB(255, 65, 75)
+	elseif cDone then
+		campaignActBadge.Text = "🏆 LEO CITY LIBERATED • ENDLESS OVERDRIVE"
+		campaignActBadge.TextColor3 = Color3.fromRGB(255, 220, 65)
+		campaignRewardLabel.Text = "+$" .. formatNumber(mRew)
+		campaignObjLabel.Text = mTitle
+		campaignBarFill.BackgroundColor3 = Color3.fromRGB(50, 225, 115)
+		campaignBarFill.Size = UDim2.fromScale(math.clamp(mProg / mGoal, 0, 1), 1)
+		campaignBarText.Text = string.format("%d / %d", math.floor(mProg), math.floor(mGoal))
+		campaignStroke.Color = Color3.fromRGB(65, 235, 130)
+	else
+		local actStage = if cAct == 1 then "THE BEGINNING" elseif cAct == 5 then "BOSS FINALE" else ("CHAPTER " .. tostring(cAct))
+		local cObj = tostring(player:GetAttribute("CampaignObjectiveText") or "Smash 12 MegaCorp Props or Barriers to spark the uprising!")
+		local cProg = tonumber(player:GetAttribute("CampaignProgress")) or mProg
+		local cGoal = math.max(1, tonumber(player:GetAttribute("CampaignGoal")) or mGoal)
+		local cRew = tonumber(player:GetAttribute("CampaignRewardCash")) or mRew
+		campaignActBadge.Text = string.format("ACT %d OF %d • %s", cAct, cTotal, actStage)
+		campaignActBadge.TextColor3 = Color3.fromRGB(255, 215, 65)
+		campaignRewardLabel.Text = "+$" .. formatNumber(cRew)
+		campaignObjLabel.Text = cObj
+		campaignBarFill.BackgroundColor3 = Color3.fromRGB(50, 225, 115)
+		campaignBarFill.Size = UDim2.fromScale(math.clamp(cProg / cGoal, 0, 1), 1)
+		campaignBarText.Text = string.format("%d / %d", math.floor(cProg), math.floor(cGoal))
+		campaignStroke.Color = Color3.fromRGB(255, 195, 55)
+	end
+
+	-- Hide HUD cleanly while Home Menu is active
+	gui.Enabled = (player:GetAttribute("HomeMenuActive") ~= true)
 
 	local mult = tonumber(player:GetAttribute("ComboMultiplier")) or 1.0
 	local hits = tonumber(player:GetAttribute("ComboCount")) or 0
@@ -545,12 +664,12 @@ RunService.RenderStepped:Connect(function(dt: number)
 	end
 
 	if inVehicle then
-		local speedMph = tonumber(player:GetAttribute("SpeedMPH")) or 0
+		local speedMph = tonumber(player:GetAttribute("VehicleSpeedMPH") or player:GetAttribute("SpeedMPH")) or 0
 		if root and speedMph == 0 then
 			speedMph = math.floor(root.AssemblyLinearVelocity.Magnitude * 0.68)
 		end
 		speedValueLabel.Text = string.format("%03d", math.clamp(math.floor(speedMph), 0, 999))
-		local gear = speedMph < 2 and "N" or tostring(math.clamp(math.ceil(speedMph / 28), 1, 6))
+		local gear = tostring(player:GetAttribute("CurrentGear") or player:GetAttribute("Gear") or (speedMph < 2 and "N" or tostring(math.clamp(math.ceil(speedMph / 22), 1, 5))))
 		gearBadge.Text = "GEAR: " .. gear
 
 		local maxVehHp = tonumber(player:GetAttribute("VehicleMaxHealth") or player:GetAttribute("MaxVehicleHealth")) or 100

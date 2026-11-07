@@ -37,6 +37,11 @@ local MAX_TOTAL_HEAT = HEAT_POINTS_PER_STAR * MAX_HEAT_STARS -- 500
 local LINE_OF_SIGHT_RANGE = 155 -- studs within which police maintain active sight
 local EVADE_COOLDOWN_DELAY = 4.0 -- seconds out of sight before heat begins decaying
 local HEAT_DECAY_PER_SECOND = 22.0 -- heat points drained per second while evading
+local WARNING_DECAY_DELAY = 3.5 -- seconds of not smashing before 0-Star warning heat decays
+local WARNING_DECAY_PER_SECOND = 10.0 -- heat points/sec drained during 0-Star warning (< 100 heat)
+local FIRST_STAR_DISPATCH_DELAY = 3.5 -- seconds dispatch delay when first crossing TotalHeat >= 100
+local PURSUIT_SPAWN_MIN_DIST = 150 -- minimum road corridor spawn distance (studs)
+local PURSUIT_SPAWN_MAX_DIST = 190 -- maximum road corridor spawn distance (studs)
 
 local BUSTED_RANGE = 18.0 -- studs proximity for boxing in / arresting player
 local BUSTED_MAX_PLAYER_SPEED = 16.0 -- studs/sec considered immobilized / boxed in
@@ -115,19 +120,19 @@ local STAR_ROSTER: { [number]: { Units: { PoliceUnitKind }, EnableRoadblocks: bo
 		EnableHelicopter = false,
 	},
 	[2] = {
-		Units = { "Cruiser", "Cruiser", "Cruiser" },
+		Units = { "Cruiser", "Cruiser" },
 		EnableRoadblocks = false,
 		EnableSpikeStrips = false,
 		EnableHelicopter = false,
 	},
 	[3] = {
-		Units = { "Cruiser", "Cruiser", "InterceptorSUV", "InterceptorSUV" },
+		Units = { "Cruiser", "Cruiser", "InterceptorSUV" },
 		EnableRoadblocks = true,
 		EnableSpikeStrips = false,
 		EnableHelicopter = false,
 	},
 	[4] = {
-		Units = { "Cruiser", "InterceptorSUV", "InterceptorSUV", "SWATEnforcer", "SWATEnforcer" },
+		Units = { "Cruiser", "InterceptorSUV", "SWATEnforcer", "SWATEnforcer" },
 		EnableRoadblocks = true,
 		EnableSpikeStrips = true,
 		EnableHelicopter = false,
@@ -263,12 +268,14 @@ type ActiveHelicopter = {
 type PlayerHeatState = {
 	TotalHeat: number, -- 0..500
 	HeatStars: number, -- 0..5
-	HeatProgress: number, -- 0..100 within current star
+	HeatProgress: number, -- 0..100 within current star (or 0..99% warning toward Star 1)
 	LastCrimeAt: number,
 	LastSeenByPoliceAt: number,
 	InLineOfSight: boolean,
 	BustedTimer: number, -- 0..4.0 seconds
 	ReachedFiveStarBanner: boolean,
+	PursuitDispatchPending: boolean,
+	PursuitDispatchReadyAt: number,
 	Units: { ActiveCopUnit },
 	Roadblocks: { ActiveRoadblock },
 	SpikeStrips: { ActiveSpikeStrip },
@@ -492,10 +499,10 @@ local function findRoadSnapSpawn(rawPos: Vector3, playerPos: Vector3, bodySize: 
 	end
 	table.insert(candidates, Vector3.new(nearX, spawnY, nearZ))
 
-	-- Additional road intersection & boulevard fallbacks around playerPos
+	-- Additional road intersection & boulevard fallbacks around playerPos (150..190 studs out)
 	local playerRoadX = nearestRoadCoord(playerPos.X)
 	local playerRoadZ = nearestRoadCoord(playerPos.Z)
-	for _, offset in ipairs({ -180, -90, 90, 180 }) do
+	for _, offset in ipairs({ -185, -155, 155, 185 }) do
 		table.insert(candidates, Vector3.new(playerRoadX, spawnY, math.clamp(playerPos.Z + offset, -630, 630)))
 		table.insert(candidates, Vector3.new(math.clamp(playerPos.X + offset, -630, 630), spawnY, playerRoadZ))
 	end
@@ -503,9 +510,19 @@ local function findRoadSnapSpawn(rawPos: Vector3, playerPos: Vector3, bodySize: 
 		for _, rz in ipairs(roadCoords) do
 			local p = Vector3.new(rx, spawnY, rz)
 			local d = (p - playerPos).Magnitude
-			if d >= 70 and d <= 165 then
+			if d >= 140 and d <= 205 then
 				table.insert(candidates, p)
 			end
+		end
+	end
+
+	-- Prefer road corridor candidates >= 135 studs away so pursuit units arrive from a fair distance
+	for _, cand in ipairs(candidates) do
+		local toPlayer = Vector3.new(playerPos.X - cand.X, 0, playerPos.Z - cand.Z)
+		local heading = if toPlayer.Magnitude > 0.1 then math.atan2(-toPlayer.X, -toPlayer.Z) else 0
+		local blocked = checkBuildingOverlapAt(cand, heading, bodySize)
+		if not blocked and toPlayer.Magnitude >= 135 then
+			return cand, heading
 		end
 	end
 
@@ -513,12 +530,12 @@ local function findRoadSnapSpawn(rawPos: Vector3, playerPos: Vector3, bodySize: 
 		local toPlayer = Vector3.new(playerPos.X - cand.X, 0, playerPos.Z - cand.Z)
 		local heading = if toPlayer.Magnitude > 0.1 then math.atan2(-toPlayer.X, -toPlayer.Z) else 0
 		local blocked = checkBuildingOverlapAt(cand, heading, bodySize)
-		if not blocked and toPlayer.Magnitude >= 42 then
+		if not blocked and toPlayer.Magnitude >= 85 then
 			return cand, heading
 		end
 	end
 
-	local fallbackPos = Vector3.new(playerRoadX, spawnY, math.clamp(playerPos.Z + 100, -630, 630))
+	local fallbackPos = Vector3.new(playerRoadX, spawnY, math.clamp(playerPos.Z + 165, -630, 630))
 	local toPlayer = Vector3.new(playerPos.X - fallbackPos.X, 0, playerPos.Z - fallbackPos.Z)
 	local fallbackHeading = if toPlayer.Magnitude > 0.1 then math.atan2(-toPlayer.X, -toPlayer.Z) else 0
 	return fallbackPos, fallbackHeading
@@ -1356,25 +1373,41 @@ end
 -- State Synchronization & Force Spawning
 --------------------------------------------------------------------------------
 local function syncHeatAttributes(player: Player, state: PlayerHeatState)
+	-- Paced 5-Star Heat Calculation:
+	--   0..99   Heat = 0 Stars (HEAT WARNING / RADAR ALERT, 0..99% gauge toward Star 1)
+	--   100..199 Heat = 1 Star  (1 Patrol Cruiser)
+	--   200..299 Heat = 2 Stars (2 Cruisers)
+	--   300..399 Heat = 3 Stars (Cruisers + SUV Interceptor + Roadblocks)
+	--   400..499 Heat = 4 Stars (SWAT Enforcer + Spike Strips)
+	--   500     Heat = 5 Stars (Full Force + Helicopter Spotlight)
 	local stars = 0
-	if state.TotalHeat > 0 then
-		stars = math.clamp(math.ceil(state.TotalHeat / HEAT_POINTS_PER_STAR), 1, MAX_HEAT_STARS)
+	if state.TotalHeat >= HEAT_POINTS_PER_STAR then
+		stars = math.clamp(math.floor(state.TotalHeat / HEAT_POINTS_PER_STAR), 1, MAX_HEAT_STARS)
 	end
 	state.HeatStars = stars
 
 	local progressInStar = 0
-	if stars > 0 then
-		local starFloor = (stars - 1) * HEAT_POINTS_PER_STAR
+	if stars == 0 then
+		-- 0..99% Radar Warning gauge toward 1 Star
+		progressInStar = math.clamp((state.TotalHeat / HEAT_POINTS_PER_STAR) * 100, 0, 99)
+	elseif stars >= MAX_HEAT_STARS then
+		progressInStar = 100
+	else
+		local starFloor = stars * HEAT_POINTS_PER_STAR
 		progressInStar = math.clamp(((state.TotalHeat - starFloor) / HEAT_POINTS_PER_STAR) * 100, 0, 100)
 	end
 	state.HeatProgress = math.floor(progressInStar + 0.5)
 
 	local bustedRatio = math.clamp(state.BustedTimer / BUSTED_HOLD_DURATION, 0, 1)
 	local isEvading = stars > 0 and not state.InLineOfSight and (os.clock() - state.LastSeenByPoliceAt >= EVADE_COOLDOWN_DELAY)
+	local isWarning = stars == 0 and state.TotalHeat > 0
 
+	player:SetAttribute("TotalHeat", math.floor(state.TotalHeat + 0.5))
 	player:SetAttribute("HeatStars", stars)
 	player:SetAttribute("HeatProgress", state.HeatProgress)
 	player:SetAttribute("HeatProgressNormalized", tonumber(string.format("%.3f", state.HeatProgress / 100)))
+	player:SetAttribute("HeatWarning", isWarning)
+	player:SetAttribute("PoliceDispatchPending", state.PursuitDispatchPending)
 	player:SetAttribute("PoliceInSight", state.InLineOfSight)
 	player:SetAttribute("PoliceEvading", isEvading)
 	player:SetAttribute("BustedProgress", tonumber(string.format("%.3f", bustedRatio)))
@@ -1451,12 +1484,12 @@ local function reconcilePoliceForceForStars(player: Player, state: PlayerHeatSta
 		currentCounts[u.Kind] = (currentCounts[u.Kind] or 0) + 1
 	end
 
-	-- Spawn missing units snapped to the nearest clear Road Line (85..125 studs out)
+	-- Spawn missing units snapped to the nearest clear Road Line (150..190 studs out)
 	for _, kind in ipairs({ "Cruiser", "InterceptorSUV", "SWATEnforcer" } :: { PoliceUnitKind }) do
 		local needed = (desiredCounts[kind] or 0) - (currentCounts[kind] or 0)
 		for _ = 1, needed do
 			local angle = math.random() * math.pi * 2
-			local dist = math.random(85, 125)
+			local dist = math.random(PURSUIT_SPAWN_MIN_DIST, PURSUIT_SPAWN_MAX_DIST)
 			local rawSpawnPos = Vector3.new(
 				playerPos.X + math.cos(angle) * dist,
 				UNIT_ARCHETYPES[kind].BodySize.Y * 0.5 + 0.5,
@@ -1505,7 +1538,7 @@ local function destroyPoliceUnit(player: Player, state: PlayerHeatState, unitInd
 	table.remove(state.Units, unitIndex)
 
 	-- Grant slight heat relief when wrecking a pursuer, while firing COP TAKEDOWN!
-	state.TotalHeat = math.max(40, state.TotalHeat - 30)
+	state.TotalHeat = math.max(HEAT_POINTS_PER_STAR, state.TotalHeat - 30)
 	syncHeatAttributes(player, state)
 
 	PoliceTakedownBindable:Fire(player, kindName, crashPos, takedownBonus)
@@ -1562,6 +1595,8 @@ local function triggerPlayerBusted(player: Player, state: PlayerHeatState)
 	state.BustedTimer = 0
 	state.InLineOfSight = false
 	state.ReachedFiveStarBanner = false
+	state.PursuitDispatchPending = false
+	state.PursuitDispatchReadyAt = 0
 	clearAllPursuitAssets(state)
 	syncHeatAttributes(player, state)
 
@@ -1627,38 +1662,72 @@ local function addHeatToPlayer(player: Player, heatDelta: number, _reason: strin
 		return
 	end
 
-	local delta = math.max(1, tonumber(heatDelta) or 10)
+	local delta = math.max(0.5, tonumber(heatDelta) or 3.5)
 	local prevStars = state.HeatStars
 	local now = os.clock()
 
 	state.TotalHeat = math.clamp(state.TotalHeat + delta, 0, MAX_TOTAL_HEAT)
 	state.LastCrimeAt = now
-	state.LastSeenByPoliceAt = now
-	state.InLineOfSight = true
 
 	syncHeatAttributes(player, state)
 
 	if state.HeatStars > prevStars then
-		reconcilePoliceForceForStars(player, state)
+		state.LastSeenByPoliceAt = now
+		state.InLineOfSight = true
 
-		local starMessages = {
-			[1] = "1-STAR HEAT: PATROL CRUISER DISPATCHED!",
-			[2] = "2-STAR HEAT: AGGRESSIVE CRUISER SQUAD INBOUND!",
-			[3] = "3-STAR HEAT: SUV INTERCEPTORS & ROADBLOCKS ACTIVE!",
-			[4] = "4-STAR HEAT: HEAVY SWAT ENFORCERS & SPIKE STRIPS!",
-			[5] = "5-STAR MAXIMUM WANTED: ALL UNITS + HELICOPTER SPOTLIGHT!",
-		}
-		local alertMsg = starMessages[state.HeatStars] or "WANTED LEVEL INCREASED!"
-		PoliceAlertRemote:FireClient(player, {
-			HeatStars = state.HeatStars,
-			HeatProgress = state.HeatProgress,
-			Headline = alertMsg,
-		})
-		RootPoliceAlertRemote:FireClient(player, {
-			HeatStars = state.HeatStars,
-			HeatProgress = state.HeatProgress,
-			Headline = alertMsg,
-		})
+		if prevStars == 0 and state.HeatStars >= 1 then
+			-- Crossing TotalHeat >= 100 (1 Star) for the first time in a pursuit:
+			-- Wait a 3.5s dispatch delay before spawning police units 150..190 studs out!
+			state.PursuitDispatchPending = true
+			state.PursuitDispatchReadyAt = now + FIRST_STAR_DISPATCH_DELAY
+			syncHeatAttributes(player, state)
+
+			local dispatchAlert = "DISPATCH ALERT: PATROL UNIT EN ROUTE!"
+			PoliceAlertRemote:FireClient(player, {
+				HeatStars = state.HeatStars,
+				HeatProgress = state.HeatProgress,
+				Headline = dispatchAlert,
+				DispatchDelay = FIRST_STAR_DISPATCH_DELAY,
+			})
+			RootPoliceAlertRemote:FireClient(player, {
+				HeatStars = state.HeatStars,
+				HeatProgress = state.HeatProgress,
+				Headline = dispatchAlert,
+				DispatchDelay = FIRST_STAR_DISPATCH_DELAY,
+			})
+			StyleCalloutRemote:FireClient(player, {
+				Callout = dispatchAlert,
+				Multiplier = tonumber(player:GetAttribute("ComboMultiplier")) or 1,
+				ComboCount = tonumber(player:GetAttribute("ComboCount")) or 0,
+				CashAwarded = 0,
+			})
+		else
+			if not state.PursuitDispatchPending then
+				reconcilePoliceForceForStars(player, state)
+			end
+
+			local starMessages = {
+				[1] = "1-STAR HEAT: PATROL CRUISER DISPATCHED!",
+				[2] = "2-STAR HEAT: CRUISER SQUAD INBOUND!",
+				[3] = "3-STAR HEAT: SUV INTERCEPTOR & ROADBLOCKS ACTIVE!",
+				[4] = "4-STAR HEAT: HEAVY SWAT ENFORCERS & SPIKE STRIPS!",
+				[5] = "5-STAR MAXIMUM WANTED: ALL UNITS + HELICOPTER SPOTLIGHT!",
+			}
+			local alertMsg = starMessages[state.HeatStars] or "WANTED LEVEL INCREASED!"
+			PoliceAlertRemote:FireClient(player, {
+				HeatStars = state.HeatStars,
+				HeatProgress = state.HeatProgress,
+				Headline = alertMsg,
+			})
+			RootPoliceAlertRemote:FireClient(player, {
+				HeatStars = state.HeatStars,
+				HeatProgress = state.HeatProgress,
+				Headline = alertMsg,
+			})
+		end
+	elseif state.HeatStars > 0 then
+		state.LastSeenByPoliceAt = now
+		state.InLineOfSight = true
 	end
 end
 
@@ -1715,6 +1784,8 @@ local function onPlayerAdded(player: Player)
 		InLineOfSight = false,
 		BustedTimer = 0,
 		ReachedFiveStarBanner = false,
+		PursuitDispatchPending = false,
+		PursuitDispatchReadyAt = 0,
 		Units = {},
 		Roadblocks = {},
 		SpikeStrips = {},
@@ -1723,8 +1794,11 @@ local function onPlayerAdded(player: Player)
 		LastSpikeStripAt = 0,
 		LastImpactReportAt = 0,
 	}
+	player:SetAttribute("TotalHeat", 0)
 	player:SetAttribute("HeatStars", 0)
 	player:SetAttribute("HeatProgress", 0)
+	player:SetAttribute("HeatWarning", false)
+	player:SetAttribute("PoliceDispatchPending", false)
 	player:SetAttribute("PoliceInSight", false)
 	player:SetAttribute("PoliceEvading", false)
 	player:SetAttribute("BustedProgress", 0)
@@ -1765,7 +1839,22 @@ RunService.Heartbeat:Connect(function(dt: number)
 
 	for _, player in ipairs(Players:GetPlayers()) do
 		local state = playerHeatStates[player.UserId]
-		if not state or state.HeatStars <= 0 then
+		if not state then
+			continue
+		end
+
+		-- 0-Star Warning Phase (0..99 Heat): no police spawned; decays at 10 heat/sec after 3.5s of not smashing
+		if state.HeatStars <= 0 then
+			if #state.Units > 0 or #state.Roadblocks > 0 or #state.SpikeStrips > 0 or state.Helicopter then
+				clearAllPursuitAssets(state)
+			end
+			state.PursuitDispatchPending = false
+			state.PursuitDispatchReadyAt = 0
+			state.InLineOfSight = false
+			if state.TotalHeat > 0 and (now - state.LastCrimeAt >= WARNING_DECAY_DELAY) then
+				state.TotalHeat = math.max(0, state.TotalHeat - WARNING_DECAY_PER_SECOND * dt)
+				syncHeatAttributes(player, state)
+			end
 			continue
 		end
 
@@ -1774,6 +1863,32 @@ RunService.Heartbeat:Connect(function(dt: number)
 		local playerPos, playerFwd, playerSpeed, _playerVel = getPlayerMotion(player)
 		local playerRight = Vector3.new(-playerFwd.Z, 0, playerFwd.X)
 		local plowMult = tonumber(player:GetAttribute("RammingForceMultiplier")) or 1.0
+
+		-- Handle 3.5s first-star dispatch delay before spawning pursuit units 150..190 studs away
+		if state.PursuitDispatchPending then
+			if now >= state.PursuitDispatchReadyAt then
+				state.PursuitDispatchPending = false
+				state.LastSeenByPoliceAt = now
+				reconcilePoliceForceForStars(player, state)
+				syncHeatAttributes(player, state)
+
+				local arrivedMsg = "1-STAR HEAT: PATROL CRUISER DISPATCHED!"
+				PoliceAlertRemote:FireClient(player, {
+					HeatStars = state.HeatStars,
+					HeatProgress = state.HeatProgress,
+					Headline = arrivedMsg,
+				})
+				RootPoliceAlertRemote:FireClient(player, {
+					HeatStars = state.HeatStars,
+					HeatProgress = state.HeatProgress,
+					Headline = arrivedMsg,
+				})
+			else
+				state.LastSeenByPoliceAt = now
+				syncHeatAttributes(player, state)
+				continue
+			end
+		end
 
 		-- Ensure unit count stays topped up during active chase
 		if #state.Units < #roster.Units then
@@ -1846,10 +1961,10 @@ RunService.Heartbeat:Connect(function(dt: number)
 			local toPlayer = Vector3.new(playerPos.X - unitPos.X, 0, playerPos.Z - unitPos.Z)
 			local dist = toPlayer.Magnitude
 
-			-- Teleport far-behind police closer along pursuit perimeter snapped to nearest clear Road Line
-			if dist > 260 then
+			-- Teleport far-behind police closer along pursuit perimeter snapped to nearest clear Road Line (150..190 studs)
+			if dist > 280 then
 				local respawnAngle = math.random() * math.pi * 2
-				local respawnDist = math.random(95, 130)
+				local respawnDist = math.random(PURSUIT_SPAWN_MIN_DIST, PURSUIT_SPAWN_MAX_DIST)
 				local rawRespawnPos = Vector3.new(
 					playerPos.X + math.cos(respawnAngle) * respawnDist,
 					unit.Archetype.BodySize.Y * 0.5 + 0.5,
@@ -2111,10 +2226,14 @@ RunService.Heartbeat:Connect(function(dt: number)
 			state.TotalHeat = math.max(0, state.TotalHeat - HEAT_DECAY_PER_SECOND * dt)
 			syncHeatAttributes(player, state)
 
-			if state.TotalHeat <= 0 then
-				-- Player successfully evaded the pursuit! Award Escape Bounty!
+			if state.HeatStars <= 0 then
+				-- Player successfully evaded the pursuit! Reset warning gauge and award Escape Bounty!
+				state.TotalHeat = 0
+				state.PursuitDispatchPending = false
+				state.PursuitDispatchReadyAt = 0
 				local escapeBounty = math.max(150, prevStars * 175)
 				clearAllPursuitAssets(state)
+				syncHeatAttributes(player, state)
 				AddCashBindable:Fire(player, escapeBounty, "PoliceEscapeBounty")
 				StyleCalloutRemote:FireClient(player, {
 					Callout = string.format("ESCAPED POLICE! +$%d BOUNTY!", escapeBounty),

@@ -452,6 +452,120 @@ local function applyDamageToVehicle(model: Model, amount: number, attacker: Play
 end
 
 --------------------------------------------------------------------------------
+-- Seated Driver Head-Clipping Fix & Cabin Silhouette Helper
+--------------------------------------------------------------------------------
+local function ensureCabinDriverSilhouette(model: Model)
+	local chassis = model.PrimaryPart or model:FindFirstChild("Chassis") :: BasePart?
+	if not chassis then
+		return
+	end
+	if model:FindFirstChild("DriverSilhouetteHelmet") then
+		return
+	end
+	local h = chassis.Size.Y
+	local cabH = math.max(3.4, h * 1.38)
+	local seat = model:FindFirstChild("DriveSeat") :: BasePart?
+	local seatZ = if seat then chassis.CFrame:PointToObjectSpace(seat.Position).Z else 0
+
+	local helmet = Instance.new("Part")
+	helmet.Name = "DriverSilhouetteHelmet"
+	helmet.Shape = Enum.PartType.Ball
+	helmet.Size = Vector3.new(1.22, 1.24, 1.28)
+	helmet.Color = Color3.fromRGB(18, 22, 28)
+	helmet.Material = Enum.Material.SmoothPlastic
+	helmet.TopSurface = Enum.SurfaceType.Smooth
+	helmet.BottomSurface = Enum.SurfaceType.Smooth
+	helmet.CanCollide = false
+	helmet.Massless = true
+	helmet.CFrame = chassis.CFrame * CFrame.new(0, h * 0.5 + cabH * 0.56, seatZ + 0.04)
+	helmet.Parent = model
+
+	local weld = Instance.new("Weld")
+	weld.Name = "DriverSilhouetteHelmet_Weld"
+	weld.Part0 = chassis
+	weld.Part1 = helmet
+	weld.C0 = CFrame.new(0, h * 0.5 + cabH * 0.56, seatZ + 0.04)
+	weld.Parent = helmet
+end
+
+local function shouldHideSeatedCharacterPart(inst: Instance, character: Model): boolean
+	if inst:IsA("BasePart") then
+		if inst.Name == "HumanoidRootPart" then
+			return false
+		end
+		if inst.Name == "Head"
+			or inst.Name == "UpperTorso"
+			or inst.Name == "Torso"
+			or inst.Name:find("Arm") ~= nil
+			or inst.Name:find("Hand") ~= nil
+		then
+			return true
+		end
+		if inst:FindFirstAncestorOfClass("Accessory") or inst:FindFirstAncestorOfClass("Hat") then
+			return true
+		end
+		local wodFolder = character:FindFirstChild("WODAvatarAttachments")
+		if wodFolder and inst:IsDescendantOf(wodFolder) then
+			return true
+		end
+		if inst.Name:find("AvatarCustomAccessory") ~= nil or inst:GetAttribute("AvatarCustomAccessory") == true then
+			return true
+		end
+		if CollectionService:HasTag(inst, "AvatarCustomAccessory") then
+			return true
+		end
+	elseif inst:IsA("Decal") or inst:IsA("Texture") then
+		local parent = inst.Parent
+		if parent and (parent.Name == "Head" or parent:FindFirstAncestorOfClass("Accessory") ~= nil) then
+			return true
+		end
+	end
+	return false
+end
+
+local function setSeatedCharacterHidden(character: Model?, vehicleModel: Model?, hide: boolean)
+	if vehicleModel and hide then
+		ensureCabinDriverSilhouette(vehicleModel)
+	end
+	if not character then
+		return
+	end
+	for _, desc in ipairs(character:GetDescendants()) do
+		if shouldHideSeatedCharacterPart(desc, character) then
+			if desc:IsA("BasePart") then
+				if hide then
+					if desc:GetAttribute("PreSeatTransparency") == nil and desc.Transparency < 0.99 then
+						desc:SetAttribute("PreSeatTransparency", desc.Transparency)
+					end
+					desc.Transparency = 1
+				else
+					local saved = tonumber(desc:GetAttribute("PreSeatTransparency"))
+					if saved == nil or saved >= 0.99 then
+						saved = 0
+					end
+					desc.Transparency = saved
+					desc:SetAttribute("PreSeatTransparency", nil)
+				end
+			elseif desc:IsA("Decal") or desc:IsA("Texture") then
+				if hide then
+					if desc:GetAttribute("PreSeatTransparency") == nil and desc.Transparency < 0.99 then
+						desc:SetAttribute("PreSeatTransparency", desc.Transparency)
+					end
+					desc.Transparency = 1
+				else
+					local saved = tonumber(desc:GetAttribute("PreSeatTransparency"))
+					if saved == nil or saved >= 0.99 then
+						saved = 0
+					end
+					desc.Transparency = saved
+					desc:SetAttribute("PreSeatTransparency", nil)
+				end
+			end
+		end
+	end
+end
+
+--------------------------------------------------------------------------------
 -- Hook Vehicle Seat Occupancy & Prompts
 --------------------------------------------------------------------------------
 local function hookVehicleModel(model: Model)
@@ -468,6 +582,7 @@ local function hookVehicleModel(model: Model)
 	end
 
 	unanchorModel(model)
+	ensureCabinDriverSilhouette(model)
 
 	local prompt = seat:FindFirstChild("EnterVehiclePrompt") :: ProximityPrompt?
 	if prompt then
@@ -494,14 +609,28 @@ local function hookVehicleModel(model: Model)
 	end
 
 	local currentDriver: Player? = nil
+	local currentDriverChar: Model? = nil
+	local charDescendantConn: RBXScriptConnection? = nil
 
 	table.insert(
 		conns,
 		seat:GetPropertyChangedSignal("Occupant"):Connect(function()
 			local occupant = seat.Occupant
 			if occupant then
-				local char = occupant.Parent
+				local char = occupant.Parent :: Model?
 				local player = if char then Players:GetPlayerFromCharacter(char) else nil
+				if char then
+					currentDriverChar = char
+					setSeatedCharacterHidden(char, model, true)
+					if charDescendantConn then
+						charDescendantConn:Disconnect()
+					end
+					charDescendantConn = char.DescendantAdded:Connect(function()
+						if seat.Occupant == occupant then
+							task.defer(setSeatedCharacterHidden, char, model, true)
+						end
+					end)
+				end
 				if player then
 					currentDriver = player
 					if prompt then
@@ -523,7 +652,7 @@ local function hookVehicleModel(model: Model)
 					local vName = tostring(model:GetAttribute("DisplayName") or vType)
 					local hp = tonumber(model:GetAttribute("Health")) or 100
 					local maxHp = tonumber(model:GetAttribute("MaxHealth")) or 100
-					local topSpeed = tonumber(model:GetAttribute("MaxSpeed")) or 85
+					local topSpeed = tonumber(model:GetAttribute("MaxSpeed")) or 64
 					local nitroCap = tonumber(model:GetAttribute("NitroCapacity")) or 4.0
 
 					player:SetAttribute("InVehicle", true)
@@ -544,6 +673,15 @@ local function hookVehicleModel(model: Model)
 					})
 				end
 			else
+				if charDescendantConn then
+					charDescendantConn:Disconnect()
+					charDescendantConn = nil
+				end
+				if currentDriverChar and currentDriverChar.Parent then
+					setSeatedCharacterHidden(currentDriverChar, model, false)
+				end
+				currentDriverChar = nil
+
 				if prompt then
 					prompt.Enabled = true
 				end
@@ -569,6 +707,14 @@ local function hookVehicleModel(model: Model)
 		conns,
 		model.AncestryChanged:Connect(function(_, parent)
 			if not parent then
+				if charDescendantConn then
+					charDescendantConn:Disconnect()
+					charDescendantConn = nil
+				end
+				if currentDriverChar and currentDriverChar.Parent then
+					setSeatedCharacterHidden(currentDriverChar, model, false)
+					currentDriverChar = nil
+				end
 				local list = hookedVehicles[model]
 				if list then
 					for _, c in ipairs(list) do
