@@ -18,7 +18,7 @@ local Workspace = game:GetService("Workspace")
 --------------------------------------------------------------------------------
 -- WAIT FOR CITY & CONFIG
 --------------------------------------------------------------------------------
-local BLOCK_SIZE = (Workspace:GetAttribute("LeoCityBlockSize") :: number?) or 200
+local BLOCK_SIZE = (Workspace:GetAttribute("LeoCityBlockSize") :: number?) or 140
 local ROAD_WIDTH = (Workspace:GetAttribute("LeoCityRoadWidth") :: number?) or 42
 local GRID_RADIUS = (Workspace:GetAttribute("LeoCityGridRadius") :: number?) or 4
 local LANE_OFFSET = 9.5
@@ -340,9 +340,14 @@ local function buildTrafficVehicleByType(vehicleType: string, idx: number): (Mod
 	end
 
 	m.PrimaryPart = chassis
-	m:SetAttribute("PropType", "TrafficVehicle")
+	local reqTier = if vehicleType == "CityTransitBus"
+		then 4
+		elseif vehicleType == "FuelTanker" or vehicleType == "PolicePatrol" then 3
+		else 2
+	m:SetAttribute("PropType", if vehicleType == "CityTransitBus" then "CityBus" else "TrafficVehicle")
 	m:SetAttribute("DestructibleType", vehicleType)
 	m:SetAttribute("IsDestructible", true)
+	m:SetAttribute("RequiredTier", reqTier)
 	m:SetAttribute("CashValue", cashVal)
 	m:SetAttribute("CashReward", cashVal)
 	m:SetAttribute("ChaosPoints", chaosPts)
@@ -494,7 +499,7 @@ local function shouldStopForRedLight(car: AICar): boolean
 end
 
 --------------------------------------------------------------------------------
--- 3. 45 LIVELY CITY CHARACTERS (ROLES, AMBIENT CHATTER & COMICAL PANIC LEAPS)
+-- 3. 45 REALISTIC ARTICULATED NYC PEDESTRIANS (ARMS, LEGS, WINTER JACKETS, ZERO NEON BODY PARTS)
 --------------------------------------------------------------------------------
 type NPCRoleSpec = {
 	role: string,
@@ -506,12 +511,20 @@ type NPCRoleSpec = {
 	panicLines: { string },
 }
 
+local SKIN_TONES = {
+	Color3.fromRGB(240, 198, 160),
+	Color3.fromRGB(217, 160, 115),
+	Color3.fromRGB(198, 134, 66),
+	Color3.fromRGB(141, 85, 36),
+	Color3.fromRGB(245, 205, 174),
+}
+
 local NPC_ROLES: { NPCRoleSpec } = {
 	{
 		role = "HotdogChef",
-		torsoColor = Color3.fromRGB(245, 245, 250),
-		legsColor = Color3.fromRGB(48, 52, 64),
-		hatColor = Color3.fromRGB(255, 255, 255),
+		torsoColor = Color3.fromRGB(235, 238, 245),
+		legsColor = Color3.fromRGB(44, 48, 58),
+		hatColor = Color3.fromRGB(245, 245, 250),
 		walkSpeed = 7.2,
 		chatterLines = {
 			"Best hotdogs in Leo City!",
@@ -526,9 +539,9 @@ local NPC_ROLES: { NPCRoleSpec } = {
 	},
 	{
 		role = "BusinessExecutive",
-		torsoColor = Color3.fromRGB(38, 52, 82),
-		legsColor = Color3.fromRGB(28, 36, 54),
-		hatColor = nil,
+		torsoColor = Color3.fromRGB(32, 42, 64),
+		legsColor = Color3.fromRGB(24, 30, 44),
+		hatColor = Color3.fromRGB(38, 44, 56),
 		walkSpeed = 8.4,
 		chatterLines = {
 			"Late for my meeting at Leo Tower!",
@@ -543,14 +556,14 @@ local NPC_ROLES: { NPCRoleSpec } = {
 	},
 	{
 		role = "ConstructionWorker",
-		torsoColor = Color3.fromRGB(255, 145, 30),
-		legsColor = Color3.fromRGB(52, 78, 128),
-		hatColor = Color3.fromRGB(255, 210, 35),
+		torsoColor = Color3.fromRGB(215, 128, 28),
+		legsColor = Color3.fromRGB(48, 68, 108),
+		hatColor = Color3.fromRGB(235, 185, 32),
 		walkSpeed = 7.8,
 		chatterLines = {
 			"Careful around the blast zone!",
 			"We just rebuilt that hydrant!",
-			"Coffee break at Sunset Cafe!",
+			"Coffee break at Soho Cafe!",
 		},
 		panicLines = {
 			"HARD HAT ON!!",
@@ -560,9 +573,9 @@ local NPC_ROLES: { NPCRoleSpec } = {
 	},
 	{
 		role = "StreetSkater",
-		torsoColor = Color3.fromRGB(195, 52, 235),
-		legsColor = Color3.fromRGB(42, 46, 55),
-		hatColor = Color3.fromRGB(45, 225, 210),
+		torsoColor = Color3.fromRGB(58, 72, 96),
+		legsColor = Color3.fromRGB(36, 40, 48),
+		hatColor = Color3.fromRGB(165, 42, 48),
 		walkSpeed = 11.2,
 		chatterLines = {
 			"Did you hear that V8?!",
@@ -577,14 +590,14 @@ local NPC_ROLES: { NPCRoleSpec } = {
 	},
 	{
 		role = "Tourist",
-		torsoColor = Color3.fromRGB(52, 198, 165),
-		legsColor = Color3.fromRGB(225, 205, 168),
-		hatColor = Color3.fromRGB(245, 215, 135),
+		torsoColor = Color3.fromRGB(46, 118, 98),
+		legsColor = Color3.fromRGB(82, 74, 64),
+		hatColor = Color3.fromRGB(195, 165, 110),
 		walkSpeed = 7.4,
 		chatterLines = {
 			"Look at the top of Leo Tower!",
-			"The boardwalk beach is gorgeous!",
-			"Smile for the vacation photo!",
+			"The Hudson pier is gorgeous!",
+			"Smile for the city photo!",
 		},
 		panicLines = {
 			"GET THAT ON CAMERA!",
@@ -594,12 +607,12 @@ local NPC_ROLES: { NPCRoleSpec } = {
 	},
 	{
 		role = "Jogger",
-		torsoColor = Color3.fromRGB(245, 75, 115),
-		legsColor = Color3.fromRGB(35, 38, 46),
-		hatColor = Color3.fromRGB(255, 230, 55),
+		torsoColor = Color3.fromRGB(178, 48, 58),
+		legsColor = Color3.fromRGB(32, 36, 44),
+		hatColor = Color3.fromRGB(48, 56, 72),
 		walkSpeed = 10.6,
 		chatterLines = {
-			"Nothing beats a sunny Leo City run!",
+			"Nothing beats a brisk NYC run!",
 			"Ten thousand steps before noon!",
 			"Out of the way, hitting my stride!",
 		},
@@ -631,56 +644,174 @@ type AIPed = {
 
 local aiPeds: { AIPed } = {}
 
+local function makePedLimb(
+	parent: Instance,
+	name: string,
+	size: Vector3,
+	cf: CFrame,
+	color: Color3,
+	material: Enum.Material,
+	shape: Enum.PartType?
+): Part
+	local p = Instance.new("Part")
+	p.Name = name
+	p.Size = size
+	p.CFrame = cf
+	p.Color = color
+	p.Material = material
+	p.TopSurface = Enum.SurfaceType.Smooth
+	p.BottomSurface = Enum.SurfaceType.Smooth
+	p.CanCollide = false
+	p.Anchored = false
+	if shape then
+		p.Shape = shape
+	end
+	p.Parent = parent
+	return p
+end
+
 local function buildPedestrian(idx: number): AIPed
 	local roleSpec = NPC_ROLES[((idx - 1) % #NPC_ROLES) + 1]
+	local skinTone = SKIN_TONES[((idx - 1) % #SKIN_TONES) + 1]
 	local m = Instance.new("Model")
 	m.Name = "Citizen_" .. roleSpec.role
 	m:SetAttribute("NPCRole", roleSpec.role)
 
+	-- Realistic winter coat / jacket Torso (Fabric / SmoothPlastic, NEVER Neon)
 	local root = Instance.new("Part")
 	root.Name = "Torso"
-	root.Size = Vector3.new(2.0, 2.6, 1.1)
+	root.Size = Vector3.new(1.8, 2.2, 1.0)
 	root.Color = roleSpec.torsoColor
-	root.Material = Enum.Material.SmoothPlastic
+	root.Material = Enum.Material.Fabric
+	root.TopSurface = Enum.SurfaceType.Smooth
+	root.BottomSurface = Enum.SurfaceType.Smooth
 	root.Anchored = true
 	root.CanCollide = false
 	root.Parent = m
 
-	local head = Instance.new("Part")
-	head.Name = "Head"
-	head.Shape = Enum.PartType.Ball
-	head.Size = Vector3.new(1.5, 1.5, 1.5)
-	head.CFrame = root.CFrame * CFrame.new(0, 2.0, 0)
-	head.Color = Color3.fromRGB(240, 198, 160)
-	head.Material = Enum.Material.SmoothPlastic
-	head.CanCollide = false
-	head.Anchored = false
-	head.Parent = m
+	-- Winter scarf / collar trim
+	local collar = makePedLimb(
+		m,
+		"WinterScarf",
+		Vector3.new(1.5, 0.35, 1.12),
+		root.CFrame * CFrame.new(0, 1.05, 0),
+		Color3.fromRGB(36, 40, 50),
+		Enum.Material.Fabric,
+		nil
+	)
 
-	local legs = Instance.new("Part")
-	legs.Name = "Legs"
-	legs.Size = Vector3.new(1.8, 2.2, 1.0)
-	legs.CFrame = root.CFrame * CFrame.new(0, -2.4, 0)
-	legs.Color = roleSpec.legsColor
-	legs.Material = Enum.Material.SmoothPlastic
-	legs.CanCollide = false
-	legs.Anchored = false
-	legs.Parent = m
+	-- Realistic Head (SmoothPlastic)
+	local head = makePedLimb(
+		m,
+		"Head",
+		Vector3.new(1.25, 1.25, 1.25),
+		root.CFrame * CFrame.new(0, 1.78, 0),
+		skinTone,
+		Enum.Material.SmoothPlastic,
+		Enum.PartType.Ball
+	)
 
-	local partsToWeld: { BasePart } = { head, legs }
+	-- Articulated Left & Right Arms + Hands
+	local leftArm = makePedLimb(
+		m,
+		"LeftArm",
+		Vector3.new(0.62, 1.95, 0.62),
+		root.CFrame * CFrame.new(-1.24, 0.08, 0),
+		roleSpec.torsoColor,
+		Enum.Material.Fabric,
+		nil
+	)
+	local rightArm = makePedLimb(
+		m,
+		"RightArm",
+		Vector3.new(0.62, 1.95, 0.62),
+		root.CFrame * CFrame.new(1.24, 0.08, 0),
+		roleSpec.torsoColor,
+		Enum.Material.Fabric,
+		nil
+	)
+	local leftHand = makePedLimb(
+		m,
+		"LeftHand",
+		Vector3.new(0.52, 0.42, 0.52),
+		root.CFrame * CFrame.new(-1.24, -1.0, 0),
+		skinTone,
+		Enum.Material.SmoothPlastic,
+		Enum.PartType.Ball
+	)
+	local rightHand = makePedLimb(
+		m,
+		"RightHand",
+		Vector3.new(0.52, 0.42, 0.52),
+		root.CFrame * CFrame.new(1.24, -1.0, 0),
+		skinTone,
+		Enum.Material.SmoothPlastic,
+		Enum.PartType.Ball
+	)
+
+	-- Articulated Left & Right Legs + Winter Boots
+	local leftLeg = makePedLimb(
+		m,
+		"LeftLeg",
+		Vector3.new(0.78, 2.0, 0.78),
+		root.CFrame * CFrame.new(-0.46, -2.1, 0),
+		roleSpec.legsColor,
+		Enum.Material.Fabric,
+		nil
+	)
+	local rightLeg = makePedLimb(
+		m,
+		"RightLeg",
+		Vector3.new(0.78, 2.0, 0.78),
+		root.CFrame * CFrame.new(0.46, -2.1, 0),
+		roleSpec.legsColor,
+		Enum.Material.Fabric,
+		nil
+	)
+	local leftBoot = makePedLimb(
+		m,
+		"LeftBoot",
+		Vector3.new(0.82, 0.36, 1.05),
+		root.CFrame * CFrame.new(-0.46, -3.15, -0.10),
+		Color3.fromRGB(28, 30, 36),
+		Enum.Material.SmoothPlastic,
+		nil
+	)
+	local rightBoot = makePedLimb(
+		m,
+		"RightBoot",
+		Vector3.new(0.82, 0.36, 1.05),
+		root.CFrame * CFrame.new(0.46, -3.15, -0.10),
+		Color3.fromRGB(28, 30, 36),
+		Enum.Material.SmoothPlastic,
+		nil
+	)
+
+	local partsToWeld: { BasePart } = {
+		collar,
+		head,
+		leftArm,
+		rightArm,
+		leftHand,
+		rightHand,
+		leftLeg,
+		rightLeg,
+		leftBoot,
+		rightBoot,
+	}
 
 	if roleSpec.hatColor then
-		local hat = Instance.new("Part")
-		hat.Name = "AccessoryHat"
-		hat.Size = if roleSpec.role == "HotdogChef"
-			then Vector3.new(1.5, 1.2, 1.5)
-			else Vector3.new(1.7, 0.55, 1.8)
-		hat.CFrame = root.CFrame * CFrame.new(0, 2.85, 0)
-		hat.Color = roleSpec.hatColor
-		hat.Material = Enum.Material.SmoothPlastic
-		hat.CanCollide = false
-		hat.Anchored = false
-		hat.Parent = m
+		local hat = makePedLimb(
+			m,
+			"AccessoryHat",
+			if roleSpec.role == "HotdogChef"
+				then Vector3.new(1.3, 0.95, 1.3)
+				else Vector3.new(1.38, 0.48, 1.45),
+			root.CFrame * CFrame.new(0, 2.48, 0),
+			roleSpec.hatColor,
+			Enum.Material.SmoothPlastic,
+			nil
+		)
 		table.insert(partsToWeld, hat)
 	end
 

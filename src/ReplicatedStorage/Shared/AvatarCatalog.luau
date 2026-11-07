@@ -102,7 +102,7 @@ AvatarCatalog.Items = {
 		Currency = "Robux", Price = 249, ProductId = 0, Rarity = "Legendary",
 		PrimaryColor = Color3.fromRGB(234, 179, 8), AccentColor = Color3.fromRGB(254, 240, 138),
 		Description = "Solid 24K gold battle armor worn by Leo City royalty.",
-		PerkLabel = "+10% Cash Earned", CashMultiplierBonus = 0.10,
+		PerkLabel = "+10% CASH", CashMultiplierBonus = 0.10,
 	},
 
 	-- ================= HEADGEAR =================
@@ -159,7 +159,7 @@ AvatarCatalog.Items = {
 		Currency = "Robux", Price = 299, ProductId = 0, Rarity = "Legendary",
 		PrimaryColor = Color3.fromRGB(250, 204, 21), AccentColor = Color3.fromRGB(239, 68, 68),
 		Description = "Jeweled golden sovereign crown forged from wrecked supercars.",
-		PerkLabel = "+10% XP Earned", XPMultiplierBonus = 0.10,
+		PerkLabel = "+10% XP", XPMultiplierBonus = 0.10,
 	},
 
 	-- ================= BACK ACCESSORIES =================
@@ -192,7 +192,7 @@ AvatarCatalog.Items = {
 		Currency = "Robux", Price = 175, ProductId = 0, Rarity = "Legendary",
 		PrimaryColor = Color3.fromRGB(30, 41, 59), AccentColor = Color3.fromRGB(249, 115, 22),
 		Description = "Twin-turbine nitro booster pack with live exhaust flames.",
-		PerkLabel = "+15% Sprint & Jump", SprintBonus = 0.15,
+		PerkLabel = "+15% SPEED", SprintBonus = 0.15,
 	},
 	ArchangelChaosWings = {
 		Id = "ArchangelChaosWings", Name = "Archangel Chaos Wings", Category = "BackAccessory",
@@ -263,7 +263,7 @@ AvatarCatalog.Items = {
 		Currency = "Robux", Price = 299, ProductId = 0, Rarity = "Legendary",
 		PrimaryColor = Color3.fromRGB(249, 115, 22), AccentColor = Color3.fromRGB(250, 204, 21),
 		Description = "Blazing solar flares and rising plasma rings.",
-		PerkLabel = "+15% Chaos Score", ChaosBonus = 0.15,
+		PerkLabel = "+15% CHAOS", ChaosBonus = 0.15,
 	},
 
 	-- ================= SKIN TONES =================

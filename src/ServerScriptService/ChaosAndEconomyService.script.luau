@@ -336,18 +336,19 @@ local playerStates: { [number]: PlayerChaosState } = {}
 export type VehicleUnlockMilestone = {
 	Id: string,
 	DisplayName: string,
+	Tier: string,
 	UnlockCost: number,
 	UnlockLevel: number,
 }
 
 local VEHICLE_UNLOCK_LADDER: { VehicleUnlockMilestone } = {
-	{ Id = "Sedan", DisplayName = "CRUISER V8 Sedan", UnlockCost = 250, UnlockLevel = 2 },
-	{ Id = "Muscle", DisplayName = "V8 Hellfire Muscle", UnlockCost = 650, UnlockLevel = 4 },
-	{ Id = "SUV", DisplayName = "TITAN 4x4 SUV", UnlockCost = 900, UnlockLevel = 6 },
-	{ Id = "Pickup", DisplayName = "RANCH RAMMER Pickup", UnlockCost = 1200, UnlockLevel = 9 },
-	{ Id = "Sports", DisplayName = "APEX GT Supercar", UnlockCost = 2000, UnlockLevel = 12 },
-	{ Id = "MonsterTruck", DisplayName = "CRUSHER XL Monster Truck", UnlockCost = 3500, UnlockLevel = 16 },
-	{ Id = "Bulldozer", DisplayName = "GOLIATH DOZER Bulldozer", UnlockCost = 5500, UnlockLevel = 22 },
+	{ Id = "Sedan", DisplayName = "CRUISER V8 Sedan", Tier = "Street", UnlockCost = 250, UnlockLevel = 2 },
+	{ Id = "Muscle", DisplayName = "V8 Hellfire Muscle", Tier = "Muscle", UnlockCost = 650, UnlockLevel = 4 },
+	{ Id = "SUV", DisplayName = "TITAN 4x4 SUV", Tier = "Heavy", UnlockCost = 900, UnlockLevel = 6 },
+	{ Id = "Pickup", DisplayName = "RANCH RAMMER Pickup", Tier = "Heavy", UnlockCost = 1200, UnlockLevel = 9 },
+	{ Id = "Sports", DisplayName = "APEX GT Supercar", Tier = "Super", UnlockCost = 2000, UnlockLevel = 12 },
+	{ Id = "MonsterTruck", DisplayName = "CRUSHER XL Monster Truck", Tier = "Demolition", UnlockCost = 3500, UnlockLevel = 16 },
+	{ Id = "Bulldozer", DisplayName = "GOLIATH DOZER Bulldozer", Tier = "Siege", UnlockCost = 5500, UnlockLevel = 22 },
 }
 
 local function isVehicleOwnedByPlayer(player: Player, vehicleId: string): boolean
@@ -367,40 +368,38 @@ end
 
 local function updateNextVehicleUnlockAttributes(player: Player)
 	local cash = math.max(0, tonumber(player:GetAttribute("Cash")) or 0)
-	local level = math.max(1, tonumber(player:GetAttribute("Level")) or 1)
 
 	local targetVehicle: VehicleUnlockMilestone? = nil
 	for _, milestone in ipairs(VEHICLE_UNLOCK_LADDER) do
 		if not isVehicleOwnedByPlayer(player, milestone.Id) then
-			if cash < milestone.UnlockCost or targetVehicle == nil then
-				targetVehicle = milestone
-				if cash < milestone.UnlockCost then
-					break
-				end
-			end
+			targetVehicle = milestone
+			break
 		end
 	end
 
 	if not targetVehicle then
 		local lastMilestone = VEHICLE_UNLOCK_LADDER[#VEHICLE_UNLOCK_LADDER]
 		player:SetAttribute("NextUnlockVehicleId", lastMilestone.Id)
-		player:SetAttribute("NextUnlockVehicleName", lastMilestone.DisplayName .. " (READY!)")
+		player:SetAttribute("NextUnlockVehicleName", lastMilestone.DisplayName .. " (MAXED!)")
 		player:SetAttribute("NextUnlockVehicleCost", lastMilestone.UnlockCost)
+		player:SetAttribute("NextUnlockVehicleTier", lastMilestone.Tier)
 		player:SetAttribute("NextUnlockProgressRatio", 1.0)
+		player:SetAttribute("CanAffordNextVehicle", cash >= lastMilestone.UnlockCost)
 		return
 	end
 
-	local cashRatio = math.clamp(cash / math.max(1, targetVehicle.UnlockCost), 0, 1)
-	local levelRatio = math.clamp(level / math.max(1, targetVehicle.UnlockLevel), 0, 1)
-	local combinedRatio = math.clamp(cashRatio * 0.8 + levelRatio * 0.2, 0.02, 1.0)
-	if cash >= targetVehicle.UnlockCost then
-		combinedRatio = 1.0
+	local canAfford = cash >= targetVehicle.UnlockCost
+	local progressRatio = math.clamp(cash / math.max(1, targetVehicle.UnlockCost), 0, 1)
+	if canAfford then
+		progressRatio = 1.0
 	end
 
 	player:SetAttribute("NextUnlockVehicleId", targetVehicle.Id)
 	player:SetAttribute("NextUnlockVehicleName", targetVehicle.DisplayName)
 	player:SetAttribute("NextUnlockVehicleCost", targetVehicle.UnlockCost)
-	player:SetAttribute("NextUnlockProgressRatio", tonumber(string.format("%.3f", combinedRatio)))
+	player:SetAttribute("NextUnlockVehicleTier", targetVehicle.Tier)
+	player:SetAttribute("NextUnlockProgressRatio", tonumber(string.format("%.3f", progressRatio)))
+	player:SetAttribute("CanAffordNextVehicle", canAfford)
 end
 
 local function getMagnetMultiplier(player: Player): number
@@ -1343,6 +1342,15 @@ local function handleDestructionEvent(
 		isJackpotCrate = true
 	end
 
+	local isGoldATM = (upperType == "GOLDATM") or (string.find(upperType, "ATM") ~= nil)
+	local isArmoredCashTruck = (upperType == "ARMOREDCASH_TRUCK")
+		or (upperType == "ARMOREDCASHTRUCK")
+		or (string.find(upperType, "ARMORED") ~= nil and string.find(upperType, "TRUCK") ~= nil)
+		or (string.find(upperType, "CASHTRUCK") ~= nil)
+	local isMegaCorpBankVault = (upperType == "MEGACORPBANKVAULT")
+		or (string.find(upperType, "VAULT") ~= nil)
+		or (string.find(upperType, "BANK") ~= nil)
+
 	if string.find(upperType, "LIGHT") or string.find(upperType, "HYDRANT") or string.find(upperType, "BUS") or string.find(upperType, "BILLBOARD") or string.find(upperType, "TOWER") then
 		heatGenerated = 5.0
 	end
@@ -1353,9 +1361,31 @@ local function handleDestructionEvent(
 	local state = playerStates[player.UserId]
 	local nextMult = if state then select(1, computeMultiplierTier(state.ComboCount + 1)) else 1
 	local callout = resolveDestructionCallout(objectType, isChainExplosion, nextMult)
+	local highTierChargeBonus: number? = nil
 
-	if isJackpotCrate then
+	if isMegaCorpBankVault then
+		baseCash = math.max(baseCash * 3, 550)
+		baseChaos = math.max(baseChaos * 3, 1650)
+		heatGenerated = 20.0
+		callout = "BANK VAULT HEIST!"
+		highTierChargeBonus = 50
+	elseif isArmoredCashTruck then
+		baseCash = math.max(baseCash * 2, 380)
+		baseChaos = math.max(baseChaos * 2, 1140)
+		heatGenerated = 15.0
+		callout = "ARMORED TRUCK SMASH!"
+		highTierChargeBonus = 40
+	elseif isJackpotCrate then
+		baseCash = math.max(baseCash * 2, 250)
+		baseChaos = math.max(baseChaos * 2, 750)
 		callout = "JACKPOT CRATE 3X!"
+		highTierChargeBonus = 35
+	elseif isGoldATM then
+		baseCash = math.max(baseCash * 2, 200)
+		baseChaos = math.max(baseChaos * 2, 600)
+		heatGenerated = 8.0
+		callout = "GOLD ATM BUST!"
+		highTierChargeBonus = 25
 	elseif callout == "CHAIN EXPLOSION!" then
 		baseCash = math.floor(baseCash * 1.6)
 		baseChaos = math.floor(baseChaos * 1.8)
@@ -1389,10 +1419,10 @@ local function handleDestructionEvent(
 
 	registerComboAction(player, baseCash, baseChaos, callout, heatGenerated, pos)
 
-	-- Advance Casino Jackpot Fever Charge (+35 for JackpotCrate, +9 to +18 for every regular prop smashed!)
-	local chargeGain = if isJackpotCrate then 35 else math.random(9, 18)
+	-- Advance Casino Jackpot Fever Charge (+25 to +50 for high-tier targets: GoldATM, JackpotCrate, ArmoredCashTruck, MegaCorpBankVault; +9 to +18 for regular props!)
+	local chargeGain = highTierChargeBonus or math.random(9, 18)
 	if type(objectTypeOrInfo) == "table" and tonumber(objectTypeOrInfo.jackpotChargeGain) then
-		chargeGain = tonumber(objectTypeOrInfo.jackpotChargeGain) :: number
+		chargeGain = math.max(chargeGain, tonumber(objectTypeOrInfo.jackpotChargeGain) :: number)
 	end
 	addJackpotCharge(player, chargeGain, pos)
 end
@@ -1601,8 +1631,16 @@ local function onPlayerAdded(player: Player)
 	syncCampaignAttributesToPlayer(player, state)
 	updateNextVehicleUnlockAttributes(player)
 
-	for _, attrName in ipairs({ "Cash", "Level", "EquippedVehicle", "OwnedVehicles", "UnlockedVehicles" }) do
+	for _, attrName in ipairs({ "Cash", "Level", "EquippedVehicle", "SelectedVehicle", "OwnedVehicles", "UnlockedVehicles" }) do
 		player:GetAttributeChangedSignal(attrName):Connect(function()
+			updateNextVehicleUnlockAttributes(player)
+		end)
+	end
+	for _, milestone in ipairs(VEHICLE_UNLOCK_LADDER) do
+		player:GetAttributeChangedSignal("Unlocked_" .. milestone.Id):Connect(function()
+			updateNextVehicleUnlockAttributes(player)
+		end)
+		player:GetAttributeChangedSignal("Owned_" .. milestone.Id):Connect(function()
 			updateNextVehicleUnlockAttributes(player)
 		end)
 	end

@@ -1,28 +1,30 @@
 --!strict
 --[[
 	DestructionSmashClient.client.luau
-	Client-side zero-resistance prop smashing, responsive high-grip brake assist,
-	dynamic brake lights + skid trails, and progressive visual car damage/crumple
-	for World of Destruction (Leo City).
+	Client-side zero-resistance prop smashing, 5-tier destruction power system,
+	intact traffic-vehicle flip physics, responsive high-grip brake assist,
+	and dynamic brake lights + skid trails for World of Destruction (Leo City).
 
 	Features:
-	  1. Zero-Resistance Client Bumper Smash Sweep (RunService.Heartbeat):
-	     - Sweeps ahead of and around the player's active vehicle (chassis.Size + Vector3.new(4, 3, 6)).
-	     - Immediately sets CanCollide = false and Anchored = false on all BaseParts of any hit
-	       "Destructible" prop, breaks internal welds, and launches pieces forward + upward with spin
-	       so the vehicle plows straight through fences, streetlights, hydrants, crates, and bus stops
-	       with ZERO slowdown or brick-wall bounce.
-	     - Preserves vehicle momentum across prop impacts and fires ReportDestruction & SmashProp remotes.
-	  2. Responsive Brake Assist, Intense Brake Lights & Skid Trails:
+	  1. 5-Tier Destruction Power System & Zero-Resistance Client Bumper Smash Sweep:
+	     - Computes playerSmashTier (1..5) from vehicle archetype + Plow upgrade level and publishes
+	       `player:SetAttribute("SmashPowerTier", tier)`.
+	     - When playerSmashTier >= requiredTier:
+	       - For regular props: breaks internal welds, sets CanCollide = false / Anchored = false,
+	         and launches pieces forward + upward with spin with ZERO slowdown.
+	       - For vehicles (AITrafficVehicle, Vehicle, TrafficVehicle, ArmoredCashTruck):
+	         NEVER breaks internal welds and NEVER sets CanCollide = false on body parts!
+	         Keeps the vehicle intact, unanchors Chassis (Anchored = false, CanCollide = true),
+	         and applies a dramatic upward/forward flip impulse (launchDir * 55 + Vector3.new(0, 32, 0))
+	         + angular spin so the entire intact car flips and tumbles through the air!
+	     - When playerSmashTier < requiredTier:
+	       - Does NOT destroy the heavy target; spawns a metallic spark burst, plays a metallic clink,
+	         and displays a 1.2s floating 3D badge ("NEED TIER X CAR OR PLOW! [PRESS B]" in gold/red)
+	         with a 1.5s per-object cooldown.
+	  2. Responsive Brake Assist, Recessed Dark-Red LED Brake Lights & Skid Trails:
 	     - Applies progressive high-grip braking deceleration assist when holding Brake (S/Down while
 	       moving forward, or Space Handbrake) so stopping is crisp, predictable, and responsive.
-	     - Lights up TaillightBar & TaillightClusters with neon red + PointLight glow and activates
-	       SkidTrailL / SkidTrailR during hard braking.
-	  3. Progressive Visual Car Damage, Crumple & Impact Sparks:
-	     - Monitors vehicle Health vs MaxHealth (< 80%, < 50%, < 25%) and offsets/tilts Hood,
-	       FrontBumper, RearBumper, and Windshield welds for physical denting/crumpling.
-	     - Spawns metallic impact sparks on hard wall collisions or health drops.
-	     - Restores all panels to pristine factory alignment when repaired (Health >= MaxHealth).
+	     - Lights up recessed LED taillight strips and activates SkidTrailL / SkidTrailR during hard braking.
 ]]
 
 local CollectionService = game:GetService("CollectionService")
@@ -30,6 +32,7 @@ local Debris = game:GetService("Debris")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
 
@@ -57,7 +60,9 @@ end
 -- State & Constants
 --------------------------------------------------------------------------------
 local locallySmashedProps: { [Instance]: number } = {}
+local tierBlockedCooldowns: { [Instance]: number } = {}
 local SMASH_CACHE_TTL = 8.0
+local TIER_BLOCK_COOLDOWN = 1.5
 
 local overlapParams = OverlapParams.new()
 overlapParams.FilterType = Enum.RaycastFilterType.Exclude
@@ -67,56 +72,154 @@ local lastRecordedHealth: number = 100
 local lastChassisSpeed: number = 0
 local lastPreImpactVelocity: Vector3 = Vector3.zero
 local lastImpactSparkAt: number = 0
-local appliedDamageTier: { [Model]: number } = {}
 
--- Crumple configuration per part for damage tiers:
--- Tier 0 = Pristine (>= 80% HP)
--- Tier 1 = Light Dent (< 80% HP)
--- Tier 2 = Medium Crumple (< 50% HP)
--- Tier 3 = Heavy Wreck Crumple (< 25% HP)
-type CrumpleSpec = {
-	PartName: string,
-	Offset: Vector3,
-	Angles: Vector3, -- radians (pitch, yaw, roll)
+--------------------------------------------------------------------------------
+-- 5-Tier Destruction Power System Lookup Tables & Helpers
+--------------------------------------------------------------------------------
+local VEHICLE_CLASS_BASE_TIER: { [string]: number } = {
+	Compact = 1,
+	Hatchback = 1,
+	Sedan = 2,
+	Muscle = 2,
+	SUV = 3,
+	Van = 3,
+	Pickup = 3,
+	Sports = 3,
+	MonsterTruck = 4,
+	Monster = 4,
+	Bulldozer = 5,
+	Tank = 5,
+	ArmoredTank = 5,
+	BoxTruck = 5,
 }
 
-local CRUMPLE_SPECS: { CrumpleSpec } = {
-	{
-		PartName = "Hood",
-		Offset = Vector3.new(0.04, 0.22, 0.28),
-		Angles = Vector3.new(math.rad(11), math.rad(-3), math.rad(4)),
-	},
-	{
-		PartName = "HoodNoseWedge",
-		Offset = Vector3.new(-0.03, 0.16, 0.32),
-		Angles = Vector3.new(math.rad(14), math.rad(2), math.rad(-3)),
-	},
-	{
-		PartName = "HoodPowerDome",
-		Offset = Vector3.new(0.04, 0.24, 0.26),
-		Angles = Vector3.new(math.rad(11), math.rad(-3), math.rad(4)),
-	},
-	{
-		PartName = "FrontBumper",
-		Offset = Vector3.new(0.06, -0.14, 0.34),
-		Angles = Vector3.new(math.rad(-9), math.rad(4), math.rad(-6)),
-	},
-	{
-		PartName = "FrontSplitter",
-		Offset = Vector3.new(-0.04, -0.16, 0.36),
-		Angles = Vector3.new(math.rad(-10), math.rad(-3), math.rad(5)),
-	},
-	{
-		PartName = "RearBumper",
-		Offset = Vector3.new(-0.05, -0.12, -0.26),
-		Angles = Vector3.new(math.rad(7), math.rad(-3), math.rad(5)),
-	},
-	{
-		PartName = "Windshield",
-		Offset = Vector3.new(0.0, -0.08, 0.14),
-		Angles = Vector3.new(math.rad(-6), math.rad(2), math.rad(-3)),
-	},
+local PROP_REQUIRED_TIER: { [string]: number } = {
+	-- Tier 1: Light Street Props
+	Crate = 1,
+	WoodenCrate = 1,
+	JackpotCrate = 1,
+	TrafficCone = 1,
+	Fence = 1,
+	Bench = 1,
+	StreetBench = 1,
+	TrashCan = 1,
+	Mailbox = 1,
+	NewspaperBox = 1,
+	FoodVendorCart = 1,
+	CafePatio = 1,
+	ConstructionBarrier = 1,
+
+	-- Tier 2: Municipal & Traffic Props
+	FireHydrant = 2,
+	StreetLight = 2,
+	TrafficLight = 2,
+	BusStop = 2,
+	PalmTree = 2,
+	GoldATM = 2,
+	TrafficVehicle = 2,
+
+	-- Tier 3: Industrial, Explosive & Heavy Armored Vehicles
+	GasPump = 3,
+	ExplosiveBarrel = 3,
+	Billboard = 3,
+	ArmoredCashTruck = 3,
+	MegaCorpTower = 3,
+
+	-- Tier 4: Massive Civic Landmarks & Transit
+	CityBus = 4,
+	ConstructionCrane = 4,
+	PlazaFountain = 4,
+
+	-- Tier 5: Ultra-Armored End-Game Targets
+	MegaCorpBankVault = 5,
+	BossGoliath = 5,
 }
+
+local function getPlayerSmashTier(player: Player?, vehicleModel: Model?): number
+	local vClass = ""
+	if vehicleModel then
+		vClass = tostring(vehicleModel:GetAttribute("VehicleType") or vehicleModel.Name)
+	end
+	if (vClass == "" or not VEHICLE_CLASS_BASE_TIER[vClass]) and player then
+		vClass = tostring(player:GetAttribute("CurrentVehicleType") or player:GetAttribute("EquippedVehicle") or "Compact")
+	end
+
+	local baseTier = VEHICLE_CLASS_BASE_TIER[vClass]
+	if not baseTier and vehicleModel then
+		baseTier = tonumber(vehicleModel:GetAttribute("BaseSmashTier"))
+	end
+	baseTier = baseTier or 1
+
+	local plowUpgrade = 1
+	if player then
+		plowUpgrade = tonumber(player:GetAttribute("Upgrade_Plow")) or 1
+	end
+	local plowBonus = math.floor((plowUpgrade - 1) * 0.75)
+	local tier = math.clamp(baseTier + plowBonus, 1, 5)
+
+	if player and player:GetAttribute("SmashPowerTier") ~= tier then
+		player:SetAttribute("SmashPowerTier", tier)
+	end
+	return tier
+end
+
+local function isVehicleTarget(inst: Instance): boolean
+	if
+		CollectionService:HasTag(inst, "AITrafficVehicle")
+		or CollectionService:HasTag(inst, "TrafficVehicle")
+		or CollectionService:HasTag(inst, "Vehicle")
+	then
+		return true
+	end
+	local propType = tostring(inst:GetAttribute("PropType") or inst.Name)
+	if propType == "TrafficVehicle" or propType == "ArmoredCashTruck" then
+		return true
+	end
+	return false
+end
+
+local function getPropRequiredTier(inst: Instance): number
+	local explicit = tonumber(inst:GetAttribute("RequiredTier"))
+	if explicit and explicit >= 1 then
+		return math.clamp(math.floor(explicit), 1, 5)
+	end
+
+	local propType = tostring(inst:GetAttribute("PropType") or inst.Name)
+	if PROP_REQUIRED_TIER[propType] then
+		return PROP_REQUIRED_TIER[propType]
+	end
+
+	if CollectionService:HasTag(inst, "AITrafficVehicle") or CollectionService:HasTag(inst, "TrafficVehicle") then
+		return 2
+	end
+
+	local lower = string.lower(propType)
+	if string.find(lower, "bankvault") or string.find(lower, "bossgoliath") then
+		return 5
+	elseif string.find(lower, "citybus") or string.find(lower, "crane") or string.find(lower, "fountain") then
+		return 4
+	elseif
+		string.find(lower, "gaspump")
+		or string.find(lower, "barrel")
+		or string.find(lower, "billboard")
+		or string.find(lower, "cashtruck")
+		or string.find(lower, "megacorptower")
+	then
+		return 3
+	elseif
+		string.find(lower, "hydrant")
+		or string.find(lower, "streetlight")
+		or string.find(lower, "trafficlight")
+		or string.find(lower, "busstop")
+		or string.find(lower, "palmtree")
+		or string.find(lower, "atm")
+		or string.find(lower, "traffic")
+	then
+		return 2
+	end
+
+	return 1
+end
 
 --------------------------------------------------------------------------------
 -- Helper: Find Active Seated Vehicle & Chassis
@@ -171,6 +274,10 @@ local function resolveDestructibleProp(part: BasePart, myVehicle: Model): Instan
 	end
 
 	if bestMatch then
+		-- Never treat a player's personal vehicle as a destructible street prop
+		if (tonumber(bestMatch:GetAttribute("OwnerUserId")) or 0) > 0 then
+			return nil
+		end
 		return bestMatch
 	end
 
@@ -194,11 +301,11 @@ local function resolveDestructibleProp(part: BasePart, myVehicle: Model): Instan
 end
 
 --------------------------------------------------------------------------------
--- Helper: Spawn Instant Client-Side Impact Sparks / Splinters
+-- Helper: Spawn Instant Client-Side Impact Sparks / Splinters & Tier Blocked Badge
 --------------------------------------------------------------------------------
-local function spawnClientImpactSparks(worldPos: Vector3, isWood: boolean)
+local function spawnClientImpactSparks(worldPos: Vector3, isWood: boolean, playMetallicClink: boolean?)
 	local now = os.clock()
-	if now - lastImpactSparkAt < 0.06 then
+	if not playMetallicClink and (now - lastImpactSparkAt < 0.06) then
 		return
 	end
 	lastImpactSparkAt = now
@@ -228,13 +335,91 @@ local function spawnClientImpactSparks(worldPos: Vector3, isWood: boolean)
 	pe.Acceleration = Vector3.new(0, -45, 0)
 	pe.Rate = 0
 	pe.Parent = host
-	pe:Emit(18)
+	pe:Emit(if playMetallicClink then 28 else 18)
 
-	Debris:AddItem(host, 0.6)
+	if playMetallicClink then
+		local clink = Instance.new("Sound")
+		clink.Name = "MetallicResistClink"
+		clink.SoundId = "rbxassetid://9114221580"
+		clink.Volume = 0.75
+		clink.PlaybackSpeed = 1.18
+		clink.Parent = host
+		clink:Play()
+	end
+
+	Debris:AddItem(host, 0.8)
+end
+
+local function showTierResistanceBadge(propInst: Instance, requiredTier: number, impactPos: Vector3)
+	local now = os.clock()
+	local lastShown = tierBlockedCooldowns[propInst]
+	if lastShown and (now - lastShown) < TIER_BLOCK_COOLDOWN then
+		return
+	end
+	tierBlockedCooldowns[propInst] = now
+
+	spawnClientImpactSparks(impactPos, false, true)
+
+	if propInst:FindFirstChild("TierBlockedBadge") then
+		return
+	end
+
+	local adorneePart: BasePart? = if propInst:IsA("BasePart")
+		then propInst
+		elseif propInst:IsA("Model") then (propInst.PrimaryPart or propInst:FindFirstChildWhichIsA("BasePart", true))
+		else nil
+	if not adorneePart then
+		return
+	end
+
+	local bb = Instance.new("BillboardGui")
+	bb.Name = "TierBlockedBadge"
+	bb.Adornee = adorneePart
+	bb.Size = UDim2.fromOffset(310, 54)
+	bb.StudsOffset = Vector3.new(0, 4.2, 0)
+	bb.AlwaysOnTop = true
+	bb.MaxDistance = 95
+	bb.Parent = propInst
+
+	local frame = Instance.new("Frame")
+	frame.Size = UDim2.fromScale(1, 1)
+	frame.BackgroundColor3 = Color3.fromRGB(135, 18, 24)
+	frame.BackgroundTransparency = 0.08
+	frame.BorderSizePixel = 0
+	frame.Parent = bb
+
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0, 10)
+	corner.Parent = frame
+
+	local stroke = Instance.new("UIStroke")
+	stroke.Color = Color3.fromRGB(255, 205, 45)
+	stroke.Thickness = 2.5
+	stroke.Parent = frame
+
+	local label = Instance.new("TextLabel")
+	label.Size = UDim2.new(1, -16, 1, -8)
+	label.Position = UDim2.fromOffset(8, 4)
+	label.BackgroundTransparency = 1
+	label.Font = Enum.Font.GothamBlack
+	label.Text = "NEED TIER " .. tostring(requiredTier) .. " CAR OR PLOW! [PRESS B]"
+	label.TextColor3 = Color3.fromRGB(255, 220, 65)
+	label.TextStrokeColor3 = Color3.fromRGB(40, 8, 10)
+	label.TextStrokeTransparency = 0.15
+	label.TextScaled = true
+	label.Parent = frame
+
+	TweenService:Create(
+		bb,
+		TweenInfo.new(1.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+		{ StudsOffset = Vector3.new(0, 6.8, 0) }
+	):Play()
+
+	Debris:AddItem(bb, 1.2)
 end
 
 --------------------------------------------------------------------------------
--- 1. Zero-Resistance Client Bumper Smash Sweep
+-- 1. Zero-Resistance Client Bumper Smash Sweep (With Intact Vehicle Flip & Tier Gate)
 --------------------------------------------------------------------------------
 local function smashPropLocallyAndNotifyServer(
 	propInst: Instance,
@@ -248,8 +433,51 @@ local function smashPropLocallyAndNotifyServer(
 	end
 	locallySmashedProps[propInst] = now
 
-	-- Break all internal welds on the client immediately so composite props shatter apart
-	if propInst:IsA("Model") and not CollectionService:HasTag(propInst, "AITrafficVehicle") then
+	local launchDir = if carForward.Magnitude > 0.05 then carForward.Unit else Vector3.new(0, 0, -1)
+	local isVehicle = isVehicleTarget(propInst)
+
+	if isVehicle then
+		-- NEVER break internal WeldConstraints and NEVER set CanCollide = false on vehicle body parts!
+		-- Keep all parts welded to PrimaryPart (Chassis), unanchor Chassis, and flip the entire intact vehicle!
+		local targetChassis: BasePart? = if propInst:IsA("Model")
+			then (propInst.PrimaryPart or (propInst:FindFirstChild("Chassis") :: BasePart?) or propInst:FindFirstChildWhichIsA("BasePart", true))
+			elseif propInst:IsA("BasePart") then propInst
+			else nil
+
+		if propInst:IsA("Model") then
+			for _, desc in ipairs(propInst:GetDescendants()) do
+				if desc:IsA("BasePart") then
+					desc.Anchored = false
+				end
+			end
+		end
+
+		if targetChassis then
+			targetChassis.Anchored = false
+			targetChassis.CanCollide = true
+			targetChassis.AssemblyLinearVelocity = launchDir * 55 + Vector3.new(0, 32, 0)
+			targetChassis.AssemblyAngularVelocity = Vector3.new(
+				(math.random() - 0.5) * 18,
+				(math.random() - 0.5) * 14,
+				(math.random() - 0.5) * 18
+			)
+			spawnClientImpactSparks(targetChassis.Position, false, false)
+		end
+
+		local outboundVel = launchDir * 55 + Vector3.new(0, 32, 0)
+		local reportRemote = getRemoteEvent("ReportDestruction")
+		if reportRemote then
+			reportRemote:FireServer(propInst, outboundVel)
+		end
+		local smashRemote = getRemoteEvent("SmashProp")
+		if smashRemote then
+			smashRemote:FireServer(propInst, outboundVel)
+		end
+		return
+	end
+
+	-- Non-vehicle destructible prop: break all internal welds on client so composite props shatter apart
+	if propInst:IsA("Model") then
 		for _, desc in ipairs(propInst:GetDescendants()) do
 			if desc:IsA("WeldConstraint") then
 				desc.Enabled = false
@@ -272,7 +500,7 @@ local function smashPropLocallyAndNotifyServer(
 	end
 
 	local baseLaunchSpeed = math.max(35, speed * 1.35)
-	local baseLaunchVel = carForward * baseLaunchSpeed + Vector3.new(0, 22, 0)
+	local baseLaunchVel = launchDir * baseLaunchSpeed + Vector3.new(0, 22, 0)
 	local firstPos: Vector3? = nil
 	local isWood = false
 
@@ -300,7 +528,7 @@ local function smashPropLocallyAndNotifyServer(
 	end
 
 	if firstPos then
-		spawnClientImpactSparks(firstPos, isWood)
+		spawnClientImpactSparks(firstPos, isWood, false)
 	end
 
 	-- Fire server remotes immediately so server triggers geysers, explosions, combo, and cash
@@ -316,6 +544,8 @@ local function smashPropLocallyAndNotifyServer(
 end
 
 local function performBumperSmashSweep(seat: VehicleSeat, model: Model, chassis: BasePart, throttleInput: number)
+	local playerSmashTier = getPlayerSmashTier(localPlayer, model)
+
 	local vel = chassis.AssemblyLinearVelocity
 	local speed = vel.Magnitude
 	local attrSpeed = tonumber(localPlayer:GetAttribute("VehicleSpeed")) or 0
@@ -349,15 +579,20 @@ local function performBumperSmashSweep(seat: VehicleSeat, model: Model, chassis:
 	for _, part in ipairs(hitParts) do
 		local propInst = resolveDestructibleProp(part, model)
 		if propInst and propInst:GetAttribute("Destroyed") ~= true then
-			smashedAny = true
-			local travelDir = if throttleInput < -0.1 and vel:Dot(flatForward) < -1
-				then -flatForward
-				else flatForward
-			smashPropLocallyAndNotifyServer(propInst, travelDir, effectiveSpeed, vel)
+			local requiredTier = getPropRequiredTier(propInst)
+			if playerSmashTier >= requiredTier then
+				smashedAny = true
+				local travelDir = if throttleInput < -0.1 and vel:Dot(flatForward) < -1
+					then -flatForward
+					else flatForward
+				smashPropLocallyAndNotifyServer(propInst, travelDir, effectiveSpeed, vel)
+			else
+				showTierResistanceBadge(propInst, requiredTier, part.Position)
+			end
 		end
 	end
 
-	-- If the physics solver already clipped an anchored prop in this substep, restore pre-impact velocity
+	-- If the physics solver already clipped an anchored prop that we smashed in this substep, restore pre-impact velocity
 	if smashedAny and lastPreImpactVelocity.Magnitude > vel.Magnitude + 6 then
 		chassis.AssemblyLinearVelocity = Vector3.new(
 			lastPreImpactVelocity.X,
@@ -368,7 +603,7 @@ local function performBumperSmashSweep(seat: VehicleSeat, model: Model, chassis:
 end
 
 --------------------------------------------------------------------------------
--- 2. Responsive Brake Assist, Brake Lights & Rear Tire Skid Trails
+-- 2. Responsive Brake Assist, Recessed Dark-Red LED Brake Lights & Skid Trails
 --------------------------------------------------------------------------------
 local function readBrakingAndThrottleState(seat: VehicleSeat, forwardSpeed: number): (number, boolean, boolean)
 	local kbThrottle = 0
@@ -415,9 +650,10 @@ local function updateBrakeLightsAndSkidTrails(
 	local clusterL = model:FindFirstChild("TaillightClusterL") :: BasePart?
 	local clusterR = model:FindFirstChild("TaillightClusterR") :: BasePart?
 
+	-- Keep recessed dark-red LED strips (185, 24, 30) when cruising; crisp red brake glow when braking
 	local activeColor = if isBraking
-		then Color3.fromRGB(255, 38, 28)
-		else Color3.fromRGB(165, 18, 18)
+		then Color3.fromRGB(220, 28, 34)
+		else Color3.fromRGB(185, 24, 30)
 	local activeMaterial = if isBraking then Enum.Material.Neon else Enum.Material.SmoothPlastic
 
 	for _, part in ipairs({ tailBar, clusterL, clusterR }) do
@@ -432,12 +668,12 @@ local function updateBrakeLightsAndSkidTrails(
 		if not brakeLight then
 			brakeLight = Instance.new("PointLight")
 			brakeLight.Name = "BrakeGlowLight"
-			brakeLight.Color = Color3.fromRGB(255, 30, 20)
-			brakeLight.Range = 16
+			brakeLight.Color = Color3.fromRGB(220, 28, 34)
+			brakeLight.Range = 12
 			brakeLight.Parent = tailBar
 		end
 		brakeLight.Enabled = isBraking
-		brakeLight.Brightness = if isBraking then 3.8 else 0
+		brakeLight.Brightness = if isBraking then 2.4 else 0
 	end
 
 	-- Enable rear tire skid trails and smoke during hard braking
@@ -492,7 +728,6 @@ local function applyResponsiveBrakeAssist(
 	local baseBrakeDecel = tonumber(model:GetAttribute("BrakeDecel")) or 120
 
 	-- Progressive high-grip braking deceleration assist
-	-- Stronger stopping power when holding S/Down or Space without drifting
 	local gripMultiplier = if (throttleInput < -0.1 and forwardSpeed > 2)
 		then 1.65
 		elseif (handbrakeActive and not isDrifting) then 1.85
@@ -523,74 +758,6 @@ local function applyResponsiveBrakeAssist(
 end
 
 --------------------------------------------------------------------------------
--- 3. Progressive Visual Car Damage, Crumple & Repair Alignment
---------------------------------------------------------------------------------
-local function computeDamageTier(health: number, maxHealth: number): number
-	local ratio = health / math.max(1, maxHealth)
-	if ratio >= 0.99 then
-		return 0
-	elseif ratio < 0.25 then
-		return 3
-	elseif ratio < 0.50 then
-		return 2
-	elseif ratio < 0.80 then
-		return 1
-	end
-	return 0
-end
-
-local function updateVehicleCrumpleVisuals(model: Model, forceUpdate: boolean?)
-	local health = tonumber(model:GetAttribute("Health")) or 100
-	local maxHealth = math.max(1, tonumber(model:GetAttribute("MaxHealth")) or 100)
-	local tier = computeDamageTier(health, maxHealth)
-
-	if not forceUpdate and appliedDamageTier[model] == tier then
-		return
-	end
-	appliedDamageTier[model] = tier
-
-	-- Scale factor for crumple intensity (0 = pristine, 0.35 = <80%, 0.70 = <50%, 1.15 = <25%)
-	local intensity = if tier == 0
-		then 0.0
-		elseif tier == 1 then 0.38
-		elseif tier == 2 then 0.75
-		else 1.18
-
-	for _, spec in ipairs(CRUMPLE_SPECS) do
-		local part = model:FindFirstChild(spec.PartName) :: BasePart?
-		if part then
-			local weld = (part:FindFirstChild(spec.PartName .. "_Weld") or part:FindFirstChildOfClass("Weld")) :: Weld?
-			if weld then
-				local pristineC0 = part:GetAttribute("PristineBaseC0")
-				if typeof(pristineC0) ~= "CFrame" then
-					local existingBase = part:GetAttribute("BaseC0")
-					pristineC0 = if typeof(existingBase) == "CFrame" then existingBase else weld.C0
-					part:SetAttribute("PristineBaseC0", pristineC0)
-				end
-
-				local baseCF = pristineC0 :: CFrame
-				if intensity <= 0.001 then
-					-- Restore to pristine factory alignment when repaired
-					part:SetAttribute("BaseC0", baseCF)
-					weld.C0 = baseCF
-				else
-					local offset = spec.Offset * intensity
-					local rot = CFrame.Angles(
-						spec.Angles.X * intensity,
-						spec.Angles.Y * intensity,
-						spec.Angles.Z * intensity
-					)
-					local crumpledCF = baseCF * CFrame.new(offset) * rot
-					-- Updating BaseC0 ensures VehicleClientController's RenderStepped tilt preserves the crumple!
-					part:SetAttribute("BaseC0", crumpledCF)
-					weld.C0 = crumpledCF
-				end
-			end
-		end
-	end
-end
-
---------------------------------------------------------------------------------
 -- Main Heartbeat Loop
 --------------------------------------------------------------------------------
 RunService.Heartbeat:Connect(function(dt: number)
@@ -600,6 +767,7 @@ RunService.Heartbeat:Connect(function(dt: number)
 
 	local seat, model, chassis = getActiveVehicleAndChassis()
 	if not seat or not model or not chassis then
+		getPlayerSmashTier(localPlayer, nil)
 		lastVehicleModel = nil
 		lastChassisSpeed = 0
 		lastPreImpactVelocity = Vector3.zero
@@ -607,26 +775,21 @@ RunService.Heartbeat:Connect(function(dt: number)
 	end
 
 	local currentHealth = tonumber(model:GetAttribute("Health")) or 100
-	local maxHealth = math.max(1, tonumber(model:GetAttribute("MaxHealth")) or 100)
 
 	if model ~= lastVehicleModel then
 		lastVehicleModel = model
 		lastRecordedHealth = currentHealth
 		lastChassisSpeed = chassis.AssemblyLinearVelocity.Magnitude
 		lastPreImpactVelocity = chassis.AssemblyLinearVelocity
-		updateVehicleCrumpleVisuals(model, true)
 	end
 
-	-- 1. Check for Health drop or Repair to update visual crumple & spawn impact sparks
+	-- 1. Check for Health drop to spawn impact sparks (NEVER modify welds/C0!)
 	if currentHealth ~= lastRecordedHealth then
 		if currentHealth < lastRecordedHealth then
 			local frontPos = (chassis.CFrame * CFrame.new(0, 0.2, -chassis.Size.Z * 0.5)).Position
-			spawnClientImpactSparks(frontPos, false)
+			spawnClientImpactSparks(frontPos, false, false)
 		end
 		lastRecordedHealth = currentHealth
-		updateVehicleCrumpleVisuals(model, true)
-	else
-		updateVehicleCrumpleVisuals(model, false)
 	end
 
 	-- 2. Read driving & braking inputs
@@ -634,7 +797,7 @@ RunService.Heartbeat:Connect(function(dt: number)
 	local forwardSpeed = vel:Dot(chassis.CFrame.LookVector)
 	local throttleInput, isBraking, handbrakeActive = readBrakingAndThrottleState(seat, forwardSpeed)
 
-	-- 3. Zero-Resistance Client Bumper Smash Sweep (runs every Heartbeat)
+	-- 3. Zero-Resistance Client Bumper Smash Sweep (with 5-Tier Destruction Power Check)
 	performBumperSmashSweep(seat, model, chassis, throttleInput)
 
 	-- 4. Responsive Brake Assist, Brake Lights & Skid Trails
@@ -644,7 +807,7 @@ RunService.Heartbeat:Connect(function(dt: number)
 	local newSpeed = chassis.AssemblyLinearVelocity.Magnitude
 	if (lastChassisSpeed - newSpeed) > 34 and lastChassisSpeed > 42 and not isBraking then
 		local frontPos = (chassis.CFrame * CFrame.new(0, 0.2, -chassis.Size.Z * 0.5)).Position
-		spawnClientImpactSparks(frontPos, false)
+		spawnClientImpactSparks(frontPos, false, false)
 	end
 
 	lastChassisSpeed = newSpeed
@@ -653,7 +816,7 @@ RunService.Heartbeat:Connect(function(dt: number)
 	end
 end)
 
--- Periodic cleanup of old entries in locallySmashedProps cache
+-- Periodic cleanup of old entries in locallySmashedProps and tierBlockedCooldowns caches
 task.spawn(function()
 	while true do
 		task.wait(10.0)
@@ -661,6 +824,11 @@ task.spawn(function()
 		for inst, ts in pairs(locallySmashedProps) do
 			if not inst.Parent or (now - ts) > SMASH_CACHE_TTL then
 				locallySmashedProps[inst] = nil
+			end
+		end
+		for inst, ts in pairs(tierBlockedCooldowns) do
+			if not inst.Parent or (now - ts) > SMASH_CACHE_TTL then
+				tierBlockedCooldowns[inst] = nil
 			end
 		end
 	end

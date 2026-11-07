@@ -1,12 +1,16 @@
 --!strict
 -- DestructionService.script.luau
--- High-impact Roblox physics destruction system for Leo City:
--- - Connects .Touched to ALL descendant BaseParts of every "Destructible" instance.
--- - Uses low BreakThresholds (<= 5 for street props, <= 12 for cranes/fountains) so vehicles plow through effortlessly.
--- - Runs a 0.06s server-side vehicle proximity smash sweep (Workspace:GetPartBoundsInBox) around occupied vehicles.
--- - Listens to client ReportDestruction & SmashProp remotes for zero-latency client-assisted prop smashing.
--- - Unanchors all parts, breaks internal WeldConstraints for multi-piece shatter, disables CanCollide for 0.35s
---   so debris never snags tires, and spawns flying wood splinters / metal fragments (Debris 3.5s).
+-- High-impact Roblox physics destruction system for Leo City with 5-Tier Destruction Power System:
+-- - Computes player SmashPowerTier (1..5) from vehicle archetype + Plow upgrade level and publishes
+--   `player:SetAttribute("SmashPowerTier", tier)`.
+-- - Enforces RequiredTier (1..5) per prop:
+--   - When playerSmashTier >= requiredTier: smashes immediately and awards full Cash & Coins.
+--   - When playerSmashTier < requiredTier: resists destruction, spawns metallic spark burst + clink sound,
+--     and shows a 1.2s floating 3D badge ("NEED TIER X CAR OR PLOW! [PRESS B]" in gold/red, 1.5s cooldown).
+-- - Preserves vehicle integrity on rammed vehicles (AITrafficVehicle, Vehicle, TrafficVehicle, ArmoredCashTruck):
+--   NEVER breaks internal WeldConstraints and NEVER sets CanCollide = false on body parts; keeps all parts
+--   welded to PrimaryPart (Chassis), unanchors Chassis, and applies a dramatic upward/forward flip impulse
+--   (launchDir * 55 + Vector3.new(0, 32, 0)) + angular spin so the entire intact car flips and tumbles!
 -- - Spawns water geysers, electric sparks, and chain-reaction explosions.
 -- - Automatically respawns destroyed props after 45 seconds when players are far away.
 
@@ -16,6 +20,7 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local ServerStorage = game:GetService("ServerStorage")
+local TweenService = game:GetService("TweenService")
 local Workspace = game:GetService("Workspace")
 
 --------------------------------------------------------------------------------
@@ -66,6 +71,7 @@ local SAFE_PLAYER_RESPAWN_DIST = 65.0
 local EXPLOSION_BLAST_RADIUS = 38.0
 local PROXIMITY_SWEEP_INTERVAL = 0.06
 local CLIENT_REPORT_MAX_DIST = 45.0
+local TIER_BLOCK_COOLDOWN = 1.5
 
 type RespawnEntry = {
 	template: Instance,
@@ -78,6 +84,253 @@ type RespawnEntry = {
 local respawnQueue: { RespawnEntry } = {}
 local boundInstances: { [Instance]: boolean } = {}
 local boundParts: { [BasePart]: boolean } = {}
+local tierBlockedCooldowns: { [Instance]: number } = {}
+
+--------------------------------------------------------------------------------
+-- 5-TIER DESTRUCTION POWER SYSTEM HELPERS
+--------------------------------------------------------------------------------
+local VEHICLE_CLASS_BASE_TIER: { [string]: number } = {
+	Compact = 1,
+	Hatchback = 1,
+	Sedan = 2,
+	Muscle = 2,
+	SUV = 3,
+	Van = 3,
+	Pickup = 3,
+	Sports = 3,
+	MonsterTruck = 4,
+	Monster = 4,
+	Bulldozer = 5,
+	Tank = 5,
+	ArmoredTank = 5,
+	BoxTruck = 5,
+}
+
+local PROP_REQUIRED_TIER: { [string]: number } = {
+	-- Tier 1: Light Street Props
+	Crate = 1,
+	WoodenCrate = 1,
+	JackpotCrate = 1,
+	TrafficCone = 1,
+	Fence = 1,
+	Bench = 1,
+	StreetBench = 1,
+	TrashCan = 1,
+	Mailbox = 1,
+	NewspaperBox = 1,
+	FoodVendorCart = 1,
+	CafePatio = 1,
+	ConstructionBarrier = 1,
+
+	-- Tier 2: Municipal & Traffic Props
+	FireHydrant = 2,
+	StreetLight = 2,
+	TrafficLight = 2,
+	BusStop = 2,
+	PalmTree = 2,
+	GoldATM = 2,
+	TrafficVehicle = 2,
+
+	-- Tier 3: Industrial, Explosive & Heavy Armored Vehicles
+	GasPump = 3,
+	ExplosiveBarrel = 3,
+	Billboard = 3,
+	ArmoredCashTruck = 3,
+	MegaCorpTower = 3,
+
+	-- Tier 4: Massive Civic Landmarks & Transit
+	CityBus = 4,
+	ConstructionCrane = 4,
+	PlazaFountain = 4,
+
+	-- Tier 5: Ultra-Armored End-Game Targets
+	MegaCorpBankVault = 5,
+	BossGoliath = 5,
+}
+
+local function getPlayerSmashTier(player: Player?, vehicleModel: Model?): number
+	local vClass = ""
+	if vehicleModel then
+		vClass = tostring(vehicleModel:GetAttribute("VehicleType") or vehicleModel.Name)
+	end
+	if (vClass == "" or not VEHICLE_CLASS_BASE_TIER[vClass]) and player then
+		vClass = tostring(player:GetAttribute("CurrentVehicleType") or player:GetAttribute("EquippedVehicle") or "Compact")
+	end
+
+	local baseTier = VEHICLE_CLASS_BASE_TIER[vClass]
+	if not baseTier and vehicleModel then
+		baseTier = tonumber(vehicleModel:GetAttribute("BaseSmashTier"))
+	end
+	baseTier = baseTier or 1
+
+	local plowUpgrade = 1
+	if player then
+		plowUpgrade = tonumber(player:GetAttribute("Upgrade_Plow")) or 1
+	end
+	local plowBonus = math.floor((plowUpgrade - 1) * 0.75)
+	local tier = math.clamp(baseTier + plowBonus, 1, 5)
+
+	if player and player:GetAttribute("SmashPowerTier") ~= tier then
+		player:SetAttribute("SmashPowerTier", tier)
+	end
+	return tier
+end
+
+local function isVehicleDestructible(inst: Instance): boolean
+	if
+		CollectionService:HasTag(inst, "AITrafficVehicle")
+		or CollectionService:HasTag(inst, "TrafficVehicle")
+		or CollectionService:HasTag(inst, "Vehicle")
+	then
+		return true
+	end
+	local propType = tostring(inst:GetAttribute("PropType") or inst.Name)
+	if propType == "TrafficVehicle" or propType == "ArmoredCashTruck" then
+		return true
+	end
+	return false
+end
+
+local function getPropRequiredTier(inst: Instance): number
+	local explicit = tonumber(inst:GetAttribute("RequiredTier"))
+	if explicit and explicit >= 1 then
+		return math.clamp(math.floor(explicit), 1, 5)
+	end
+
+	local propType = tostring(inst:GetAttribute("PropType") or inst.Name)
+	if PROP_REQUIRED_TIER[propType] then
+		return PROP_REQUIRED_TIER[propType]
+	end
+
+	if CollectionService:HasTag(inst, "AITrafficVehicle") or CollectionService:HasTag(inst, "TrafficVehicle") then
+		return 2
+	end
+
+	local lower = string.lower(propType)
+	if string.find(lower, "bankvault") or string.find(lower, "bossgoliath") then
+		return 5
+	elseif string.find(lower, "citybus") or string.find(lower, "crane") or string.find(lower, "fountain") then
+		return 4
+	elseif
+		string.find(lower, "gaspump")
+		or string.find(lower, "barrel")
+		or string.find(lower, "billboard")
+		or string.find(lower, "cashtruck")
+		or string.find(lower, "megacorptower")
+	then
+		return 3
+	elseif
+		string.find(lower, "hydrant")
+		or string.find(lower, "streetlight")
+		or string.find(lower, "trafficlight")
+		or string.find(lower, "busstop")
+		or string.find(lower, "palmtree")
+		or string.find(lower, "atm")
+		or string.find(lower, "traffic")
+	then
+		return 2
+	end
+
+	return 1
+end
+
+local function showTierResistanceFeedback(propInst: Instance, requiredTier: number)
+	local now = os.clock()
+	local lastShown = tierBlockedCooldowns[propInst]
+	if lastShown and (now - lastShown) < TIER_BLOCK_COOLDOWN then
+		return
+	end
+	tierBlockedCooldowns[propInst] = now
+
+	local adorneePart: BasePart? = if propInst:IsA("BasePart")
+		then propInst
+		elseif propInst:IsA("Model") then (propInst.PrimaryPart or propInst:FindFirstChildWhichIsA("BasePart", true))
+		else nil
+	if not adorneePart then
+		return
+	end
+
+	-- Metallic spark burst + metallic clink sound
+	local sparkHost = Instance.new("Part")
+	sparkHost.Name = "TierResistSparkVFX"
+	sparkHost.Size = Vector3.new(0.5, 0.5, 0.5)
+	sparkHost.Position = adorneePart.Position
+	sparkHost.Anchored = true
+	sparkHost.CanCollide = false
+	sparkHost.Transparency = 1
+	sparkHost.Parent = Workspace
+
+	local pe = Instance.new("ParticleEmitter")
+	pe.Color = ColorSequence.new(Color3.fromRGB(255, 235, 110), Color3.fromRGB(255, 110, 20))
+	pe.LightEmission = 1.0
+	pe.Size = NumberSequence.new(0.45, 0.0)
+	pe.Lifetime = NumberRange.new(0.18, 0.42)
+	pe.Speed = NumberRange.new(20, 38)
+	pe.SpreadAngle = Vector2.new(180, 180)
+	pe.Acceleration = Vector3.new(0, -45, 0)
+	pe.Rate = 0
+	pe.Parent = sparkHost
+	pe:Emit(24)
+
+	local clink = Instance.new("Sound")
+	clink.Name = "MetallicResistClink"
+	clink.SoundId = "rbxassetid://9114221580"
+	clink.Volume = 0.7
+	clink.PlaybackSpeed = 1.18
+	clink.Parent = sparkHost
+	clink:Play()
+
+	Debris:AddItem(sparkHost, 0.8)
+
+	if propInst:FindFirstChild("TierBlockedBadge") then
+		return
+	end
+
+	local bb = Instance.new("BillboardGui")
+	bb.Name = "TierBlockedBadge"
+	bb.Adornee = adorneePart
+	bb.Size = UDim2.fromOffset(310, 54)
+	bb.StudsOffset = Vector3.new(0, 4.2, 0)
+	bb.AlwaysOnTop = true
+	bb.MaxDistance = 95
+	bb.Parent = propInst
+
+	local frame = Instance.new("Frame")
+	frame.Size = UDim2.fromScale(1, 1)
+	frame.BackgroundColor3 = Color3.fromRGB(135, 18, 24)
+	frame.BackgroundTransparency = 0.08
+	frame.BorderSizePixel = 0
+	frame.Parent = bb
+
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0, 10)
+	corner.Parent = frame
+
+	local stroke = Instance.new("UIStroke")
+	stroke.Color = Color3.fromRGB(255, 205, 45)
+	stroke.Thickness = 2.5
+	stroke.Parent = frame
+
+	local label = Instance.new("TextLabel")
+	label.Size = UDim2.new(1, -16, 1, -8)
+	label.Position = UDim2.fromOffset(8, 4)
+	label.BackgroundTransparency = 1
+	label.Font = Enum.Font.GothamBlack
+	label.Text = "NEED TIER " .. tostring(requiredTier) .. " CAR OR PLOW! [PRESS B]"
+	label.TextColor3 = Color3.fromRGB(255, 220, 65)
+	label.TextStrokeColor3 = Color3.fromRGB(40, 8, 10)
+	label.TextStrokeTransparency = 0.15
+	label.TextScaled = true
+	label.Parent = frame
+
+	TweenService:Create(
+		bb,
+		TweenInfo.new(1.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+		{ StudsOffset = Vector3.new(0, 6.8, 0) }
+	):Play()
+
+	Debris:AddItem(bb, 1.2)
+end
 
 --------------------------------------------------------------------------------
 -- DESTRUCTIBLE RESOLUTION HELPERS
@@ -110,6 +363,9 @@ local function resolveDestructibleInstance(candidate: Instance?): Instance?
 	end
 
 	if bestMatch then
+		if (tonumber(bestMatch:GetAttribute("OwnerUserId")) or 0) > 0 then
+			return nil
+		end
 		return bestMatch
 	end
 
@@ -156,11 +412,12 @@ end
 --------------------------------------------------------------------------------
 -- DRIVER & VEHICLE RESOLUTION
 --------------------------------------------------------------------------------
-local function resolveAttacker(hitPart: BasePart): (Player?, number, Vector3)
+local function resolveAttacker(hitPart: BasePart): (Player?, number, Vector3, Model?)
 	local vel = hitPart.AssemblyLinearVelocity
 	local speed = vel.Magnitude
 	local ramMultiplier = 1.0
 	local attacker: Player? = nil
+	local resolvedVehicleModel: Model? = nil
 
 	local model = hitPart:FindFirstAncestorOfClass("Model")
 	if model then
@@ -174,6 +431,9 @@ local function resolveAttacker(hitPart: BasePart): (Player?, number, Vector3)
 		local vehicleModel = model
 		while vehicleModel.Parent and vehicleModel.Parent:IsA("Model") and vehicleModel.Parent ~= Workspace do
 			vehicleModel = vehicleModel.Parent :: Model
+		end
+		if CollectionService:HasTag(vehicleModel, "Vehicle") or vehicleModel:FindFirstChild("DriveSeat") then
+			resolvedVehicleModel = vehicleModel
 		end
 
 		local ramAttr = (vehicleModel:GetAttribute("RamMultiplier") :: number?)
@@ -240,7 +500,7 @@ local function resolveAttacker(hitPart: BasePart): (Player?, number, Vector3)
 		end
 	end
 
-	return attacker, ramMultiplier, vel
+	return attacker, ramMultiplier, vel, resolvedVehicleModel
 end
 
 --------------------------------------------------------------------------------
@@ -423,6 +683,7 @@ local function triggerChainExplosion(pos: Vector3, attacker: Player?, sourceProp
 
 	-- Blast nearby destructibles in radius with proportional shockwave velocity
 	task.delay(0.08, function()
+		local attackerTier = if attacker then (tonumber(attacker:GetAttribute("SmashPowerTier")) or getPlayerSmashTier(attacker, nil)) else 3
 		for _, prop in ipairs(CollectionService:GetTagged("Destructible")) do
 			if prop:GetAttribute("Destroyed") ~= true then
 				local pPos = getDestructiblePosition(prop)
@@ -430,9 +691,12 @@ local function triggerChainExplosion(pos: Vector3, attacker: Player?, sourceProp
 					local delta = pPos - pos
 					local dist = delta.Magnitude
 					if dist <= EXPLOSION_BLAST_RADIUS then
-						local dir = if dist > 0.1 then delta.Unit else Vector3.new(0, 1, 0)
-						local falloff = math.clamp(1 - (dist / EXPLOSION_BLAST_RADIUS) * 0.5, 0.45, 1.0)
-						destroyProp(prop, attacker, dir * (58 * falloff) + Vector3.new(0, 14, 0), true)
+						local reqTier = getPropRequiredTier(prop)
+						if math.max(attackerTier, 3) >= reqTier then
+							local dir = if dist > 0.1 then delta.Unit else Vector3.new(0, 1, 0)
+							local falloff = math.clamp(1 - (dist / EXPLOSION_BLAST_RADIUS) * 0.5, 0.45, 1.0)
+							destroyProp(prop, attacker, dir * (58 * falloff) + Vector3.new(0, 14, 0), true)
+						end
 					end
 				end
 			end
@@ -453,7 +717,7 @@ destroyProp = function(inst: Instance, attacker: Player?, hitVel: Vector3, isFro
 	inst:SetAttribute("Destroyed", true)
 
 	local primary: BasePart? = if inst:IsA("Model")
-		then inst.PrimaryPart or inst:FindFirstChildWhichIsA("BasePart", true)
+		then (inst.PrimaryPart or (inst:FindFirstChild("Chassis") :: BasePart?) or inst:FindFirstChildWhichIsA("BasePart", true))
 		elseif inst:IsA("BasePart") then inst
 		else nil
 	if not primary then
@@ -463,6 +727,7 @@ destroyProp = function(inst: Instance, attacker: Player?, hitVel: Vector3, isFro
 	local propPos = primary.Position
 	local originCF = (inst:GetAttribute("OriginCFrame") :: CFrame?) or primary.CFrame
 	local propType = (inst:GetAttribute("PropType") :: string?) or inst.Name
+	local isVehicle = isVehicleDestructible(inst)
 	local isJackpotCrate = (propType == "JackpotCrate")
 		or (inst:GetAttribute("IsJackpotCrate") == true)
 		or (string.find(string.lower(propType), "jackpot") ~= nil)
@@ -494,21 +759,12 @@ destroyProp = function(inst: Instance, attacker: Player?, hitVel: Vector3, isFro
 		end
 	end
 
-	-- Disable & break all internal WeldConstraints on models so boards/crates/poles/signs shatter apart
-	if inst:IsA("Model") and not CollectionService:HasTag(inst, "AITrafficVehicle") then
-		breakAllInternalWelds(inst)
-	end
-
-	-- Unanchor all parts, set CanCollide = false for the first 0.35s so pieces never block or trip tires,
-	-- and apply dramatic launch velocity + angular spin
 	local flatVel = Vector3.new(hitVel.X, 0, hitVel.Z)
 	local launchDir = if flatVel.Magnitude > 0.5
 		then flatVel.Unit
 		elseif hitVel.Magnitude > 0.5 then hitVel.Unit
 		else Vector3.new(0, 1, 0)
 	local launchSpeed = math.clamp(math.max(hitVel.Magnitude * 1.25, 36), 32, 78)
-	local upwardLift = math.clamp(launchSpeed * 0.45, 18, 28)
-	local spreadScale = math.clamp(launchSpeed * 0.25, 8, 18)
 
 	local parts: { BasePart } = {}
 	if inst:IsA("Model") then
@@ -521,35 +777,60 @@ destroyProp = function(inst: Instance, attacker: Player?, hitVel: Vector3, isFro
 		table.insert(parts, inst)
 	end
 
-	for idx, p in ipairs(parts) do
-		p.Anchored = false
-		p.CanCollide = false
-		local partSpeedScale = math.clamp(1.08 - (idx - 1) * 0.05, 0.78, 1.15)
-		local spread = Vector3.new(
-			(math.random() - 0.5) * 2.2,
-			math.random() * 0.55 + 0.15,
-			(math.random() - 0.5) * 2.2
-		) * spreadScale
-		p.AssemblyLinearVelocity = launchDir * (launchSpeed * partSpeedScale)
-			+ Vector3.new(0, upwardLift, 0)
-			+ spread
-		p.AssemblyAngularVelocity = Vector3.new(
-			(math.random() - 0.5) * 22,
-			(math.random() - 0.5) * 22,
-			(math.random() - 0.5) * 22
+	if isVehicle then
+		-- NEVER break internal WeldConstraints and NEVER set CanCollide = false on vehicle body parts!
+		-- Keep all parts of the vehicle welded together to its PrimaryPart (Chassis), unanchor Chassis,
+		-- and apply a dramatic upward/forward flip impulse + angular spin so the entire intact car flips!
+		for _, p in ipairs(parts) do
+			p.Anchored = false
+		end
+		primary.Anchored = false
+		primary.CanCollide = true
+		primary.AssemblyLinearVelocity = launchDir * 55 + Vector3.new(0, 32, 0)
+		primary.AssemblyAngularVelocity = Vector3.new(
+			(math.random() - 0.5) * 18,
+			(math.random() - 0.5) * 14,
+			(math.random() - 0.5) * 18
 		)
-	end
+	else
+		-- Regular destructible prop: break all internal welds so boards/crates/poles/signs shatter apart
+		if inst:IsA("Model") then
+			breakAllInternalWelds(inst)
+		end
 
-	-- Re-enable collision on flying debris after 0.35s once the vehicle has plowed past
-	task.delay(0.35, function()
-		if inst and inst.Parent then
-			for _, p in ipairs(parts) do
-				if p and p.Parent and p.Transparency < 0.95 then
-					p.CanCollide = true
+		local upwardLift = math.clamp(launchSpeed * 0.45, 18, 28)
+		local spreadScale = math.clamp(launchSpeed * 0.25, 8, 18)
+
+		for idx, p in ipairs(parts) do
+			p.Anchored = false
+			p.CanCollide = false
+			local partSpeedScale = math.clamp(1.08 - (idx - 1) * 0.05, 0.78, 1.15)
+			local spread = Vector3.new(
+				(math.random() - 0.5) * 2.2,
+				math.random() * 0.55 + 0.15,
+				(math.random() - 0.5) * 2.2
+			) * spreadScale
+			p.AssemblyLinearVelocity = launchDir * (launchSpeed * partSpeedScale)
+				+ Vector3.new(0, upwardLift, 0)
+				+ spread
+			p.AssemblyAngularVelocity = Vector3.new(
+				(math.random() - 0.5) * 22,
+				(math.random() - 0.5) * 22,
+				(math.random() - 0.5) * 22
+			)
+		end
+
+		-- Re-enable collision on flying debris after 0.35s once the vehicle has plowed past
+		task.delay(0.35, function()
+			if inst and inst.Parent then
+				for _, p in ipairs(parts) do
+					if p and p.Parent and p.Transparency < 0.95 then
+						p.CanCollide = true
+					end
 				end
 			end
-		end
-	end)
+		end)
+	end
 
 	-- Spawn extra flying wood splinters / metal fragments cleaned up after 3.5s
 	spawnShatterDebrisBurst(propPos, propType, primary.Color, primary.Material, launchDir, launchSpeed)
@@ -600,18 +881,20 @@ destroyProp = function(inst: Instance, attacker: Player?, hitVel: Vector3, isFro
 		end
 	end
 
-	-- Fade out broken physics parts after 6 seconds to keep framerate fast
-	task.delay(6.0, function()
-		if inst and inst.Parent then
-			for _, p in ipairs(parts) do
-				if p and p.Parent then
-					p.Transparency = 1
-					p.CanCollide = false
-					p.Anchored = true
+	-- Fade out broken non-vehicle physics parts after 6 seconds to keep framerate fast
+	if not isVehicle then
+		task.delay(6.0, function()
+			if inst and inst.Parent then
+				for _, p in ipairs(parts) do
+					if p and p.Parent then
+						p.Transparency = 1
+						p.CanCollide = false
+						p.Anchored = true
+					end
 				end
 			end
-		end
-	end)
+		end)
+	end
 end
 
 --------------------------------------------------------------------------------
@@ -646,12 +929,18 @@ local function bindDestructible(inst: Instance)
 			end
 		end
 
-		local attacker, ramMultiplier, hitVel = resolveAttacker(otherPart)
+		local attacker, ramMultiplier, hitVel, attackerVehModel = resolveAttacker(otherPart)
 		local effectiveSpeed = hitVel.Magnitude * ramMultiplier
 		local threshold = getEffectiveBreakThreshold(inst)
 
-		-- If touched by an occupied player vehicle or moving player/vehicle assembly, smash effortlessly
 		if effectiveSpeed >= threshold or (attacker ~= nil and effectiveSpeed >= 2.0) then
+			local smashTier = getPlayerSmashTier(attacker, attackerVehModel)
+			local requiredTier = getPropRequiredTier(inst)
+			if smashTier < requiredTier then
+				showTierResistanceFeedback(inst, requiredTier)
+				return
+			end
+
 			local launchVel = if hitVel.Magnitude >= 15
 				then hitVel
 				else (otherPart.CFrame.LookVector * 38 + Vector3.new(0, 12, 0))
@@ -771,6 +1060,13 @@ local function handleClientSmashRequest(player: Player, targetArg: any, velocity
 		return
 	end
 
+	local smashTier = getPlayerSmashTier(player, vehModel)
+	local requiredTier = getPropRequiredTier(propInst)
+	if smashTier < requiredTier then
+		showTierResistanceFeedback(propInst, requiredTier)
+		return
+	end
+
 	local hitVel = if typeof(velocityArg) == "Vector3" then velocityArg else fallbackVel
 	if hitVel.Magnitude < 25 then
 		local look = if vehModel and vehModel.PrimaryPart
@@ -787,6 +1083,24 @@ ReportDestructionRemote.OnServerEvent:Connect(handleClientSmashRequest)
 SmashPropRemote.OnServerEvent:Connect(handleClientSmashRequest)
 
 --------------------------------------------------------------------------------
+-- PLAYER SMASH POWER TIER ATTRIBUTE SYNC
+--------------------------------------------------------------------------------
+local function bindPlayerSmashTierSync(player: Player)
+	getPlayerSmashTier(player, nil)
+	for _, attr in ipairs({ "EquippedVehicle", "CurrentVehicleType", "Upgrade_Plow", "PlowLevel" }) do
+		player:GetAttributeChangedSignal(attr):Connect(function()
+			local _, _, vehModel = getPlayerReferencePositionAndVelocity(player)
+			getPlayerSmashTier(player, vehModel)
+		end)
+	end
+end
+
+for _, plr in ipairs(Players:GetPlayers()) do
+	task.spawn(bindPlayerSmashTierSync, plr)
+end
+Players.PlayerAdded:Connect(bindPlayerSmashTierSync)
+
+--------------------------------------------------------------------------------
 -- SERVER-SIDE VEHICLE PROXIMITY SMASH SWEEP (EVERY 0.06s)
 --------------------------------------------------------------------------------
 local sweepOverlapParams = OverlapParams.new()
@@ -799,6 +1113,8 @@ local function sweepAroundVehicle(vehicleModel: Model, driver: Player?)
 	if not chassis then
 		return
 	end
+
+	local smashTier = getPlayerSmashTier(driver, vehicleModel)
 
 	local vel = chassis.AssemblyLinearVelocity
 	local speed = vel.Magnitude
@@ -827,7 +1143,12 @@ local function sweepAroundVehicle(vehicleModel: Model, driver: Player?)
 	for _, part in ipairs(hitParts) do
 		local propInst = resolveDestructibleInstance(part)
 		if propInst and propInst ~= vehicleModel and propInst:GetAttribute("Destroyed") ~= true then
-			destroyProp(propInst, driver, launchVel, false)
+			local requiredTier = getPropRequiredTier(propInst)
+			if smashTier >= requiredTier then
+				destroyProp(propInst, driver, launchVel, false)
+			else
+				showTierResistanceFeedback(propInst, requiredTier)
+			end
 		end
 	end
 end
@@ -841,7 +1162,7 @@ RunService.Heartbeat:Connect(function(dt: number)
 
 	local sweptVehicles: { [Model]: boolean } = {}
 
-	-- 1. Check all players seated in vehicles (or sprinting on foot into street props)
+	-- 1. Check all players seated in vehicles (or sprinting on foot into Tier 1 street props)
 	for _, plr in ipairs(Players:GetPlayers()) do
 		local char = plr.Character
 		local hum = char and char:FindFirstChildOfClass("Humanoid")
@@ -854,14 +1175,14 @@ RunService.Heartbeat:Connect(function(dt: number)
 				sweepAroundVehicle(vehModel, plr)
 			end
 		elseif hrp and hrp.AssemblyLinearVelocity.Magnitude >= 22 then
-			-- High-speed on-foot dash/sprint prop smash
+			-- High-speed on-foot dash/sprint prop smash (Tier 1 props only)
 			sweepOverlapParams.FilterDescendantsInstances = if char then { char } else {}
 			local hitParts = Workspace:GetPartBoundsInBox(hrp.CFrame, Vector3.new(5.5, 6.0, 5.5), sweepOverlapParams)
 			for _, part in ipairs(hitParts) do
 				local propInst = resolveDestructibleInstance(part)
 				if propInst and propInst:GetAttribute("Destroyed") ~= true then
-					local threshold = getEffectiveBreakThreshold(propInst)
-					if threshold <= 5 then
+					local requiredTier = getPropRequiredTier(propInst)
+					if requiredTier <= 1 then
 						destroyProp(propInst, plr, hrp.AssemblyLinearVelocity + Vector3.new(0, 14, 0), false)
 					end
 				end
@@ -914,6 +1235,7 @@ task.spawn(function()
 					table.remove(respawnQueue, i)
 					if entry.liveInstance and entry.liveInstance.Parent then
 						boundInstances[entry.liveInstance] = nil
+						tierBlockedCooldowns[entry.liveInstance] = nil
 						entry.liveInstance:Destroy()
 					end
 					if entry.parent and entry.parent.Parent then
@@ -933,4 +1255,4 @@ task.spawn(function()
 	end
 end)
 
-print("[DestructionService] Ready and monitoring destructible city props.")
+print("[DestructionService] Ready and monitoring destructible city props with 5-Tier Destruction Power System.")

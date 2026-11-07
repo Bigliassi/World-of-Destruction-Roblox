@@ -1,11 +1,10 @@
 --!strict
 -- CameraAndFXController.client.luau
 -- Dynamic speed-scaled chase camera, trauma 3D shake, police pursuit vignette,
--- 3D floating BillboardGui popups, 3D Magnetized Flying Gold Coins,
--- Physical 3D Golden Breadcrumb Trail (self-explanatory for a 5-year-old),
--- and crisp one-shot Casino & Material SFX (NO annoying continuous speed-up engine/drift loops!).
+-- compact offset 3D floating BillboardGui popups, low-arc 3D Smash Gold Coins
+-- that erupt strictly from smashed objects into the lower front bumper without blocking view,
+-- and crisp one-shot Casino & Material SFX (ZERO looped engine or drift sounds!).
 
-local CollectionService = game:GetService("CollectionService")
 local Debris = game:GetService("Debris")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -337,7 +336,7 @@ local function playProceduralSound(kind: string, pitchVariance: number?)
 end
 
 -- ==========================================
--- 3. 3D FLOATING BILLBOARD POPUPS
+-- 3. 3D FLOATING BILLBOARD POPUPS (COMPACT, OFFSET & NON-BLOCKING)
 -- ==========================================
 local popupContainer = Workspace:FindFirstChild("WODFloatingPopups")
 if not popupContainer then
@@ -350,7 +349,7 @@ local function spawn3DPopup(worldPos: Vector3, headline: string, subtext: string
 	local anchor = Instance.new("Part")
 	anchor.Name = "FXPopupAnchor"
 	anchor.Size = Vector3.new(0.2, 0.2, 0.2)
-	anchor.Position = worldPos + Vector3.new((math.random() - 0.5) * 2.2, 1.5, (math.random() - 0.5) * 2.2)
+	anchor.Position = worldPos + Vector3.new((math.random() - 0.5) * 1.6, 0.8, (math.random() - 0.5) * 1.6)
 	anchor.Anchored = true
 	anchor.CanCollide = false
 	anchor.CanQuery = false
@@ -360,14 +359,14 @@ local function spawn3DPopup(worldPos: Vector3, headline: string, subtext: string
 
 	local bb = Instance.new("BillboardGui")
 	bb.Name = "ImpactBillboard"
-	bb.Size = UDim2.fromOffset(145, 44)
-	bb.StudsOffset = Vector3.new(0, 2.5, 0)
-	bb.AlwaysOnTop = true
-	bb.MaxDistance = 220
+	bb.Size = UDim2.fromOffset(92, 26)
+	bb.StudsOffset = Vector3.new(2.5, 1.8, 0)
+	bb.AlwaysOnTop = false
+	bb.MaxDistance = 160
 	bb.Parent = anchor
 
 	local mainLabel = Instance.new("TextLabel")
-	mainLabel.Size = UDim2.new(1, 0, 0.60, 0)
+	mainLabel.Size = UDim2.new(1, 0, if subtext and #subtext > 0 then 0.62 else 1.0, 0)
 	mainLabel.BackgroundTransparency = 1
 	mainLabel.Font = Enum.Font.GothamBlack
 	mainLabel.Text = headline
@@ -379,8 +378,8 @@ local function spawn3DPopup(worldPos: Vector3, headline: string, subtext: string
 	local subLabel: TextLabel? = nil
 	if subtext and #subtext > 0 then
 		subLabel = Instance.new("TextLabel")
-		subLabel.Size = UDim2.new(1, 0, 0.38, 0)
-		subLabel.Position = UDim2.fromScale(0, 0.60)
+		subLabel.Size = UDim2.new(1, 0, 0.36, 0)
+		subLabel.Position = UDim2.fromScale(0, 0.62)
 		subLabel.BackgroundTransparency = 1
 		subLabel.Font = Enum.Font.GothamBold
 		subLabel.Text = subtext
@@ -390,27 +389,28 @@ local function spawn3DPopup(worldPos: Vector3, headline: string, subtext: string
 		subLabel.Parent = bb
 	end
 
-	TweenService:Create(bb, TweenInfo.new(0.85, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
-		StudsOffset = Vector3.new(0, 5.4, 0),
+	TweenService:Create(bb, TweenInfo.new(0.65, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+		StudsOffset = Vector3.new(2.8, 3.2, 0),
 	}):Play()
-	TweenService:Create(mainLabel, TweenInfo.new(0.85, Enum.EasingStyle.Linear), {
+	TweenService:Create(mainLabel, TweenInfo.new(0.65, Enum.EasingStyle.Linear), {
 		TextTransparency = 1,
 		TextStrokeTransparency = 1,
 	}):Play()
 	if subLabel then
-		TweenService:Create(subLabel, TweenInfo.new(0.85, Enum.EasingStyle.Linear), {
+		TweenService:Create(subLabel, TweenInfo.new(0.65, Enum.EasingStyle.Linear), {
 			TextTransparency = 1,
 			TextStrokeTransparency = 1,
 		}):Play()
 	end
 
-	task.delay(0.9, function()
+	task.delay(0.7, function()
 		anchor:Destroy()
 	end)
 end
 
 -- ==========================================
--- 3B. 3D MAGNETIZED FLYING GOLD COINS ON EVERY SMASH
+-- 3B. LOW-ARC 3D GOLD COINS FROM SMASHED OBJECTS ONLY
+--     (Never spawns coins on empty road and never blocks camera view!)
 -- ==========================================
 local flyingCoinsFolder = Workspace:FindFirstChild("WODFlyingCoins")
 if existingFxGui and flyingCoinsFolder then
@@ -435,10 +435,25 @@ type ActiveFlyingCoin = {
 	coinIndex: number,
 	totalCoins: number,
 	cashPerCoin: number,
-	showPopupOnArrival: boolean,
 }
 
 local activeFlyingCoins: { ActiveFlyingCoin } = {}
+
+local function getPlayerBumperTargetPosition(): Vector3
+	local char = player.Character
+	if not char then
+		return Vector3.new(0, 1.5, 0)
+	end
+	local root = char:FindFirstChild("HumanoidRootPart") :: BasePart?
+	if root then
+		return root.Position - Vector3.new(0, 1.4, 0)
+	end
+	local hum = char:FindFirstChildOfClass("Humanoid")
+	if hum and hum.SeatPart then
+		return hum.SeatPart.Position - Vector3.new(0, 1.4, 0)
+	end
+	return Vector3.new(0, 1.5, 0)
+end
 
 local function getPlayerCenterPosition(): Vector3
 	local char = player.Character
@@ -464,397 +479,71 @@ local function spawnCoinArrivalSparkle(pos: Vector3)
 	local sparkAnchor = Instance.new("Part")
 	sparkAnchor.Name = "CoinSparkle"
 	sparkAnchor.Shape = Enum.PartType.Ball
-	sparkAnchor.Size = Vector3.new(1.2, 1.2, 1.2)
-	sparkAnchor.Position = pos + Vector3.new((math.random() - 0.5) * 2.0, 1.2, (math.random() - 0.5) * 2.0)
-	sparkAnchor.Color = Color3.fromRGB(255, 235, 90)
-	sparkAnchor.Material = Enum.Material.Neon
-	sparkAnchor.Transparency = 0.2
+	sparkAnchor.Size = Vector3.new(0.45, 0.45, 0.45)
+	sparkAnchor.Position = pos + Vector3.new((math.random() - 0.5) * 1.2, 0.2, (math.random() - 0.5) * 1.2)
+	sparkAnchor.Color = Color3.fromRGB(255, 210, 40)
+	sparkAnchor.Material = Enum.Material.Metal
+	sparkAnchor.Reflectance = 0.35
+	sparkAnchor.Transparency = 0.25
 	sparkAnchor.Anchored = true
 	sparkAnchor.CanCollide = false
 	sparkAnchor.CanQuery = false
 	sparkAnchor.CanTouch = false
 	sparkAnchor.Parent = flyingCoinsFolder
 
-	TweenService:Create(sparkAnchor, TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-		Size = Vector3.new(3.2, 3.2, 3.2),
+	TweenService:Create(sparkAnchor, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+		Size = Vector3.new(1.1, 1.1, 1.1),
 		Transparency = 1,
 	}):Play()
-	Debris:AddItem(sparkAnchor, 0.25)
+	Debris:AddItem(sparkAnchor, 0.20)
 end
 
 local function spawnMagnetizedGoldCoins(originPos: Vector3, totalCash: number, desiredCount: number?)
 	-- Cap total simultaneous flying coins for crisp 60fps performance
-	if #activeFlyingCoins > 42 then
+	if #activeFlyingCoins > 36 then
 		return
 	end
 
-	local count = math.clamp(desiredCount or math.random(6, 12), 6, 12)
+	local count = math.clamp(desiredCount or math.random(5, 9), 5, 9)
 	local perCoinCash = math.max(5, math.floor(totalCash / count))
 
 	for i = 1, count do
 		local coin = Instance.new("Part")
 		coin.Name = "FlyingGoldCoin"
 		coin.Shape = Enum.PartType.Cylinder
-		coin.Size = Vector3.new(0.3, 1.8, 1.8)
-		coin.Color = Color3.fromRGB(255, 215, 35)
-		coin.Material = Enum.Material.Neon
+		coin.Size = Vector3.new(0.16, 0.78, 0.78)
+		coin.Color = Color3.fromRGB(255, 210, 40)
+		coin.Material = Enum.Material.Metal
+		coin.Reflectance = 0.35
 		coin.TopSurface = Enum.SurfaceType.Smooth
 		coin.BottomSurface = Enum.SurfaceType.Smooth
 		coin.Anchored = true
 		coin.CanCollide = false
 		coin.CanQuery = false
 		coin.CanTouch = false
-		coin.Position = originPos + Vector3.new(0, 1.2, 0)
+		coin.Position = originPos + Vector3.new(0, 0.6, 0)
 		coin.Parent = flyingCoinsFolder
 
-		-- Inner smooth gold medallion face for rich 3D depth
-		local face = Instance.new("Part")
-		face.Name = "CoinFace"
-		face.Shape = Enum.PartType.Cylinder
-		face.Size = Vector3.new(0.36, 1.32, 1.32)
-		face.Color = Color3.fromRGB(255, 190, 20)
-		face.Material = Enum.Material.SmoothPlastic
-		face.Anchored = false
-		face.CanCollide = false
-		face.CanQuery = false
-		face.CanTouch = false
-		face.Massless = true
-		face.CFrame = coin.CFrame
-		face.Parent = coin
-
-		local weld = Instance.new("WeldConstraint")
-		weld.Part0 = coin
-		weld.Part1 = face
-		weld.Parent = coin
-
+		-- Fountain outward and LOW (peak height = +1.4 to +2.4 studs above ground — well BELOW car roof and camera line-of-sight!)
 		local angle = (i / count) * math.pi * 2 + (math.random() - 0.5) * 0.45
-		local radius = 3.2 + math.random() * 4.5
-		local height = 5.5 + math.random() * 4.8
-		local apexPos = originPos + Vector3.new(math.cos(angle) * radius, height, math.sin(angle) * radius)
+		local radius = 2.0 + math.random() * 2.8
+		local peakHeight = 1.4 + math.random() * 1.0
+		local apexPos = originPos + Vector3.new(math.cos(angle) * radius, peakHeight, math.sin(angle) * radius)
 
 		table.insert(activeFlyingCoins, {
 			part = coin,
-			startPos = originPos + Vector3.new(0, 1.0, 0),
+			startPos = originPos + Vector3.new(0, 0.6, 0),
 			apexPos = apexPos,
 			elapsed = 0,
-			arcDuration = 0.25,
-			homingDuration = 0.45,
-			delayBeforeHoming = (i - 1) * 0.024,
-			spinSpeed = 12 + math.random() * 6,
+			arcDuration = 0.22,
+			homingDuration = 0.32,
+			delayBeforeHoming = (i - 1) * 0.015,
+			spinSpeed = 14 + math.random() * 6,
 			spinPhase = math.random() * math.pi * 2,
 			coinIndex = i,
 			totalCoins = count,
 			cashPerCoin = perCoinCash,
-			showPopupOnArrival = (i == count or i == math.ceil(count * 0.5)),
 		})
-	end
-end
-
--- ==========================================
--- 3C. PHYSICAL 3D GOLD COIN BREADCRUMB TRAIL & BOUNCING TARGET RING
---     (Self-Explanatory for Any 5-Year-Old in 2 Seconds with Zero Reading!)
--- ==========================================
-local existingTrail = Workspace:FindFirstChild("WODGoldenCoinTrail")
-if existingTrail then
-	existingTrail:Destroy()
-end
-
-local trailFolder = Instance.new("Folder")
-trailFolder.Name = "WODGoldenCoinTrail"
-trailFolder.Parent = Workspace
-
-local TRAIL_DISTANCES = { 15, 28, 42, 56, 70 }
-local TRAIL_COLLECT_RADIUS = 8.0
-
-type BreadcrumbNode = {
-	rimPart: Part,
-	facePart: Part,
-	chevronPart: Part,
-	worldPos: Vector3,
-	collected: boolean,
-	distOffset: number,
-}
-
-local breadcrumbNodes: { BreadcrumbNode } = {}
-
-local function createCoinFaceSurfaceGui(parent: BasePart, normalId: Enum.NormalId)
-	local sg = Instance.new("SurfaceGui")
-	sg.Face = normalId
-	sg.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
-	sg.PixelsPerStud = 42
-	sg.LightInfluence = 0
-	sg.Parent = parent
-
-	local lbl = Instance.new("TextLabel")
-	lbl.Size = UDim2.fromScale(1, 1)
-	lbl.BackgroundTransparency = 1
-	lbl.Font = Enum.Font.GothamBlack
-	lbl.Text = "$"
-	lbl.TextColor3 = Color3.fromRGB(255, 250, 195)
-	lbl.TextScaled = true
-	lbl.Rotation = 90
-	lbl.Parent = sg
-end
-
-for idx, dist in ipairs(TRAIL_DISTANCES) do
-	local rim = Instance.new("Part")
-	rim.Name = "BreadcrumbCoin_" .. tostring(idx)
-	rim.Shape = Enum.PartType.Cylinder
-	rim.Size = Vector3.new(0.36, 3.1, 3.1)
-	rim.Color = Color3.fromRGB(255, 215, 35)
-	rim.Material = Enum.Material.Neon
-	rim.TopSurface = Enum.SurfaceType.Smooth
-	rim.BottomSurface = Enum.SurfaceType.Smooth
-	rim.Anchored = true
-	rim.CanCollide = false
-	rim.CanQuery = false
-	rim.CanTouch = false
-	rim.Position = Vector3.new(0, 3.2, -dist)
-	rim.Parent = trailFolder
-
-	local face = Instance.new("Part")
-	face.Name = "BreadcrumbCoinFace_" .. tostring(idx)
-	face.Shape = Enum.PartType.Cylinder
-	face.Size = Vector3.new(0.44, 2.35, 2.35)
-	face.Color = Color3.fromRGB(255, 195, 25)
-	face.Material = Enum.Material.SmoothPlastic
-	face.TopSurface = Enum.SurfaceType.Smooth
-	face.BottomSurface = Enum.SurfaceType.Smooth
-	face.Anchored = true
-	face.CanCollide = false
-	face.CanQuery = false
-	face.CanTouch = false
-	face.Position = rim.Position
-	face.Parent = trailFolder
-
-	createCoinFaceSurfaceGui(face, Enum.NormalId.Right)
-	createCoinFaceSurfaceGui(face, Enum.NormalId.Left)
-
-	-- Glowing road ring/chevron beneath each coin
-	local chevron = Instance.new("Part")
-	chevron.Name = "RoadCoinRing_" .. tostring(idx)
-	chevron.Shape = Enum.PartType.Cylinder
-	chevron.Size = Vector3.new(0.18, 3.6, 3.6)
-	chevron.Color = Color3.fromRGB(255, 225, 75)
-	chevron.Material = Enum.Material.Neon
-	chevron.Transparency = 0.35
-	chevron.Anchored = true
-	chevron.CanCollide = false
-	chevron.CanQuery = false
-	chevron.CanTouch = false
-	chevron.CFrame = CFrame.new(0, 0.3, -dist) * CFrame.Angles(0, 0, math.rad(90))
-	chevron.Parent = trailFolder
-
-	table.insert(breadcrumbNodes, {
-		rimPart = rim,
-		facePart = face,
-		chevronPart = chevron,
-		worldPos = Vector3.new(0, 3.2, -dist),
-		collected = false,
-		distOffset = dist,
-	})
-end
-
--- Bouncing Target Ring on the road at the destination prop cluster / vehicle
-local targetRingPart = Instance.new("Part")
-targetRingPart.Name = "BouncingTargetRing"
-targetRingPart.Shape = Enum.PartType.Cylinder
-targetRingPart.Size = Vector3.new(0.35, 9.5, 9.5)
-targetRingPart.Color = Color3.fromRGB(255, 215, 35)
-targetRingPart.Material = Enum.Material.Neon
-targetRingPart.Transparency = 0.2
-targetRingPart.Anchored = true
-targetRingPart.CanCollide = false
-targetRingPart.CanQuery = false
-targetRingPart.CanTouch = false
-targetRingPart.CFrame = CFrame.new(0, 0.4, -75) * CFrame.Angles(0, 0, math.rad(90))
-targetRingPart.Parent = trailFolder
-
-local targetBillboard = Instance.new("BillboardGui")
-targetBillboard.Name = "TargetVisualPrompt"
-targetBillboard.Size = UDim2.fromOffset(170, 56)
-targetBillboard.StudsOffset = Vector3.new(0, 6.2, 0)
-targetBillboard.AlwaysOnTop = true
-targetBillboard.MaxDistance = 260
-targetBillboard.Parent = targetRingPart
-
-local targetBadge = Instance.new("Frame")
-targetBadge.Size = UDim2.fromScale(1, 1)
-targetBadge.BackgroundColor3 = Color3.fromRGB(20, 22, 32)
-targetBadge.BackgroundTransparency = 0.12
-targetBadge.BorderSizePixel = 0
-targetBadge.Parent = targetBillboard
-
-local targetCorner = Instance.new("UICorner")
-targetCorner.CornerRadius = UDim.new(0, 12)
-targetCorner.Parent = targetBadge
-
-local targetStroke = Instance.new("UIStroke")
-targetStroke.Color = Color3.fromRGB(255, 215, 35)
-targetStroke.Thickness = 2.8
-targetStroke.Parent = targetBadge
-
-local targetLabel = Instance.new("TextLabel")
-targetLabel.Size = UDim2.new(1, -12, 1, -6)
-targetLabel.Position = UDim2.fromOffset(6, 3)
-targetLabel.BackgroundTransparency = 1
-targetLabel.Font = Enum.Font.GothamBlack
-targetLabel.Text = "💥 SMASH COINS!"
-targetLabel.TextColor3 = Color3.fromRGB(255, 225, 55)
-targetLabel.TextScaled = true
-targetLabel.Parent = targetBadge
-
-local currentTrailTargetInst: Instance? = nil
-local currentTrailTargetPos: Vector3 = Vector3.new(0, 2.5, -75)
-local currentTrailOriginPos: Vector3 = Vector3.zero
-local lastTrailRefreshAt = 0.0
-
-local function getInstanceWorldPos(inst: Instance): Vector3?
-	if inst:IsA("BasePart") then
-		return inst.Position
-	elseif inst:IsA("Model") then
-		local p = inst.PrimaryPart or inst:FindFirstChildWhichIsA("BasePart", true)
-		if p then
-			return p.Position
-		end
-	end
-	return nil
-end
-
-local function findBestGuidanceTarget(playerPos: Vector3, playerForward: Vector3, isSeated: boolean): (Instance?, Vector3, string)
-	-- 1. If player is on foot (not seated in a car), point the coin trail straight to their car!
-	if not isSeated then
-		local bestVeh: Instance? = nil
-		local bestVehPos = Vector3.zero
-		local bestVehDist = 220
-
-		local vehiclesFolder = Workspace:FindFirstChild("Vehicles")
-		local parkedFolder = Workspace:FindFirstChild("ParkedVehicles")
-		local candidates: { Instance } = {}
-
-		if vehiclesFolder then
-			for _, v in ipairs(vehiclesFolder:GetChildren()) do
-				table.insert(candidates, v)
-			end
-		end
-		if parkedFolder then
-			for _, v in ipairs(parkedFolder:GetChildren()) do
-				table.insert(candidates, v)
-			end
-		end
-
-		for _, v in ipairs(candidates) do
-			if v:IsA("Model") and v:GetAttribute("IsWrecked") ~= true then
-				local vPos = getInstanceWorldPos(v)
-				if vPos then
-					local d = (vPos - playerPos).Magnitude
-					-- Prioritize personal vehicle owned by this player
-					if v:GetAttribute("OwnerUserId") == player.UserId then
-						d *= 0.35
-					end
-					if d < bestVehDist then
-						bestVehDist = d
-						bestVeh = v
-						bestVehPos = vPos
-					end
-				end
-			end
-		end
-
-		if bestVeh then
-			return bestVeh, bestVehPos, "🚗 DRIVE CAR!"
-		end
-	end
-
-	-- 2. If Act 5 Boss Goliath is active, point straight to Boss Goliath!
-	if player:GetAttribute("BossActive") == true then
-		local bossModel = Workspace:FindFirstChild("MegaCorpBossConvoy")
-		if bossModel then
-			local bPos = getInstanceWorldPos(bossModel)
-			if bPos then
-				return bossModel, bPos, "💥 RAM BOSS!"
-			end
-		end
-	end
-
-	-- 3. Find the best smashable prop cluster ahead of the player
-	local bestProp: Instance? = nil
-	local bestPropPos = playerPos + playerForward * 75
-	local bestScore = math.huge
-	local bestLabel = "💥 SMASH!"
-
-	local tagged = CollectionService:GetTagged("Destructible")
-	if #tagged == 0 then
-		local leoCity = Workspace:FindFirstChild("LeoCity")
-		local propsFolder = leoCity and leoCity:FindFirstChild("DestructibleProps")
-		if propsFolder then
-			tagged = propsFolder:GetChildren()
-		end
-	end
-
-	for _, prop in ipairs(tagged) do
-		if prop:GetAttribute("Destroyed") ~= true and not CollectionService:HasTag(prop, "Vehicle") then
-			local pPos = getInstanceWorldPos(prop)
-			if pPos then
-				local delta = Vector3.new(pPos.X - playerPos.X, 0, pPos.Z - playerPos.Z)
-				local dist = delta.Magnitude
-				if dist >= 16 and dist <= 220 then
-					local dir = delta.Unit
-					local forwardDot = dir:Dot(playerForward)
-					-- Strongly prefer props in front of the car, and prioritize JackpotCrates / high-value targets
-					local anglePenalty = (1 - forwardDot) * 55
-					local pType = tostring(prop:GetAttribute("PropType") or prop.Name)
-					local jackpotBonus = (pType == "JackpotCrate" or prop:GetAttribute("IsJackpotCrate") == true) and -35 or 0
-					local score = dist + anglePenalty + jackpotBonus
-					if score < bestScore then
-						bestScore = score
-						bestProp = prop
-						bestPropPos = pPos
-						if pType == "JackpotCrate" or prop:GetAttribute("IsJackpotCrate") == true then
-							bestLabel = "🎰 JACKPOT CRATE!"
-						elseif pType == "FireHydrant" then
-							bestLabel = "💦 SMASH HYDRANT!"
-						else
-							bestLabel = "💥 SMASH COINS!"
-						end
-					end
-				end
-			end
-		end
-	end
-
-	return bestProp, bestPropPos, bestLabel
-end
-
-local function layoutBreadcrumbTrail(playerPos: Vector3, playerForward: Vector3, targetPos: Vector3, labelText: string)
-	currentTrailOriginPos = playerPos
-	currentTrailTargetPos = targetPos
-	targetLabel.Text = labelText
-
-	local flatDelta = Vector3.new(targetPos.X - playerPos.X, 0, targetPos.Z - playerPos.Z)
-	local totalDist = flatDelta.Magnitude
-	local targetDir = if totalDist > 1 then flatDelta.Unit else playerForward
-
-	local roadY = math.clamp(playerPos.Y - 1.5, 0.5, 12.0)
-
-	for i, node in ipairs(breadcrumbNodes) do
-		local d = node.distOffset
-		-- Blend smoothly from the car's nose direction toward the target direction so coins form an inviting curve
-		local alpha = i / #breadcrumbNodes
-		local blendedDir = (playerForward * (1 - alpha * 0.65) + targetDir * (alpha * 0.65))
-		if blendedDir.Magnitude < 0.05 then
-			blendedDir = targetDir
-		else
-			blendedDir = blendedDir.Unit
-		end
-
-		local stepDist = if totalDist > 20 then math.min(d, math.max(12, totalDist * (i / #breadcrumbNodes))) else d
-		local posXZ = Vector3.new(playerPos.X, 0, playerPos.Z) + blendedDir * stepDist
-		node.worldPos = Vector3.new(posXZ.X, roadY + 2.4, posXZ.Z)
-		node.collected = false
-		node.rimPart.Transparency = 0.05
-		node.facePart.Transparency = 0
-		node.chevronPart.Transparency = 0.35
 	end
 end
 
@@ -896,7 +585,6 @@ player.AttributeChanged:Connect(function(attr: string)
 			addCameraTrauma(0.35, 0.25)
 			local pPos = getPlayerCenterPosition()
 			spawn3DPopup(pPos, "LEVEL UP! LV." .. tostring(nowLvl), "RANK PROMOTION", Color3.fromRGB(95, 225, 255))
-			spawnMagnetizedGoldCoins(pPos + Vector3.new(0, 3, 0), nowLvl * 250, 10)
 		end
 		lastLevelAttr = nowLvl
 	end
@@ -919,7 +607,7 @@ task.spawn(function()
 		local title = amount >= 0 and ("+$" .. tostring(math.floor(amount))) or tostring(labelText or "SMASH!")
 		local subtitle = typeof(labelText) == "string" and labelText or "DESTRUCTION"
 		spawn3DPopup(pos, title, subtitle, Color3.fromRGB(110, 255, 140))
-		spawnMagnetizedGoldCoins(pos, math.max(25, amount), math.random(6, 9))
+		spawnMagnetizedGoldCoins(pos, math.max(25, amount), math.random(5, 9))
 		addCameraTrauma(math.clamp(amount / 750, 0.12, 0.48), 0.10)
 		local sfxKind = classifyPropSoundKind(labelText, false)
 		playProceduralSound(sfxKind, 0.08)
@@ -960,8 +648,8 @@ task.spawn(function()
 
 		spawn3DPopup(pos, "+$" .. tostring(math.floor(cash)), sub, Color3.fromRGB(255, 215, 45))
 
-		-- Spawn 6 to 12 physical 3D Spinning Gold Coins that fountain upward and magnetically fly into the player's car!
-		local coinCount = if isJackpotCrate then 12 else math.clamp(math.floor(6 + (cash / 35)), 6, 12)
+		-- Spawn 5 to 9 compact, gleaming 3D Gold Coins at worldPos that fountain low and curve into the lower front bumper!
+		local coinCount = if isJackpotCrate then 9 else math.clamp(math.floor(5 + (cash / 45)), 5, 9)
 		spawnMagnetizedGoldCoins(pos, cash, coinCount)
 
 		local sfxKind = classifyPropSoundKind(propType, isExplosion)
@@ -979,9 +667,7 @@ task.spawn(function()
 			addCameraTrauma(0.42, 0.30)
 			local pPos = getPlayerCenterPosition()
 			local prizeTitle = tostring(payload.PrizeTitle or payload.Callout or "JACKPOT WINNER!")
-			local cashWon = tonumber(payload.CashAwarded) or 3500
-			spawn3DPopup(pPos + Vector3.new(0, 2.5, 0), "🎰 " .. prizeTitle, "CASINO JACKPOT SPIN!", Color3.fromRGB(255, 215, 35))
-			spawnMagnetizedGoldCoins(pPos + Vector3.new(0, 4.0, 0), math.max(1000, cashWon), 12)
+			spawn3DPopup(pPos + Vector3.new(0, 1.2, 0), "🎰 " .. prizeTitle, "CASINO JACKPOT SPIN!", Color3.fromRGB(255, 215, 35))
 		end
 	end)
 
@@ -1007,10 +693,9 @@ task.spawn(function()
 end)
 
 -- ==========================================
--- 6. RENDERSTEPPED CHASE CAMERA, FOV, 3D COIN MAGNETISM, BREADCRUMB TRAIL & VIGNETTE
+-- 6. RENDERSTEPPED CHASE CAMERA, FOV, LOW-ARC 3D COIN MAGNETISM & VIGNETTE
 -- ==========================================
 local sirenPhase = 0.0
-local coinSpinClock = 0.0
 
 RunService.RenderStepped:Connect(function(dt: number)
 	local cam = Workspace.CurrentCamera
@@ -1018,7 +703,6 @@ RunService.RenderStepped:Connect(function(dt: number)
 
 	noiseClock += dt * 28
 	sirenPhase += dt * 8.5
-	coinSpinClock += dt
 
 	local char = player.Character
 	local root = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
@@ -1044,9 +728,9 @@ RunService.RenderStepped:Connect(function(dt: number)
 	currentFov = currentFov + (targetFov - currentFov) * math.min(1, dt * 8)
 	cam.FieldOfView = currentFov
 
-	local playerCenter = getPlayerCenterPosition()
+	local targetPos = if root then (root.Position - Vector3.new(0, 1.4, 0)) else getPlayerBumperTargetPosition()
 
-	-- Update 3D Magnetized Flying Gold Coins (0.25s upward fountain arc -> 0.45s magnetic homing into car!)
+	-- Update 3D Magnetized Flying Gold Coins (0.22s low fountain arc -> 0.32s curve into lower front bumper!)
 	if #activeFlyingCoins > 0 then
 		for i = #activeFlyingCoins, 1, -1 do
 			local c = activeFlyingCoins[i]
@@ -1054,35 +738,27 @@ RunService.RenderStepped:Connect(function(dt: number)
 			local spinAngle = c.spinPhase + c.elapsed * c.spinSpeed
 
 			if c.elapsed <= c.arcDuration then
-				-- Fountain upward arc (0.25s)
+				-- Low fountain arc (+1.4..2.4 studs above ground — well BELOW car roof and camera line-of-sight!)
 				local t = math.clamp(c.elapsed / c.arcDuration, 0, 1)
 				local easeOut = 1 - (1 - t) * (1 - t)
 				local pos = c.startPos:Lerp(c.apexPos, easeOut)
 				c.part.CFrame = CFrame.new(pos) * CFrame.Angles(0, spinAngle, 0)
 			else
-				-- Magnetic homing into player's car/character (0.45s)
+				-- Curve into the lower front bumper over 0.32s and immediately Destroy upon reaching 4 studs of bumper!
 				local homeElapsed = c.elapsed - c.arcDuration - c.delayBeforeHoming
 				if homeElapsed <= 0 then
 					c.part.CFrame = CFrame.new(c.apexPos) * CFrame.Angles(0, spinAngle, 0)
 				else
 					local t = math.clamp(homeElapsed / c.homingDuration, 0, 1)
 					local easeIn = t * t
-					local pos = c.apexPos:Lerp(playerCenter + Vector3.new(0, 1.5, 0), easeIn)
+					local pos = c.apexPos:Lerp(targetPos, easeIn)
 					c.part.CFrame = CFrame.new(pos) * CFrame.Angles(0, spinAngle * 1.35, 0)
 
-					if t >= 1.0 then
-						-- Coin hit the car! Play soft ascending musical CashChime & flash popup
+					local distToBumper = (pos - targetPos).Magnitude
+					if distToBumper <= 4.0 or t >= 1.0 then
 						local pitchRatio = (c.coinIndex - 1) / math.max(1, c.totalCoins - 1)
 						playCasinoCoinChime(pitchRatio)
-						spawnCoinArrivalSparkle(playerCenter)
-						if c.showPopupOnArrival then
-							spawn3DPopup(
-								playerCenter + Vector3.new(0, 2.2, 0),
-								"+$" .. tostring(c.cashPerCoin * c.totalCoins),
-								"GOLD MAGNET",
-								Color3.fromRGB(255, 225, 55)
-							)
-						end
+						spawnCoinArrivalSparkle(targetPos)
 						c.part:Destroy()
 						table.remove(activeFlyingCoins, i)
 					end
@@ -1091,89 +767,7 @@ RunService.RenderStepped:Connect(function(dt: number)
 		end
 	end
 
-	-- Update Physical 3D Gold Coin Breadcrumb Trail & Bouncing Target Ring
 	local inHomeMenu = (player:GetAttribute("HomeMenuActive") == true) or (player:GetAttribute("HomeMenuCameraActive") == true)
-	if root and not inHomeMenu then
-		local look = root.CFrame.LookVector
-		local flatForward = Vector3.new(look.X, 0, look.Z)
-		if flatForward.Magnitude < 0.05 then
-			flatForward = Vector3.new(0, 0, -1)
-		else
-			flatForward = flatForward.Unit
-		end
-
-		local now = os.clock()
-		local targetDestroyed = (currentTrailTargetInst == nil)
-			or (currentTrailTargetInst.Parent == nil)
-			or (currentTrailTargetInst:GetAttribute("Destroyed") == true)
-		local distFromOrigin = (Vector3.new(playerCenter.X, 0, playerCenter.Z) - Vector3.new(currentTrailOriginPos.X, 0, currentTrailOriginPos.Z)).Magnitude
-		local distToTarget = (Vector3.new(playerCenter.X, 0, playerCenter.Z) - Vector3.new(currentTrailTargetPos.X, 0, currentTrailTargetPos.Z)).Magnitude
-
-		local allCollected = true
-		for _, node in ipairs(breadcrumbNodes) do
-			if not node.collected then
-				allCollected = false
-				break
-			end
-		end
-
-		if targetDestroyed or allCollected or distToTarget < 10 or distFromOrigin > 52 or (now - lastTrailRefreshAt > 4.0) then
-			lastTrailRefreshAt = now
-			local bestInst, bestPos, labelText = findBestGuidanceTarget(playerCenter, flatForward, isSeatedInVehicle)
-			currentTrailTargetInst = bestInst
-			layoutBreadcrumbTrail(playerCenter, flatForward, bestPos, labelText)
-		end
-
-		-- Animate the 5 spinning 3D Gold Coins & check 8-stud collection radius
-		for i, node in ipairs(breadcrumbNodes) do
-			if not node.collected then
-				local flatDist = (Vector3.new(playerCenter.X, 0, playerCenter.Z) - Vector3.new(node.worldPos.X, 0, node.worldPos.Z)).Magnitude
-				if flatDist <= TRAIL_COLLECT_RADIUS then
-					node.collected = true
-					node.rimPart.Transparency = 1
-					node.facePart.Transparency = 1
-					node.chevronPart.Transparency = 1
-
-					-- Pop with musical ascending coin chime + gold sparkle burst + instant visual reward!
-					playCasinoCoinChime((i - 1) / math.max(1, #breadcrumbNodes - 1))
-					spawnCoinArrivalSparkle(node.worldPos)
-					spawn3DPopup(node.worldPos, "🪙 GOLD TRAIL!", "KEEP SMASHING!", Color3.fromRGB(255, 225, 55))
-					spawnMagnetizedGoldCoins(node.worldPos, 25, 6)
-				else
-					local bob = math.sin(coinSpinClock * 4.2 + i * 0.75) * 0.42
-					local spin = coinSpinClock * 3.4 + i * 0.5
-					local cf = CFrame.new(node.worldPos + Vector3.new(0, bob, 0)) * CFrame.Angles(0, spin, 0)
-					node.rimPart.CFrame = cf
-					node.facePart.CFrame = cf
-					node.chevronPart.CFrame = CFrame.new(node.worldPos.X, node.worldPos.Y - 2.1, node.worldPos.Z)
-						* CFrame.Angles(0, 0, math.rad(90))
-				end
-			end
-		end
-
-		-- Animate Bouncing Target Ring at destination
-		if currentTrailTargetInst and currentTrailTargetInst.Parent then
-			local livePos = getInstanceWorldPos(currentTrailTargetInst)
-			if livePos then
-				currentTrailTargetPos = livePos
-			end
-		end
-		local ringPulse = 9.0 + math.sin(coinSpinClock * 5.0) * 1.4
-		local ringY = math.clamp(currentTrailTargetPos.Y - 1.2, 0.4, 8.0) + math.abs(math.sin(coinSpinClock * 4.5)) * 0.55
-		targetRingPart.Transparency = 0.22
-		targetRingPart.Size = Vector3.new(0.35, ringPulse, ringPulse)
-		targetRingPart.CFrame = CFrame.new(currentTrailTargetPos.X, ringY, currentTrailTargetPos.Z)
-			* CFrame.Angles(0, 0, math.rad(90))
-		targetBillboard.Enabled = true
-	else
-		for _, node in ipairs(breadcrumbNodes) do
-			node.rimPart.Transparency = 1
-			node.facePart.Transparency = 1
-			node.chevronPart.Transparency = 1
-		end
-		targetRingPart.Transparency = 1
-		targetBillboard.Enabled = false
-	end
 
 	-- Trauma-Based 3D Rotational & Positional Camera Shake (scaled by Settings CameraShakeScale)
 	local shakeScale = tonumber(player:GetAttribute("CameraShakeScale")) or 1.0

@@ -57,10 +57,10 @@ local ServerEvents, RemoteEvents = ensureEvents()
 --------------------------------------------------------------------------------
 -- CONSTANTS & GRID CONFIG
 --------------------------------------------------------------------------------
-local BLOCK_SIZE = 200 -- studs per city block (expanded 2,200 x 2,200 stud metropolitan map!)
+local BLOCK_SIZE = 140 -- tight 140-stud NYC metropolitan blocks for dense action & zero emptiness!
 local ROAD_WIDTH = 42 -- wide 4-lane sunlit avenues
 local SIDEWALK_WIDTH = 10 -- bright warm limestone sidewalk
-local GRID_RADIUS = 4 -- -4..4 = 9x9 full city blocks (2,200 x 2,200 studs total span)
+local GRID_RADIUS = 4 -- -4..4 = 9x9 full city blocks
 
 Workspace:SetAttribute("LeoCityBlockSize", BLOCK_SIZE)
 Workspace:SetAttribute("LeoCityRoadWidth", ROAD_WIDTH)
@@ -173,14 +173,54 @@ local function weldChildrenToPrimary(model: Model, primary: BasePart)
 	end
 end
 
+local PROP_DEFAULT_REQUIRED_TIER: { [string]: number } = {
+	-- Tier 1: Light Street Props
+	Crate = 1,
+	WoodenCrate = 1,
+	JackpotCrate = 1,
+	TrafficCone = 1,
+	Fence = 1,
+	Bench = 1,
+	TrashCan = 1,
+	RecyclingBin = 1,
+	Mailbox = 1,
+	NewspaperBox = 1,
+	FoodVendorCart = 1,
+	CafePatio = 1,
+	ConstructionBarrier = 1,
+	-- Tier 2: Municipal & Traffic Props
+	FireHydrant = 2,
+	StreetLight = 2,
+	TrafficLight = 2,
+	BusStop = 2,
+	PalmTree = 2,
+	GoldATM = 2,
+	TrafficVehicle = 2,
+	-- Tier 3: Industrial, Explosive & Heavy Armored Vehicles
+	GasPump = 3,
+	ExplosiveBarrel = 3,
+	Billboard = 3,
+	ArmoredCashTruck = 3,
+	MegaCorpTower = 3,
+	-- Tier 4: Massive Civic Landmarks & Transit
+	CityBus = 4,
+	ConstructionCrane = 4,
+	PlazaFountain = 4,
+	-- Tier 5: Ultra-Armored End-Game Targets
+	MegaCorpBankVault = 5,
+	BossGoliath = 5,
+}
+
 local function tagDestructible(
 	instance: Instance,
 	propType: string,
 	cashValue: number,
 	chaosPoints: number,
 	breakThreshold: number,
-	explosive: boolean?
+	explosive: boolean?,
+	requiredTier: number?
 )
+	local reqTier = requiredTier or PROP_DEFAULT_REQUIRED_TIER[propType] or 1
 	instance:SetAttribute("PropType", propType)
 	instance:SetAttribute("DestructibleType", propType)
 	instance:SetAttribute("IsDestructible", true)
@@ -189,6 +229,7 @@ local function tagDestructible(
 	instance:SetAttribute("ChaosPoints", chaosPoints)
 	instance:SetAttribute("BreakThreshold", breakThreshold)
 	instance:SetAttribute("Explosive", explosive == true)
+	instance:SetAttribute("RequiredTier", reqTier)
 	instance:SetAttribute("Destroyed", false)
 
 	if instance:IsA("Model") and instance.PrimaryPart then
@@ -564,12 +605,91 @@ local function spawnMegaCorpSurveillanceTower(pos: Vector3, yawDeg: number)
 	local pylon = makePart(m, "TowerPylon", Vector3.new(2.6, 20, 2.6), rot * CFrame.new(0, 10, 0), Color3.fromRGB(38, 42, 54), Enum.Material.Metal, true)
 	local screen = makePart(m, "PropagandaScreen", Vector3.new(9.5, 5.5, 1.0), rot * CFrame.new(0, 14.5, 0), Color3.fromRGB(22, 26, 36), Enum.Material.Metal, false)
 	local scanner = makePart(m, "ScannerBeacon", Vector3.new(3.2, 1.8, 3.2), rot * CFrame.new(0, 20.8, 0), Color3.fromRGB(255, 48, 65), Enum.Material.Neon, false)
-	addSurfaceSign(screen, "MEGACORP WATCHES YOU\n[SMASH FOR BONUS!]", Color3.fromRGB(255, 75, 75), Enum.NormalId.Front)
-	addSurfaceSign(screen, "MEGACORP PROPERTY\n[TARGET]", Color3.fromRGB(255, 205, 55), Enum.NormalId.Back)
+	addSurfaceSign(screen, "MEGACORP WATCHES YOU\n[TIER 3 TARGET]", Color3.fromRGB(255, 75, 75), Enum.NormalId.Front)
+	addSurfaceSign(screen, "MEGACORP PROPERTY\n[TIER 3 TARGET]", Color3.fromRGB(255, 205, 55), Enum.NormalId.Back)
 
 	weldChildrenToPrimary(m, pylon)
 	m.Parent = PropsFolder
-	tagDestructible(m, "MegaCorpTower", 140, 95, 20, true)
+	tagDestructible(m, "MegaCorpTower", 140, 95, 20, true, 3)
+end
+
+local function spawnGoldATM(pos: Vector3, yawDeg: number)
+	local m = Instance.new("Model")
+	m.Name = "GoldATM"
+	local rot = CFrame.new(pos) * CFrame.Angles(0, math.rad(yawDeg), 0)
+
+	local kiosk = makePart(m, "ATMKioskBody", Vector3.new(3.0, 5.4, 2.2), rot * CFrame.new(0, 2.7, 0), Color3.fromRGB(235, 185, 35), Enum.Material.Metal, true)
+	makePart(m, "ATMTopHeader", Vector3.new(3.3, 1.0, 2.5), rot * CFrame.new(0, 5.7, 0), Color3.fromRGB(28, 34, 48), Enum.Material.Metal, false)
+	local screen = makePart(m, "ATMScreen", Vector3.new(2.2, 1.6, 0.2), rot * CFrame.new(0, 3.4, -1.15), Color3.fromRGB(65, 240, 130), Enum.Material.Neon, false)
+	addSurfaceSign(screen, "GOLD ATM\n[TIER 2]", Color3.fromRGB(16, 22, 30), Enum.NormalId.Front)
+	addSurfaceSign(kiosk, "GOLD ATM", Color3.fromRGB(28, 32, 42), Enum.NormalId.Back)
+
+	weldChildrenToPrimary(m, kiosk)
+	m.Parent = PropsFolder
+	tagDestructible(m, "GoldATM", 120, 80, 12, false, 2)
+end
+
+local function spawnArmoredCashTruck(pos: Vector3, yawDeg: number)
+	local m = Instance.new("Model")
+	m.Name = "ArmoredCashTruck"
+	local rot = CFrame.new(pos) * CFrame.Angles(0, math.rad(yawDeg), 0)
+
+	local chassis = makePart(m, "Chassis", Vector3.new(6.8, 1.6, 15.6), rot * CFrame.new(0, 1.8, 0), Color3.fromRGB(34, 40, 52), Enum.Material.Metal, true)
+	local vaultBox = makePart(m, "ArmoredCargoBox", Vector3.new(6.6, 4.4, 10.2), rot * CFrame.new(0, 4.6, 2.4), Color3.fromRGB(44, 52, 68), Enum.Material.Metal, false)
+	makePart(m, "GoldArmorStripe", Vector3.new(6.8, 0.75, 10.0), rot * CFrame.new(0, 4.4, 2.4), Color3.fromRGB(245, 195, 40), Enum.Material.Metal, false)
+	makePart(m, "CabFront", Vector3.new(6.4, 3.0, 4.6), rot * CFrame.new(0, 3.9, -5.0), Color3.fromRGB(34, 40, 52), Enum.Material.Metal, false)
+	local ws = makePart(m, "ArmorWindshield", Vector3.new(5.8, 1.4, 0.35), rot * CFrame.new(0, 4.4, -7.25), Color3.fromRGB(24, 30, 38), Enum.Material.Glass, false)
+	ws.Transparency = 0.25
+	makePart(m, "FrontBullBar", Vector3.new(7.0, 1.4, 0.8), rot * CFrame.new(0, 2.1, -7.9), Color3.fromRGB(245, 195, 40), Enum.Material.DiamondPlate, false)
+
+	for _, sx in ipairs({ -3.3, 3.3 }) do
+		for _, sz in ipairs({ -4.8, 4.4 }) do
+			local wheel = makePart(
+				m,
+				"Wheel",
+				Vector3.new(1.2, 2.8, 2.8),
+				rot * CFrame.new(sx, 1.4, sz) * CFrame.Angles(0, math.rad(90), 0),
+				Color3.fromRGB(20, 22, 26),
+				Enum.Material.SmoothPlastic,
+				false
+			)
+			wheel.Shape = Enum.PartType.Cylinder
+		end
+	end
+
+	addSurfaceSign(vaultBox, "ARMORED CASH VAN [TIER 3]", Color3.fromRGB(255, 215, 55), Enum.NormalId.Left)
+	addSurfaceSign(vaultBox, "ARMORED CASH VAN [TIER 3]", Color3.fromRGB(255, 215, 55), Enum.NormalId.Right)
+
+	weldChildrenToPrimary(m, chassis)
+	CollectionService:AddTag(m, "Vehicle")
+	m.Parent = PropsFolder
+	tagDestructible(m, "ArmoredCashTruck", 450, 320, 24, false, 3)
+end
+
+local function spawnMegaCorpBankVault(pos: Vector3, yawDeg: number)
+	local m = Instance.new("Model")
+	m.Name = "MegaCorpBankVault"
+	local rot = CFrame.new(pos) * CFrame.Angles(0, math.rad(yawDeg), 0)
+
+	local vaultBody = makePart(m, "VaultCore", Vector3.new(10.5, 8.2, 7.6), rot * CFrame.new(0, 4.1, 0), Color3.fromRGB(235, 185, 32), Enum.Material.Metal, true)
+	makePart(m, "TitaniumFrame", Vector3.new(11.1, 8.6, 1.4), rot * CFrame.new(0, 4.3, -3.4), Color3.fromRGB(48, 54, 68), Enum.Material.DiamondPlate, false)
+	local doorWheel = makePart(
+		m,
+		"VaultDoorDial",
+		Vector3.new(0.8, 5.4, 5.4),
+		rot * CFrame.new(0, 4.3, -4.1) * CFrame.Angles(0, math.rad(90), 0),
+		Color3.fromRGB(255, 215, 55),
+		Enum.Material.Metal,
+		false
+	)
+	doorWheel.Shape = Enum.PartType.Cylinder
+	local neonTrim = makePart(m, "VaultHeaderSign", Vector3.new(10.2, 1.6, 1.6), rot * CFrame.new(0, 9.0, -3.2), Color3.fromRGB(22, 26, 38), Enum.Material.Metal, false)
+	addSurfaceSign(neonTrim, "GOLDEN BANK VAULT [TIER 5]", Color3.fromRGB(255, 220, 65), Enum.NormalId.Front)
+	addSurfaceSign(vaultBody, "GOLDEN BANK VAULT [TIER 5]", Color3.fromRGB(30, 24, 12), Enum.NormalId.Back)
+
+	weldChildrenToPrimary(m, vaultBody)
+	m.Parent = PropsFolder
+	tagDestructible(m, "MegaCorpBankVault", 2500, 1800, 35, true, 5)
 end
 
 --------------------------------------------------------------------------------
@@ -691,22 +811,25 @@ end
 local function buildSpeedShop(pos: Vector3, yawDeg: number)
 	local m = Instance.new("Model")
 	m.Name = "SpeedShop"
-	local rot = CFrame.new(pos) * CFrame.Angles(0, math.rad(yawDeg), 0)
+	local basePos = Vector3.new(pos.X, 0, pos.Z)
+	local rot = CFrame.new(basePos) * CFrame.Angles(0, math.rad(yawDeg), 0)
 
-	makePart(m, "ShowroomFloor", Vector3.new(54, 0.8, 44), rot * CFrame.new(0, 0.4, 0), Color3.fromRGB(28, 32, 42), Enum.Material.Concrete, true)
-	makePart(m, "BackWall", Vector3.new(52, 22, 2), rot * CFrame.new(0, 11, 16), Color3.fromRGB(22, 26, 36), Enum.Material.Metal, true)
-	makePart(m, "LeftWall", Vector3.new(2, 22, 30), rot * CFrame.new(-25, 11, 2), Color3.fromRGB(22, 26, 36), Enum.Material.Metal, true)
-	makePart(m, "RightWall", Vector3.new(2, 22, 30), rot * CFrame.new(25, 11, 2), Color3.fromRGB(22, 26, 36), Enum.Material.Metal, true)
-	makePart(m, "Roof", Vector3.new(54, 1.6, 34), rot * CFrame.new(0, 22.5, 2), Color3.fromRGB(18, 20, 28), Enum.Material.Metal, true)
+	-- ShowroomFloor at Y = 0.26 (top Y = 0.46) — strictly above SidewalkBlock (top Y = 0.30) for zero Z-fighting!
+	makePart(m, "ShowroomFloor", Vector3.new(44, 0.40, 36), rot * CFrame.new(0, 0.26, 0), Color3.fromRGB(28, 32, 42), Enum.Material.Concrete, true)
+	makePart(m, "BackWall", Vector3.new(42, 22, 2), rot * CFrame.new(0, 11.4, 14), Color3.fromRGB(22, 26, 36), Enum.Material.Metal, true)
+	makePart(m, "LeftWall", Vector3.new(2, 22, 26), rot * CFrame.new(-20, 11.4, 2), Color3.fromRGB(22, 26, 36), Enum.Material.Metal, true)
+	makePart(m, "RightWall", Vector3.new(2, 22, 26), rot * CFrame.new(20, 11.4, 2), Color3.fromRGB(22, 26, 36), Enum.Material.Metal, true)
+	makePart(m, "Roof", Vector3.new(44, 1.6, 30), rot * CFrame.new(0, 22.8, 2), Color3.fromRGB(18, 20, 28), Enum.Material.Metal, true)
 
-	local glass = makePart(m, "ShowroomGlass", Vector3.new(46, 16, 0.6), rot * CFrame.new(0, 8.5, -12), Color3.fromRGB(60, 210, 255), Enum.Material.Glass, true)
+	local glass = makePart(m, "ShowroomGlass", Vector3.new(38, 16, 0.6), rot * CFrame.new(0, 8.8, -10.4), Color3.fromRGB(60, 210, 255), Enum.Material.Glass, true)
 	glass.Transparency = 0.55
 
-	local signBoard = makePart(m, "SignBoard", Vector3.new(38, 6.5, 1.5), rot * CFrame.new(0, 26.5, -11), Color3.fromRGB(16, 20, 30), Enum.Material.Metal, true)
+	local signBoard = makePart(m, "SignBoard", Vector3.new(34, 6.0, 1.5), rot * CFrame.new(0, 26.8, -9.5), Color3.fromRGB(16, 20, 30), Enum.Material.Metal, true)
 	addSurfaceSign(signBoard, "LEO SPEED SHOP & DEALER", Color3.fromRGB(40, 240, 255), Enum.NormalId.Front)
 	addSurfaceSign(signBoard, "LEO SPEED SHOP & DEALER", Color3.fromRGB(40, 240, 255), Enum.NormalId.Back)
 
-	local pad = makePart(m, "SpeedShopPad", Vector3.new(20, 0.6, 16), rot * CFrame.new(0, 0.4, -22), Color3.fromRGB(25, 235, 255), Enum.Material.Neon, true)
+	-- SpeedShopPad at Y = 0.58 (top Y = 0.70) — strictly above ShowroomFloor (top Y = 0.46) for zero Z-fighting!
+	local pad = makePart(m, "SpeedShopPad", Vector3.new(18, 0.24, 14), rot * CFrame.new(0, 0.58, -16), Color3.fromRGB(25, 235, 255), Enum.Material.Neon, true)
 	pad.CanCollide = false
 	pad:SetAttribute("IsSpeedShop", true)
 	CollectionService:AddTag(pad, "SpeedShopPad")
@@ -746,19 +869,22 @@ end
 local function buildMechanicRepairBay(pos: Vector3, yawDeg: number)
 	local m = Instance.new("Model")
 	m.Name = "MechanicRepairBay"
-	local rot = CFrame.new(pos) * CFrame.Angles(0, math.rad(yawDeg), 0)
+	local basePos = Vector3.new(pos.X, 0, pos.Z)
+	local rot = CFrame.new(basePos) * CFrame.Angles(0, math.rad(yawDeg), 0)
 
-	makePart(m, "BayFloor", Vector3.new(36, 0.8, 36), rot * CFrame.new(0, 0.4, 0), Color3.fromRGB(34, 38, 46), Enum.Material.Concrete, true)
-	makePart(m, "LeftWall", Vector3.new(2, 16, 28), rot * CFrame.new(-14, 8, 0), Color3.fromRGB(48, 52, 62), Enum.Material.Concrete, true)
-	makePart(m, "RightWall", Vector3.new(2, 16, 28), rot * CFrame.new(14, 8, 0), Color3.fromRGB(48, 52, 62), Enum.Material.Concrete, true)
-	makePart(m, "Roof", Vector3.new(32, 1.5, 30), rot * CFrame.new(0, 16.5, 0), Color3.fromRGB(28, 32, 40), Enum.Material.Metal, true)
+	-- BayFloor at Y = 0.26 (top Y = 0.46) — strictly above SidewalkBlock (top Y = 0.30)
+	makePart(m, "BayFloor", Vector3.new(32, 0.40, 32), rot * CFrame.new(0, 0.26, 0), Color3.fromRGB(34, 38, 46), Enum.Material.Concrete, true)
+	makePart(m, "LeftWall", Vector3.new(2, 16, 26), rot * CFrame.new(-13, 8.4, 0), Color3.fromRGB(48, 52, 62), Enum.Material.Concrete, true)
+	makePart(m, "RightWall", Vector3.new(2, 16, 26), rot * CFrame.new(13, 8.4, 0), Color3.fromRGB(48, 52, 62), Enum.Material.Concrete, true)
+	makePart(m, "Roof", Vector3.new(30, 1.5, 28), rot * CFrame.new(0, 16.8, 0), Color3.fromRGB(28, 32, 40), Enum.Material.Metal, true)
 
-	local sign = makePart(m, "MechanicSign", Vector3.new(28, 5, 1.4), rot * CFrame.new(0, 19.8, -13), Color3.fromRGB(20, 26, 32), Enum.Material.Metal, true)
+	local sign = makePart(m, "MechanicSign", Vector3.new(26, 5, 1.4), rot * CFrame.new(0, 20.1, -12), Color3.fromRGB(20, 26, 32), Enum.Material.Metal, true)
 	addSurfaceSign(sign, "INSTANT REPAIR & NITRO REFILL", Color3.fromRGB(60, 255, 120), Enum.NormalId.Front)
 	addSurfaceSign(sign, "INSTANT REPAIR & NITRO REFILL", Color3.fromRGB(60, 255, 120), Enum.NormalId.Back)
 
-	local pad = makePart(m, "RepairPad", Vector3.new(20, 0.6, 22), rot * CFrame.new(0, 0.5, 0), Color3.fromRGB(50, 255, 110), Enum.Material.Neon, true)
-	pad.Transparency = 0.25
+	-- RepairPad at Y = 0.58 (top Y = 0.70) — strictly above BayFloor (top Y = 0.46) so green pad NEVER flickers!
+	local pad = makePart(m, "RepairPad", Vector3.new(18, 0.24, 20), rot * CFrame.new(0, 0.58, 0), Color3.fromRGB(50, 255, 110), Enum.Material.Neon, true)
+	pad.Transparency = 0.20
 	pad.CanCollide = false
 	pad:SetAttribute("IsMechanicSpot", true)
 	CollectionService:AddTag(pad, "MechanicPad")
@@ -861,18 +987,18 @@ local function buildSkyscraper(center: Vector3, width: number, depth: number, he
 		)
 	end
 
-	-- 2. Main Art Deco Stepped Tower Core with Reflective Glass Curtain Wall & Vertical Pilasters
+	-- 2. Main Art Deco Stepped Tower Core with Reflective Glass Curtain Wall & Vertical Pilasters (0.4+ stud offsets for zero Z-fighting!)
 	local lowerH = height * 0.72
 	local midSetbackH = height * 0.28
-	makePart(m, "Shaft", Vector3.new(width - 1.6, lowerH, depth - 1.6), CFrame.new(center + Vector3.new(0, lowerH * 0.5, 0)), tint, Enum.Material.Concrete, true)
-	makePart(m, "ArtDecoSetbackTier", Vector3.new((width - 1.6) * 0.82, midSetbackH, (depth - 1.6) * 0.82), CFrame.new(center + Vector3.new(0, lowerH + midSetbackH * 0.5, 0)), tint, Enum.Material.Concrete, true)
+	makePart(m, "Shaft", Vector3.new(width - 2.0, lowerH, depth - 2.0), CFrame.new(center + Vector3.new(0, lowerH * 0.5, 0)), tint, Enum.Material.Concrete, true)
+	makePart(m, "ArtDecoSetbackTier", Vector3.new((width - 2.0) * 0.80, midSetbackH, (depth - 2.0) * 0.80), CFrame.new(center + Vector3.new(0, lowerH + midSetbackH * 0.5, 0)), tint, Enum.Material.Concrete, true)
 
-	local curtainZ = makePart(m, "GlassCurtainZ", Vector3.new(width - 3.2, lowerH - podiumH - 4, depth + 0.2), CFrame.new(center + Vector3.new(0, podiumH + (lowerH - podiumH - 4) * 0.5, 0)), glassTint, Enum.Material.Glass, true)
+	local curtainZ = makePart(m, "GlassCurtainZ", Vector3.new(width - 4.0, lowerH - podiumH - 4, depth - 0.8), CFrame.new(center + Vector3.new(0, podiumH + (lowerH - podiumH - 4) * 0.5, 0)), glassTint, Enum.Material.Glass, true)
 	curtainZ.Reflectance = 0.32
-	local curtainX = makePart(m, "GlassCurtainX", Vector3.new(width + 0.2, lowerH - podiumH - 4, depth - 3.2), CFrame.new(center + Vector3.new(0, podiumH + (lowerH - podiumH - 4) * 0.5, 0)), glassTint, Enum.Material.Glass, true)
+	local curtainX = makePart(m, "GlassCurtainX", Vector3.new(width - 0.8, lowerH - podiumH - 4, depth - 4.0), CFrame.new(center + Vector3.new(0, podiumH + (lowerH - podiumH - 4) * 0.5, 0)), glassTint, Enum.Material.Glass, true)
 	curtainX.Reflectance = 0.32
 
-	-- Vertical stone corner pilasters & center mullion ribs
+	-- Vertical stone corner pilasters & center mullion ribs (offset +0.6 studs outside glass so faces never co-plane)
 	for _, sx in ipairs({ -1, 0, 1 }) do
 		for _, sz in ipairs({ -1, 1 }) do
 			local pilW = if sx == 0 then 1.8 else 2.8
@@ -880,7 +1006,7 @@ local function buildSkyscraper(center: Vector3, width: number, depth: number, he
 				m,
 				"VerticalPilasterZ",
 				Vector3.new(pilW, lowerH, 1.4),
-				CFrame.new(center + Vector3.new(sx * (width * 0.46), lowerH * 0.5, sz * (depth * 0.5))),
+				CFrame.new(center + Vector3.new(sx * (width * 0.44), lowerH * 0.5, sz * (depth * 0.5 + 0.45))),
 				podiumColor,
 				Enum.Material.Concrete,
 				true
@@ -889,7 +1015,7 @@ local function buildSkyscraper(center: Vector3, width: number, depth: number, he
 				m,
 				"VerticalPilasterX",
 				Vector3.new(1.4, lowerH, pilW),
-				CFrame.new(center + Vector3.new(sz * (width * 0.5), lowerH * 0.5, sx * (depth * 0.46))),
+				CFrame.new(center + Vector3.new(sz * (width * 0.5 + 0.45), lowerH * 0.5, sx * (depth * 0.44))),
 				podiumColor,
 				Enum.Material.Concrete,
 				true
@@ -897,14 +1023,15 @@ local function buildSkyscraper(center: Vector3, width: number, depth: number, he
 		end
 	end
 
-	-- Horizontal spandrel ledges + warm amber & cool ice-cyan NYC night office floor bands
+	-- Horizontal spandrel ledges + warm amber & cool ice-cyan NYC night office floor bands (0.45+ stud offsets)
 	local floors = math.clamp(math.floor((height - podiumH) / 14), 3, 12)
 	for f = 1, floors do
 		local y = podiumH + (f - 0.5) * ((height - podiumH - 4) / floors)
-		local tierScale = if y > lowerH then 0.82 else 1.0
-		makePart(m, "SpandrelLedge", Vector3.new(width * tierScale + 0.8, 1.1, depth * tierScale + 0.8), CFrame.new(center + Vector3.new(0, y - 2.2, 0)), Color3.fromRGB(58, 64, 76), Enum.Material.Metal, true)
+		local tierScale = if y > lowerH then 0.80 else 1.0
+		makePart(m, "SpandrelLedge", Vector3.new(width * tierScale + 1.8, 1.1, depth * tierScale + 1.8), CFrame.new(center + Vector3.new(0, y - 2.2, 0)), Color3.fromRGB(58, 64, 76), Enum.Material.Metal, true)
 		local winColor = if (f + math.floor(center.X)) % 2 == 0 then Color3.fromRGB(255, 204, 118) else Color3.fromRGB(135, 192, 248)
-		makePart(m, "LitOfficeFloor", Vector3.new((width - 2.2) * tierScale, 2.5, (depth - 2.2) * tierScale), CFrame.new(center + Vector3.new(0, y, 0)), winColor, Enum.Material.Neon, true)
+		makePart(m, "LitOfficeFloorZ", Vector3.new((width - 4.4) * tierScale, 2.4, (depth + 0.45) * tierScale), CFrame.new(center + Vector3.new(0, y, 0)), winColor, Enum.Material.Neon, true)
+		makePart(m, "LitOfficeFloorX", Vector3.new((width + 0.45) * tierScale, 2.4, (depth - 4.4) * tierScale), CFrame.new(center + Vector3.new(0, y, 0)), winColor, Enum.Material.Neon, true)
 	end
 
 	-- 3. Setback Crown, Mechanical Penthouse & Rooftop Helipad / Aviation Beacons
@@ -950,121 +1077,148 @@ local function buildMidRiseCommercialBlock(origin: Vector3, variant: number)
 	local p2 = palettes[((math.abs(variant) + 1) % #palettes) + 1]
 
 	-- Building A (NW quadrant)
-	local b1Center = origin + Vector3.new(-28, 0.3, -24)
-	makePart(BuildingsFolder, "MidRiseStoreA", Vector3.new(44, 34, 38), CFrame.new(b1Center + Vector3.new(0, 17, 0)), p1.wall, Enum.Material.SmoothPlastic, true)
-	makePart(BuildingsFolder, "StoreCorniceA", Vector3.new(46, 2.2, 40), CFrame.new(b1Center + Vector3.new(0, 35, 0)), p1.trim, Enum.Material.Concrete, true)
-	local glassA = makePart(BuildingsFolder, "StorefrontGlassA", Vector3.new(38, 10, 39.2), CFrame.new(b1Center + Vector3.new(0, 5.5, 0)), Color3.fromRGB(135, 210, 250), Enum.Material.Glass, true)
+	local b1Center = origin + Vector3.new(-20, 0.3, -18)
+	makePart(BuildingsFolder, "MidRiseStoreA", Vector3.new(34, 34, 30), CFrame.new(b1Center + Vector3.new(0, 17, 0)), p1.wall, Enum.Material.SmoothPlastic, true)
+	makePart(BuildingsFolder, "StoreCorniceA", Vector3.new(36, 2.2, 32), CFrame.new(b1Center + Vector3.new(0, 35, 0)), p1.trim, Enum.Material.Concrete, true)
+	local glassA = makePart(BuildingsFolder, "StorefrontGlassA", Vector3.new(28, 10, 31.2), CFrame.new(b1Center + Vector3.new(0, 5.5, 0)), Color3.fromRGB(135, 210, 250), Enum.Material.Glass, true)
 	glassA.Reflectance = 0.25
-	local awningA = makePart(BuildingsFolder, "AwningA", Vector3.new(40, 1.2, 44), CFrame.new(b1Center + Vector3.new(0, 11.2, 0)), Color3.fromRGB(225, 62, 58), Enum.Material.Fabric, true)
+	local awningA = makePart(BuildingsFolder, "AwningA", Vector3.new(30, 1.2, 35), CFrame.new(b1Center + Vector3.new(0, 11.2, 0)), Color3.fromRGB(225, 62, 58), Enum.Material.Fabric, true)
 	addSurfaceSign(awningA, p1.sign, p1.signCol, Enum.NormalId.Front)
 	addSurfaceSign(awningA, p1.sign, p1.signCol, Enum.NormalId.Back)
 
 	-- Building B (SE quadrant)
-	local b2Center = origin + Vector3.new(28, 0.3, 24)
-	makePart(BuildingsFolder, "MidRiseStoreB", Vector3.new(42, 42, 36), CFrame.new(b2Center + Vector3.new(0, 21, 0)), p2.wall, Enum.Material.SmoothPlastic, true)
-	makePart(BuildingsFolder, "StoreCorniceB", Vector3.new(44, 2.2, 38), CFrame.new(b2Center + Vector3.new(0, 43, 0)), p2.trim, Enum.Material.Concrete, true)
-	local glassB = makePart(BuildingsFolder, "StorefrontGlassB", Vector3.new(36, 10, 37.2), CFrame.new(b2Center + Vector3.new(0, 5.5, 0)), Color3.fromRGB(135, 210, 250), Enum.Material.Glass, true)
+	local b2Center = origin + Vector3.new(20, 0.3, 18)
+	makePart(BuildingsFolder, "MidRiseStoreB", Vector3.new(32, 42, 28), CFrame.new(b2Center + Vector3.new(0, 21, 0)), p2.wall, Enum.Material.SmoothPlastic, true)
+	makePart(BuildingsFolder, "StoreCorniceB", Vector3.new(34, 2.2, 30), CFrame.new(b2Center + Vector3.new(0, 43, 0)), p2.trim, Enum.Material.Concrete, true)
+	local glassB = makePart(BuildingsFolder, "StorefrontGlassB", Vector3.new(26, 10, 29.2), CFrame.new(b2Center + Vector3.new(0, 5.5, 0)), Color3.fromRGB(135, 210, 250), Enum.Material.Glass, true)
 	glassB.Reflectance = 0.25
-	local signB = makePart(BuildingsFolder, "StoreSignB", Vector3.new(34, 4.2, 38), CFrame.new(b2Center + Vector3.new(0, 13.5, 0)), Color3.fromRGB(32, 38, 52), Enum.Material.Metal, true)
+	local signB = makePart(BuildingsFolder, "StoreSignB", Vector3.new(26, 4.2, 30), CFrame.new(b2Center + Vector3.new(0, 13.5, 0)), Color3.fromRGB(32, 38, 52), Enum.Material.Metal, true)
 	addSurfaceSign(signB, p2.sign, p2.signCol, Enum.NormalId.Front)
 	addSurfaceSign(signB, p2.sign, p2.signCol, Enum.NormalId.Back)
 
-	-- Outdoor Cafe Patio, Food Vendor Carts, MegaCorp Targets & Trees in SW / NE plazas
-	spawnPalmTree(origin + Vector3.new(-38, 0.3, 32))
-	spawnPalmTree(origin + Vector3.new(38, 0.3, -32))
-	spawnCafePatio(origin + Vector3.new(-22, 0.3, 24), 0)
-	spawnFoodVendorCart(origin + Vector3.new(26, 0.3, -26), 180, variant)
-	spawnFenceRun(origin + Vector3.new(24, 0.3, -48), 0, 3, Color3.fromRGB(235, 222, 198))
-	spawnCrateCluster(origin + Vector3.new(-24, 0.3, 42), 2)
+	-- Outdoor Cafe Patio, Food Vendor Carts, Gold ATMs, Armored Cash Vans & MegaCorp Targets in SW / NE plazas
+	spawnPalmTree(origin + Vector3.new(-32, 0.3, 28))
+	spawnPalmTree(origin + Vector3.new(32, 0.3, -28))
+	spawnCafePatio(origin + Vector3.new(-18, 0.3, 20), 0)
+	spawnFoodVendorCart(origin + Vector3.new(22, 0.3, -22), 180, variant)
+	spawnGoldATM(origin + Vector3.new(-34, 0.3, -6), 90)
+	spawnFenceRun(origin + Vector3.new(18, 0.3, -38), 0, 3, Color3.fromRGB(235, 222, 198))
+	spawnCrateCluster(origin + Vector3.new(-20, 0.3, 34), 2)
 	if math.abs(variant) % 2 == 0 then
-		spawnBillboard(origin + Vector3.new(-42, 0.3, 46), 45, "SMASH MEGACORP PROPERTY!", Color3.fromRGB(255, 85, 85))
+		spawnBillboard(origin + Vector3.new(-34, 0.3, 36), 45, "SMASH MEGACORP PROPERTY!", Color3.fromRGB(255, 85, 85))
+		spawnArmoredCashTruck(origin + Vector3.new(32, 0.3, 0), 0)
 	else
-		spawnMegaCorpSurveillanceTower(origin + Vector3.new(42, 0.3, -46), -45)
+		spawnMegaCorpSurveillanceTower(origin + Vector3.new(34, 0.3, -36), -45)
 	end
 end
 
 local function buildGasStation(origin: Vector3)
 	local m = Instance.new("Model")
 	m.Name = "LeoGasStation"
-	makePart(m, "Canopy", Vector3.new(52, 2.2, 32), CFrame.new(origin + Vector3.new(0, 18, 0)), Color3.fromRGB(230, 45, 45), Enum.Material.Metal, true)
-	local fascia = makePart(m, "Fascia", Vector3.new(52.6, 3.2, 32.6), CFrame.new(origin + Vector3.new(0, 19.5, 0)), Color3.fromRGB(255, 200, 40), Enum.Material.Neon, true)
+	makePart(m, "Canopy", Vector3.new(44, 2.2, 28), CFrame.new(origin + Vector3.new(0, 18, 0)), Color3.fromRGB(230, 45, 45), Enum.Material.Metal, true)
+	local fascia = makePart(m, "Fascia", Vector3.new(44.8, 3.2, 28.8), CFrame.new(origin + Vector3.new(0, 19.5, 0)), Color3.fromRGB(255, 200, 40), Enum.Material.Neon, true)
 	addSurfaceSign(fascia, "BOOM GAS & NITRO", Color3.fromRGB(30, 30, 35), Enum.NormalId.Front)
 	addSurfaceSign(fascia, "BOOM GAS & NITRO", Color3.fromRGB(30, 30, 35), Enum.NormalId.Back)
 
-	for _, sx in ipairs({ -18, 18 }) do
-		for _, sz in ipairs({ -10, 10 }) do
+	for _, sx in ipairs({ -16, 16 }) do
+		for _, sz in ipairs({ -9, 9 }) do
 			makePart(m, "Pillar", Vector3.new(2.2, 18, 2.2), CFrame.new(origin + Vector3.new(sx, 9, sz)), Color3.fromRGB(220, 225, 235), Enum.Material.Concrete, true)
 		end
 	end
 	m.Parent = BuildingsFolder
 
 	-- Explosive gas pumps & barrels!
-	for _, px in ipairs({ -12, 0, 12 }) do
-		spawnGasPump(origin + Vector3.new(px, 0, -4), 0)
-		spawnGasPump(origin + Vector3.new(px, 0, 6), 180)
+	for _, px in ipairs({ -10, 0, 10 }) do
+		spawnGasPump(origin + Vector3.new(px, 0.3, -4), 0)
+		spawnGasPump(origin + Vector3.new(px, 0.3, 6), 180)
 	end
-	spawnExplosiveBarrel(origin + Vector3.new(-22, 0, 0))
-	spawnExplosiveBarrel(origin + Vector3.new(22, 0, 0))
+	spawnExplosiveBarrel(origin + Vector3.new(-18, 0.3, 0))
+	spawnExplosiveBarrel(origin + Vector3.new(18, 0.3, 0))
+end
+
+local function buildShippingContainerStack(origin: Vector3, offset: Vector3, yawDeg: number)
+	local containerColors = {
+		{ col = Color3.fromRGB(195, 48, 38), label = "RED HOOK PORT" },
+		{ col = Color3.fromRGB(34, 96, 178), label = "ATLANTIC CARGO" },
+		{ col = Color3.fromRGB(228, 162, 32), label = "MEGACORP FREIGHT" },
+		{ col = Color3.fromRGB(38, 138, 86), label = "HUDSON SHIPPING" },
+	}
+	local baseRot = CFrame.new(origin + offset) * CFrame.Angles(0, math.rad(yawDeg), 0)
+	for row = 0, 1 do
+		for tier = 0, 1 do
+			if not (row == 1 and tier == 1) then
+				local spec = containerColors[((row * 2 + tier) % #containerColors) + 1]
+				local cPos = baseRot * CFrame.new((row - 0.5) * 9.2, 4.4 + tier * 8.8, 0)
+				local box = makePart(BuildingsFolder, "ShippingContainer", Vector3.new(8.4, 8.6, 22.0), cPos, spec.col, Enum.Material.CorrugatedMetal, true)
+				makePart(BuildingsFolder, "ContainerCornerFrame", Vector3.new(8.8, 8.8, 1.2), cPos * CFrame.new(0, 0, -10.5), Color3.fromRGB(38, 42, 50), Enum.Material.Metal, true)
+				makePart(BuildingsFolder, "ContainerRearDoors", Vector3.new(8.8, 8.8, 1.2), cPos * CFrame.new(0, 0, 10.5), Color3.fromRGB(38, 42, 50), Enum.Material.Metal, true)
+				addSurfaceSign(box, spec.label, Color3.fromRGB(245, 248, 255), Enum.NormalId.Left)
+				addSurfaceSign(box, spec.label, Color3.fromRGB(245, 248, 255), Enum.NormalId.Right)
+			end
+		end
+	end
 end
 
 local function buildIndustrialYardBlock(origin: Vector3, seed: number)
-	-- Crane centerpiece
+	-- Crane centerpiece (Tier 4 target)
 	local crane = Instance.new("Model")
 	crane.Name = "ConstructionCrane"
-	local base = makePart(crane, "CraneBase", Vector3.new(12, 4, 12), CFrame.new(origin + Vector3.new(-35, 2, -35)), Color3.fromRGB(245, 185, 30), Enum.Material.Metal, true)
-	makePart(crane, "Mast", Vector3.new(5, 85, 5), CFrame.new(origin + Vector3.new(-35, 44.5, -35)), Color3.fromRGB(245, 185, 30), Enum.Material.Metal, false)
-	makePart(crane, "Jib", Vector3.new(75, 4, 4), CFrame.new(origin + Vector3.new(-10, 86, -35)), Color3.fromRGB(245, 185, 30), Enum.Material.Metal, false)
+	local base = makePart(crane, "CraneBase", Vector3.new(12, 4, 12), CFrame.new(origin + Vector3.new(-24, 2, -24)), Color3.fromRGB(245, 185, 30), Enum.Material.Metal, true)
+	makePart(crane, "Mast", Vector3.new(5, 85, 5), CFrame.new(origin + Vector3.new(-24, 44.5, -24)), Color3.fromRGB(245, 185, 30), Enum.Material.Metal, false)
+	makePart(crane, "Jib", Vector3.new(68, 4, 4), CFrame.new(origin + Vector3.new(-2, 86, -24)), Color3.fromRGB(245, 185, 30), Enum.Material.Metal, false)
 	weldChildrenToPrimary(crane, base)
 	crane.Parent = PropsFolder
-	tagDestructible(crane, "ConstructionCrane", 350, 250, 55, false)
+	tagDestructible(crane, "ConstructionCrane", 350, 250, 55, false, 4)
 
-	-- Warehouse
-	makePart(BuildingsFolder, "Warehouse", Vector3.new(56, 26, 40), CFrame.new(origin + Vector3.new(28, 13, 25)), Color3.fromRGB(95, 65, 55), Enum.Material.CorrodedMetal, true)
+	-- Detailed Multi-Colored Shipping Container Port Stack & Gantry Frame (replaces flat brown box warehouse!)
+	buildShippingContainerStack(origin, Vector3.new(18, 0, 14), 0)
 
 	-- Explosive barrel clusters & crates
-	for k = 1, 6 do
-		local angle = (k / 6) * math.pi * 2 + seed
-		local bPos = origin + Vector3.new(math.cos(angle) * 28, 0, math.sin(angle) * 28)
+	for k = 1, 5 do
+		local angle = (k / 5) * math.pi * 2 + seed
+		local bPos = origin + Vector3.new(math.cos(angle) * 22, 0, math.sin(angle) * 22)
 		spawnExplosiveBarrel(bPos)
 		spawnExplosiveBarrel(bPos + Vector3.new(3.2, 0, 0))
 	end
-	spawnCrateCluster(origin + Vector3.new(-15, 0, 25), 3)
-	spawnCrateCluster(origin + Vector3.new(10, 0, -25), 3)
-	spawnConstructionBarrier(origin + Vector3.new(0, 0, -55), 0)
-	spawnConstructionBarrier(origin + Vector3.new(-55, 0, 0), 90)
-	spawnBillboard(origin + Vector3.new(-45, 0, 45), 45, "DANGER: BLAST ZONE", Color3.fromRGB(255, 90, 30))
+	spawnCrateCluster(origin + Vector3.new(-14, 0, 18), 3)
+	spawnCrateCluster(origin + Vector3.new(8, 0, -18), 3)
+	spawnConstructionBarrier(origin + Vector3.new(0, 0, -38), 0)
+	spawnConstructionBarrier(origin + Vector3.new(-38, 0, 0), 90)
+	spawnBillboard(origin + Vector3.new(-32, 0, 32), 45, "DANGER: BLAST ZONE", Color3.fromRGB(255, 90, 30))
 end
 
 local function buildSuburbanParkBlock(origin: Vector3)
-	-- Snowy Central Park winter lawn & frozen ice pond
-	makePart(CityRoot, "ParkLawn", Vector3.new(BLOCK_SIZE - ROAD_WIDTH - 16, 0.8, BLOCK_SIZE - ROAD_WIDTH - 16), CFrame.new(origin + Vector3.new(0, 0.4, 0)), Color3.fromRGB(218, 228, 242), Enum.Material.Sand, true)
-	local pond = makePart(CityRoot, "ParkPond", Vector3.new(46, 0.9, 34), CFrame.new(origin + Vector3.new(-22, 0.5, 18)), Color3.fromRGB(145, 192, 232), Enum.Material.Glass, true)
+	-- Snowy Central Park winter lawn (top Y = 0.36) & frozen ice pond (top Y = 0.44) — strictly separated Y heights!
+	local parkSpan = BLOCK_SIZE - ROAD_WIDTH - 12
+	makePart(CityRoot, "ParkLawn", Vector3.new(parkSpan, 0.24, parkSpan), CFrame.new(origin + Vector3.new(0, 0.24, 0)), Color3.fromRGB(218, 228, 242), Enum.Material.Sand, true)
+	local pond = makePart(CityRoot, "ParkPond", Vector3.new(36, 0.24, 26), CFrame.new(origin + Vector3.new(-16, 0.32, 14)), Color3.fromRGB(145, 192, 232), Enum.Material.Glass, true)
 	pond.Reflectance = 0.28
 
 	-- Perimeter destructible fences
-	spawnFenceRun(origin + Vector3.new(0, 0, -56), 0, 5, Color3.fromRGB(220, 226, 238))
-	spawnFenceRun(origin + Vector3.new(0, 0, 56), 0, 5, Color3.fromRGB(220, 226, 238))
-	spawnBench(origin + Vector3.new(18, 0.8, 12), -45)
-	spawnBench(origin + Vector3.new(18, 0.8, -12), -135)
-	spawnJackpotCrate(origin + Vector3.new(24, 0.8, 0))
+	spawnFenceRun(origin + Vector3.new(0, 0.3, -40), 0, 4, Color3.fromRGB(220, 226, 238))
+	spawnFenceRun(origin + Vector3.new(0, 0.3, 40), 0, 4, Color3.fromRGB(220, 226, 238))
+	spawnBench(origin + Vector3.new(14, 0.36, 10), -45)
+	spawnBench(origin + Vector3.new(14, 0.36, -10), -135)
+	spawnJackpotCrate(origin + Vector3.new(20, 0.36, 0))
 
 	-- Park seamless steel stunt jump over frozen pond
-	buildStuntRamp(origin + Vector3.new(-22, 0.8, -18), 180, 26, 6.2, 38, "ParkLakeMegaJump")
+	buildStuntRamp(origin + Vector3.new(-16, 0.36, -14), 180, 26, 6.2, 38, "ParkLakeMegaJump")
 end
 
 local function buildBeachfrontBoardwalk(origin: Vector3)
-	-- Frosty Hudson River Pier & Winter Boardwalk on East edge
-	makePart(CityRoot, "BeachSand", Vector3.new(BLOCK_SIZE - ROAD_WIDTH, 0.7, BLOCK_SIZE - ROAD_WIDTH), CFrame.new(origin + Vector3.new(0, 0.35, 0)), Color3.fromRGB(82, 88, 100), Enum.Material.Concrete, true)
-	makePart(CityRoot, "BoardwalkDeck", Vector3.new(28, 1.0, BLOCK_SIZE - ROAD_WIDTH), CFrame.new(origin + Vector3.new(-38, 0.5, 0)), Color3.fromRGB(102, 74, 52), Enum.Material.WoodPlanks, true)
+	-- Frosty Hudson River Pier (top Y = 0.36) & Winter Boardwalk on East edge (top Y = 0.46)
+	local usable = BLOCK_SIZE - ROAD_WIDTH
+	makePart(CityRoot, "BeachSand", Vector3.new(usable, 0.24, usable), CFrame.new(origin + Vector3.new(0, 0.24, 0)), Color3.fromRGB(82, 88, 100), Enum.Material.Concrete, true)
+	makePart(CityRoot, "BoardwalkDeck", Vector3.new(24, 0.24, usable), CFrame.new(origin + Vector3.new(-26, 0.34, 0)), Color3.fromRGB(102, 74, 52), Enum.Material.WoodPlanks, true)
 
-	for _, zOff in ipairs({ -42, 0, 42 }) do
-		spawnPalmTree(origin + Vector3.new(-16, 0.6, zOff))
-		spawnPalmTree(origin + Vector3.new(26, 0.6, zOff))
-		spawnBench(origin + Vector3.new(-32, 1.0, zOff + 12), 90)
+	for _, zOff in ipairs({ -30, 0, 30 }) do
+		spawnPalmTree(origin + Vector3.new(-12, 0.36, zOff))
+		spawnPalmTree(origin + Vector3.new(18, 0.36, zOff))
+		spawnBench(origin + Vector3.new(-22, 0.46, zOff + 8), 90)
 	end
-	spawnCrateCluster(origin + Vector3.new(-36, 1.0, -20), 2)
-	spawnJackpotCrate(origin + Vector3.new(-28, 1.0, 22))
-	buildStuntRamp(origin + Vector3.new(10, 0.7, 0), 0, 26, 6.2, 38, "BoardwalkStuntJump")
+	spawnCrateCluster(origin + Vector3.new(-26, 0.46, -16), 2)
+	spawnJackpotCrate(origin + Vector3.new(-20, 0.46, 16))
+	buildStuntRamp(origin + Vector3.new(8, 0.36, 0), 0, 26, 6.2, 38, "BoardwalkStuntJump")
 end
 
 --------------------------------------------------------------------------------
@@ -1073,11 +1227,12 @@ end
 
 local function buildLeoCity()
 	local totalSpan = (GRID_RADIUS * 2 + 1) * BLOCK_SIZE + 240
-	makePart(CityRoot, "CityBaseplate", Vector3.new(totalSpan, 4, totalSpan), CFrame.new(0, -2, 0), Color3.fromRGB(34, 38, 46), Enum.Material.Concrete, true)
+	-- CityBaseplate at Y = -2.2, Size Y = 4.0 -> top Y = -0.20 (strictly below Road top Y = 0.16!)
+	makePart(CityRoot, "CityBaseplate", Vector3.new(totalSpan, 4, totalSpan), CFrame.new(0, -2.2, 0), Color3.fromRGB(34, 38, 46), Enum.Material.Concrete, true)
 
 	-- Hudson River dark icy water along the East waterfront
 	local oceanX = (GRID_RADIUS + 1.2) * BLOCK_SIZE
-	local river = makePart(CityRoot, "OceanWater", Vector3.new(360, 3.6, totalSpan), CFrame.new(oceanX, -1.6, 0), Color3.fromRGB(24, 48, 72), Enum.Material.Glass, true)
+	local river = makePart(CityRoot, "OceanWater", Vector3.new(360, 3.6, totalSpan), CFrame.new(oceanX, -1.8, 0), Color3.fromRGB(24, 48, 72), Enum.Material.Glass, true)
 	river.Reflectance = 0.22
 
 	-- SpawnLocation at Leo Plaza (0, 0, 0) — flush and invisible so there is no grey studded pad or curb step!
@@ -1092,17 +1247,19 @@ local function buildLeoCity()
 	spawnLoc.Parent = CityRoot
 
 	-- Grand Central Avenue straight through X = 0 and Z = 0 with wet reflective dark NYC slate asphalt
+	-- Road Y = 0.0, Size Y = 0.32 -> top Y = 0.16
+	-- LaneDash Y = 0.21, Size Y = 0.08 -> top Y = 0.25 (strictly above Road top Y = 0.16!)
 	local gridExtent = (GRID_RADIUS + 1) * BLOCK_SIZE
-	local grandAve = makePart(RoadsFolder, "GrandCentralAveNS", Vector3.new(ROAD_WIDTH, 0.34, gridExtent * 2), CFrame.new(0, 0.17, 0), Color3.fromRGB(26, 30, 38), Enum.Material.Asphalt, true)
+	local grandAve = makePart(RoadsFolder, "GrandCentralAveNS", Vector3.new(ROAD_WIDTH, 0.32, gridExtent * 2), CFrame.new(0, 0.0, 0), Color3.fromRGB(26, 30, 38), Enum.Material.Asphalt, true)
 	grandAve.Reflectance = 0.14
 	for z = -gridExtent + 20, gridExtent - 20, 28 do
-		makePart(RoadsFolder, "GrandAveDashNS", Vector3.new(0.8, 0.37, 12), CFrame.new(0, 0.185, z), Color3.fromRGB(235, 190, 50), Enum.Material.SmoothPlastic, true)
-		makePart(RoadsFolder, "GrandAveWhiteLaneW", Vector3.new(0.45, 0.36, 9), CFrame.new(-ROAD_WIDTH * 0.25, 0.18, z), Color3.fromRGB(215, 222, 235), Enum.Material.SmoothPlastic, true)
-		makePart(RoadsFolder, "GrandAveWhiteLaneE", Vector3.new(0.45, 0.36, 9), CFrame.new(ROAD_WIDTH * 0.25, 0.18, z), Color3.fromRGB(215, 222, 235), Enum.Material.SmoothPlastic, true)
+		makePart(RoadsFolder, "GrandAveDashNS", Vector3.new(0.8, 0.08, 12), CFrame.new(0, 0.21, z), Color3.fromRGB(235, 190, 50), Enum.Material.SmoothPlastic, true)
+		makePart(RoadsFolder, "GrandAveWhiteLaneW", Vector3.new(0.45, 0.08, 9), CFrame.new(-ROAD_WIDTH * 0.25, 0.21, z), Color3.fromRGB(215, 222, 235), Enum.Material.SmoothPlastic, true)
+		makePart(RoadsFolder, "GrandAveWhiteLaneE", Vector3.new(0.45, 0.08, 9), CFrame.new(ROAD_WIDTH * 0.25, 0.21, z), Color3.fromRGB(215, 222, 235), Enum.Material.SmoothPlastic, true)
 	end
 
 	-- Steaming NYC Manholes along Grand Central Avenue
-	for z = -320, 320, 160 do
+	for z = -280, 280, 140 do
 		spawnSteamingManhole(Vector3.new(8, 0.2, z + 35))
 	end
 
@@ -1113,38 +1270,39 @@ local function buildLeoCity()
 	end
 
 	for _, rx in ipairs(roadLines) do
-		local rns = makePart(RoadsFolder, "RoadNS", Vector3.new(ROAD_WIDTH, 0.3, gridExtent * 2), CFrame.new(rx, 0.15, 0), Color3.fromRGB(28, 32, 40), Enum.Material.Asphalt, true)
+		local rns = makePart(RoadsFolder, "RoadNS", Vector3.new(ROAD_WIDTH, 0.32, gridExtent * 2), CFrame.new(rx, 0.0, 0), Color3.fromRGB(28, 32, 40), Enum.Material.Asphalt, true)
 		rns.Reflectance = 0.14
 		for z = -gridExtent + 20, gridExtent - 20, 28 do
-			makePart(RoadsFolder, "LaneDashNS", Vector3.new(0.8, 0.34, 12), CFrame.new(rx, 0.17, z), Color3.fromRGB(235, 190, 50), Enum.Material.SmoothPlastic, true)
-			makePart(RoadsFolder, "WhiteLaneNS_W", Vector3.new(0.45, 0.33, 9), CFrame.new(rx - ROAD_WIDTH * 0.25, 0.165, z), Color3.fromRGB(215, 222, 235), Enum.Material.SmoothPlastic, true)
-			makePart(RoadsFolder, "WhiteLaneNS_E", Vector3.new(0.45, 0.33, 9), CFrame.new(rx + ROAD_WIDTH * 0.25, 0.165, z), Color3.fromRGB(215, 222, 235), Enum.Material.SmoothPlastic, true)
+			makePart(RoadsFolder, "LaneDashNS", Vector3.new(0.8, 0.08, 12), CFrame.new(rx, 0.21, z), Color3.fromRGB(235, 190, 50), Enum.Material.SmoothPlastic, true)
+			makePart(RoadsFolder, "WhiteLaneNS_W", Vector3.new(0.45, 0.08, 9), CFrame.new(rx - ROAD_WIDTH * 0.25, 0.21, z), Color3.fromRGB(215, 222, 235), Enum.Material.SmoothPlastic, true)
+			makePart(RoadsFolder, "WhiteLaneNS_E", Vector3.new(0.45, 0.08, 9), CFrame.new(rx + ROAD_WIDTH * 0.25, 0.21, z), Color3.fromRGB(215, 222, 235), Enum.Material.SmoothPlastic, true)
 		end
 	end
 
 	for _, rz in ipairs(roadLines) do
-		local rew = makePart(RoadsFolder, "RoadEW", Vector3.new(gridExtent * 2, 0.32, ROAD_WIDTH), CFrame.new(0, 0.16, rz), Color3.fromRGB(28, 32, 40), Enum.Material.Asphalt, true)
+		-- RoadEW at Y = 0.01 (top Y = 0.17) so NS/EW intersections never Z-fight; LaneDashEW at Y = 0.21 (top Y = 0.25)
+		local rew = makePart(RoadsFolder, "RoadEW", Vector3.new(gridExtent * 2, 0.32, ROAD_WIDTH), CFrame.new(0, 0.01, rz), Color3.fromRGB(28, 32, 40), Enum.Material.Asphalt, true)
 		rew.Reflectance = 0.14
 		for x = -gridExtent + 20, gridExtent - 20, 28 do
-			makePart(RoadsFolder, "LaneDashEW", Vector3.new(12, 0.35, 0.8), CFrame.new(x, 0.175, rz), Color3.fromRGB(235, 190, 50), Enum.Material.SmoothPlastic, true)
-			makePart(RoadsFolder, "WhiteLaneEW_N", Vector3.new(9, 0.34, 0.45), CFrame.new(x, 0.17, rz - ROAD_WIDTH * 0.25), Color3.fromRGB(215, 222, 235), Enum.Material.SmoothPlastic, true)
-			makePart(RoadsFolder, "WhiteLaneEW_S", Vector3.new(9, 0.34, 0.45), CFrame.new(x, 0.17, rz + ROAD_WIDTH * 0.25), Color3.fromRGB(215, 222, 235), Enum.Material.SmoothPlastic, true)
+			makePart(RoadsFolder, "LaneDashEW", Vector3.new(12, 0.08, 0.8), CFrame.new(x, 0.21, rz), Color3.fromRGB(235, 190, 50), Enum.Material.SmoothPlastic, true)
+			makePart(RoadsFolder, "WhiteLaneEW_N", Vector3.new(9, 0.08, 0.45), CFrame.new(x, 0.21, rz - ROAD_WIDTH * 0.25), Color3.fromRGB(215, 222, 235), Enum.Material.SmoothPlastic, true)
+			makePart(RoadsFolder, "WhiteLaneEW_S", Vector3.new(9, 0.08, 0.45), CFrame.new(x, 0.21, rz + ROAD_WIDTH * 0.25), Color3.fromRGB(215, 222, 235), Enum.Material.SmoothPlastic, true)
 		end
 	end
 
-	-- Intersections: Crosswalks + Traffic Lights + Steaming Manholes
+	-- Intersections: Crosswalks (Y = 0.22, top Y = 0.26) + Traffic Lights + Steaming Manholes
 	for _, rx in ipairs(roadLines) do
 		for _, rz in ipairs(roadLines) do
 			local interPos = Vector3.new(rx, 0, rz)
 			for s = -2, 2 do
 				if s ~= 0 then
-					makePart(RoadsFolder, "CrosswalkN", Vector3.new(3.2, 0.36, 1.2), CFrame.new(rx + s * 5.5, 0.18, rz - ROAD_WIDTH * 0.5 - 2), Color3.fromRGB(212, 218, 230), Enum.Material.SmoothPlastic, true)
-					makePart(RoadsFolder, "CrosswalkE", Vector3.new(1.2, 0.36, 3.2), CFrame.new(rx + ROAD_WIDTH * 0.5 + 2, 0.18, rz + s * 5.5), Color3.fromRGB(212, 218, 230), Enum.Material.SmoothPlastic, true)
+					makePart(RoadsFolder, "CrosswalkN", Vector3.new(3.2, 0.08, 1.2), CFrame.new(rx + s * 5.5, 0.22, rz - ROAD_WIDTH * 0.5 - 2), Color3.fromRGB(212, 218, 230), Enum.Material.SmoothPlastic, true)
+					makePart(RoadsFolder, "CrosswalkE", Vector3.new(1.2, 0.08, 3.2), CFrame.new(rx + ROAD_WIDTH * 0.5 + 2, 0.22, rz + s * 5.5), Color3.fromRGB(212, 218, 230), Enum.Material.SmoothPlastic, true)
 				end
 			end
 			spawnTrafficLight(interPos, Vector3.new(-ROAD_WIDTH * 0.5 - 3, 0, -ROAD_WIDTH * 0.5 - 3), 0, "NS")
 			spawnTrafficLight(interPos, Vector3.new(ROAD_WIDTH * 0.5 + 3, 0, ROAD_WIDTH * 0.5 + 3), 90, "EW")
-			if math.abs(rx) <= 300 and math.abs(rz) <= 300 then
+			if math.abs(rx) <= 240 and math.abs(rz) <= 240 then
 				spawnSteamingManhole(Vector3.new(rx - 9, 0.2, rz + 9))
 			end
 		end
@@ -1156,13 +1314,13 @@ local function buildLeoCity()
 			local origin = Vector3.new(bx * BLOCK_SIZE, 0, bz * BLOCK_SIZE)
 			local usable = BLOCK_SIZE - ROAD_WIDTH
 
-			-- Dark wet Manhattan bluestone granite sidewalk framing block (0.26 studs tall so vehicles never snag on curbs)
+			-- Dark wet Manhattan bluestone granite sidewalk framing block at Y = 0.20 (Size Y = 0.20 -> top Y = 0.30)
 			if bx ~= 0 then
-				makePart(CityRoot, "SidewalkBlock", Vector3.new(usable, 0.26, usable), CFrame.new(origin + Vector3.new(0, 0.13, 0)), Color3.fromRGB(68, 74, 84), Enum.Material.Concrete, true)
+				makePart(CityRoot, "SidewalkBlock", Vector3.new(usable, 0.20, usable), CFrame.new(origin + Vector3.new(0, 0.20, 0)), Color3.fromRGB(68, 74, 84), Enum.Material.Concrete, true)
 			else
 				local sideW = (usable - ROAD_WIDTH) * 0.5
-				makePart(CityRoot, "SidewalkBlockW", Vector3.new(sideW, 0.26, usable), CFrame.new(origin + Vector3.new(-(ROAD_WIDTH * 0.5 + sideW * 0.5), 0.13, 0)), Color3.fromRGB(68, 74, 84), Enum.Material.Concrete, true)
-				makePart(CityRoot, "SidewalkBlockE", Vector3.new(sideW, 0.26, usable), CFrame.new(origin + Vector3.new(ROAD_WIDTH * 0.5 + sideW * 0.5, 0.13, 0)), Color3.fromRGB(68, 74, 84), Enum.Material.Concrete, true)
+				makePart(CityRoot, "SidewalkBlockW", Vector3.new(sideW, 0.20, usable), CFrame.new(origin + Vector3.new(-(ROAD_WIDTH * 0.5 + sideW * 0.5), 0.20, 0)), Color3.fromRGB(68, 74, 84), Enum.Material.Concrete, true)
+				makePart(CityRoot, "SidewalkBlockE", Vector3.new(sideW, 0.20, usable), CFrame.new(origin + Vector3.new(ROAD_WIDTH * 0.5 + sideW * 0.5, 0.20, 0)), Color3.fromRGB(68, 74, 84), Enum.Material.Concrete, true)
 			end
 
 			-- Streetlights, Fire Hydrants & Easy-Smash Street Clutter Rows on every block perimeter
@@ -1173,82 +1331,93 @@ local function buildLeoCity()
 			spawnStreetLight(origin + Vector3.new(edge, 0.3, edge), -135)
 			spawnFireHydrant(origin + Vector3.new(-edge, 0.3, 0))
 			spawnFireHydrant(origin + Vector3.new(edge, 0.3, 0))
-			spawnStreetClutterRow(origin + Vector3.new(-edge + 2.5, 0.3, -24), 90)
-			spawnStreetClutterRow(origin + Vector3.new(edge - 2.5, 0.3, 24), -90)
+			spawnStreetClutterRow(origin + Vector3.new(-edge + 2.5, 0.3, -18), 90)
+			spawnStreetClutterRow(origin + Vector3.new(edge - 2.5, 0.3, 18), -90)
 
 			-- District & Landmark Assignment
 			if bx == 0 and bz == 0 then
 				-- LEO PLAZA & GRAND CENTRAL BOULEVARD:
 				-- Central avenue (X = -21..21) is wide-open for driving straight ahead!
-				-- Ornamental Circular Marble Fountain is placed in the West Plaza Courtyard (-42, 0, 12)
-				local fCenter = origin + Vector3.new(-42, 0.3, 12)
-				local fountain = makePart(LandmarksFolder, "LeoPlazaFountain", Vector3.new(3.2, 20, 20), CFrame.new(fCenter + Vector3.new(0, 1.6, 0)) * CFrame.Angles(0, 0, math.rad(90)), Color3.fromRGB(235, 238, 245), Enum.Material.Marble, true)
+				-- Ornamental Circular Marble Fountain is placed in the West Plaza Courtyard (-36, 0, 10)
+				local fCenter = origin + Vector3.new(-36, 0.3, 10)
+				local fountain = makePart(LandmarksFolder, "LeoPlazaFountain", Vector3.new(3.2, 18, 18), CFrame.new(fCenter + Vector3.new(0, 1.6, 0)) * CFrame.Angles(0, 0, math.rad(90)), Color3.fromRGB(235, 238, 245), Enum.Material.Marble, true)
 				fountain.Shape = Enum.PartType.Cylinder
-				local tier = makePart(LandmarksFolder, "FountainWaterTier", Vector3.new(1.4, 15, 15), CFrame.new(fCenter + Vector3.new(0, 3.4, 0)) * CFrame.Angles(0, 0, math.rad(90)), Color3.fromRGB(65, 195, 245), Enum.Material.Glass, true)
+				local tier = makePart(LandmarksFolder, "FountainWaterTier", Vector3.new(1.4, 14, 14), CFrame.new(fCenter + Vector3.new(0, 3.4, 0)) * CFrame.Angles(0, 0, math.rad(90)), Color3.fromRGB(65, 195, 245), Enum.Material.Glass, true)
 				tier.Shape = Enum.PartType.Cylinder
 				tier.Transparency = 0.25
 				local spire = makePart(LandmarksFolder, "FountainWaterSpire", Vector3.new(8.5, 2.8, 2.8), CFrame.new(fCenter + Vector3.new(0, 7.2, 0)) * CFrame.Angles(0, 0, math.rad(90)), Color3.fromRGB(185, 235, 255), Enum.Material.Marble, true)
 				spire.Shape = Enum.PartType.Cylinder
 				spire.CanCollide = false
-				tagDestructible(fountain, "PlazaFountain", 500, 300, 75, false)
+				tagDestructible(fountain, "PlazaFountain", 500, 300, 75, false, 4)
 
-				spawnCrateCluster(origin + Vector3.new(-28, 0.3, -10), 3)
-				spawnCrateCluster(origin + Vector3.new(28, 0.3, -10), 3)
-				spawnJackpotCrate(origin + Vector3.new(-14, 0.3, -18))
-				spawnJackpotCrate(origin + Vector3.new(14, 0.3, -18))
-				spawnFoodVendorCart(origin + Vector3.new(-32, 0.3, 28), 90, 1)
-				spawnFoodVendorCart(origin + Vector3.new(32, 0.3, 28), -90, 2)
-				spawnCafePatio(origin + Vector3.new(38, 0.3, 8), -90)
-				spawnMegaCorpSurveillanceTower(origin + Vector3.new(-36, 0.3, -38), 35)
-				spawnMegaCorpSurveillanceTower(origin + Vector3.new(36, 0.3, -38), -35)
-				spawnBench(origin + Vector3.new(-26, 0.3, 12), 90)
-				spawnBench(origin + Vector3.new(26, 0.3, 12), -90)
-				spawnPalmTree(origin + Vector3.new(-26, 0.3, 34))
-				spawnPalmTree(origin + Vector3.new(26, 0.3, 34))
+				-- Tier 1..5 Targets right in & around Leo Plaza so players immediately see why bigger cars & plows matter!
+				spawnCrateCluster(origin + Vector3.new(-24, 0.3, -8), 3)
+				spawnCrateCluster(origin + Vector3.new(24, 0.3, -8), 3)
+				spawnJackpotCrate(origin + Vector3.new(-14, 0.3, -16))
+				spawnJackpotCrate(origin + Vector3.new(14, 0.3, -16))
+				spawnGoldATM(origin + Vector3.new(-26, 0.3, -2), 90)
+				spawnGoldATM(origin + Vector3.new(26, 0.3, -2), -90)
+				spawnArmoredCashTruck(origin + Vector3.new(28, 0.3, 14), 0)
+				spawnMegaCorpBankVault(origin + Vector3.new(36, 0.3, -34), -35)
+				spawnFoodVendorCart(origin + Vector3.new(-28, 0.3, 24), 90, 1)
+				spawnFoodVendorCart(origin + Vector3.new(28, 0.3, 28), -90, 2)
+				spawnCafePatio(origin + Vector3.new(34, 0.3, 6), -90)
+				spawnMegaCorpSurveillanceTower(origin + Vector3.new(-34, 0.3, -34), 35)
+				spawnBench(origin + Vector3.new(-24, 0.3, 10), 90)
+				spawnBench(origin + Vector3.new(24, 0.3, 10), -90)
+				spawnPalmTree(origin + Vector3.new(-24, 0.3, 30))
+				spawnPalmTree(origin + Vector3.new(24, 0.3, 30))
 
 				-- Seamless 1-piece low-angle steel Stunt Ramp down the North end of Grand Central Boulevard & Plaza Speed Shop / Mechanic Bay on East/West flanks
-				buildStuntRamp(origin + Vector3.new(0, 0.3, -68), 0, 26, 6.2, 38, "LeoPlazaRamp")
-				buildSpeedShop(origin + Vector3.new(54, 0.3, -24), -90)
-				buildMechanicRepairBay(origin + Vector3.new(-54, 0.3, -24), 90)
+				buildStuntRamp(origin + Vector3.new(0, 0.3, -52), 0, 26, 6.2, 38, "LeoPlazaRamp")
+				buildSpeedShop(origin + Vector3.new(44, 0, -20), -90)
+				buildMechanicRepairBay(origin + Vector3.new(-44, 0, -20), 90)
 			elseif bx == 1 and bz == 0 then
-				buildSpeedShop(origin + Vector3.new(0, 0.3, 0), -90)
+				buildSpeedShop(origin, -90)
 				spawnBusStop(origin + Vector3.new(0, 0.3, -edge + 2), 0)
-				spawnFoodVendorCart(origin + Vector3.new(-36, 0.3, 32), 0, 3)
+				spawnGoldATM(origin + Vector3.new(-24, 0.3, 20), 90)
+				spawnFoodVendorCart(origin + Vector3.new(-28, 0.3, 26), 0, 3)
 			elseif bx == -1 and bz == 0 then
-				buildMechanicRepairBay(origin + Vector3.new(0, 0.3, 0), 90)
+				buildMechanicRepairBay(origin, 90)
 				spawnBusStop(origin + Vector3.new(0, 0.3, edge - 2), 180)
-				spawnFoodVendorCart(origin + Vector3.new(36, 0.3, -32), 180, 1)
+				spawnGoldATM(origin + Vector3.new(24, 0.3, -20), -90)
+				spawnFoodVendorCart(origin + Vector3.new(28, 0.3, -26), 180, 1)
 			elseif bx == 0 and bz == -2 then
-				buildGasStation(origin + Vector3.new(44, 0.3, 0))
-				buildMechanicRepairBay(origin + Vector3.new(-44, 0.3, 0), 90)
+				buildGasStation(origin + Vector3.new(34, 0, 0))
+				buildMechanicRepairBay(origin + Vector3.new(-34, 0, 0), 90)
 			elseif bx == 2 and bz == 2 then
-				buildSpeedShop(origin + Vector3.new(0, 0.3, 0), 180)
+				buildSpeedShop(origin, 180)
 			elseif bx == -2 and bz == 2 then
-				buildGasStation(origin + Vector3.new(0, 0.3, 0))
+				buildGasStation(origin)
 			elseif bx == GRID_RADIUS then
 				-- East Coastline: Beachfront Boardwalk
 				buildBeachfrontBoardwalk(origin)
 			elseif bx <= -2 and bz <= -1 then
-				-- NW Sector: Industrial Construction Yard with cranes & explosive barrels
+				-- NW Sector: Shipping Container Port & Industrial Construction Yard
 				buildIndustrialYardBlock(origin + Vector3.new(0, 0.3, 0), bx * 7 + bz * 13)
 			elseif bx <= -2 and bz >= 1 then
 				-- SW Sector: Suburban Park & Lake
 				buildSuburbanParkBlock(origin)
 			elseif math.abs(bx) <= 1 and math.abs(bz) <= 1 then
-				-- Downtown Gotham / NYC Skyscraper Core
+				-- Downtown Gotham / NYC Skyscraper Core with Tier 2 Gold ATMs, Tier 3 Armored Cash Vans & Tier 5 Golden Bank Vaults
 				local isLeoTower = (bx == 0 and bz == -1) or (bx == 1 and bz == -1)
 				local h = if (bx == 0 and bz == -1) then 195 elseif (bx == 1 and bz == -1) then 175 else 115 + ((math.abs(bx * 3 + bz * 5) % 4) * 18)
 				local col = if isLeoTower then Color3.fromRGB(48, 56, 70) else Color3.fromRGB(62, 68, 82)
 				local towerName = if (bx == 0 and bz == -1) then "LeoTower" else "DowntownTower"
-				local xOff = if bx == 0 then 44 else 28
-				buildSkyscraper(origin + Vector3.new(-xOff, 0.3, -26), 38, 38, h, col, towerName, isLeoTower)
-				buildSkyscraper(origin + Vector3.new(xOff, 0.3, 26), 36, 36, 96, Color3.fromRGB(76, 68, 62), "GlassOfficeTower", false)
+				local xOff = if bx == 0 then 34 else 22
+				buildSkyscraper(origin + Vector3.new(-xOff, 0.3, -20), 34, 34, h, col, towerName, isLeoTower)
+				buildSkyscraper(origin + Vector3.new(xOff, 0.3, 20), 32, 32, 96, Color3.fromRGB(76, 68, 62), "GlassOfficeTower", false)
 				spawnBusStop(origin + Vector3.new(-edge + 2, 0.3, 0), 90)
-				spawnCrateCluster(origin + Vector3.new(xOff, 0.3, -26), 3)
-				spawnJackpotCrate(origin + Vector3.new(xOff - 8, 0.3, -18))
-				spawnFoodVendorCart(origin + Vector3.new(-xOff, 0.3, 18), 0, bx + bz)
-				spawnMegaCorpSurveillanceTower(origin + Vector3.new(xOff, 0.3, -46), 180)
-				spawnBillboard(origin + Vector3.new(-xOff, 0.3, 38), 0, "SMASH MEGACORP PROPERTY!", Color3.fromRGB(255, 200, 40))
+				spawnCrateCluster(origin + Vector3.new(xOff, 0.3, -20), 3)
+				spawnJackpotCrate(origin + Vector3.new(xOff - 6, 0.3, -14))
+				spawnGoldATM(origin + Vector3.new(-xOff + 14, 0.3, 0), 0)
+				spawnArmoredCashTruck(origin + Vector3.new(xOff - 10, 0.3, -4), 90)
+				if isLeoTower then
+					spawnMegaCorpBankVault(origin + Vector3.new(xOff, 0.3, -28), 0)
+				end
+				spawnFoodVendorCart(origin + Vector3.new(-xOff, 0.3, 14), 0, bx + bz)
+				spawnMegaCorpSurveillanceTower(origin + Vector3.new(xOff, 0.3, -36), 180)
+				spawnBillboard(origin + Vector3.new(-xOff, 0.3, 30), 0, "SMASH MEGACORP PROPERTY!", Color3.fromRGB(255, 200, 40))
 			else
 				-- Mixed Commercial / Midtown Storefront blocks
 				buildMidRiseCommercialBlock(origin, bx * 5 + bz * 11)

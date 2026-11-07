@@ -1,8 +1,13 @@
 --!strict
 -- GameHUD.client.luau
 -- Sleek, minimal, auto-scaled HUD for World of Destruction:
--- Top-Left Compact Pill, Top-Center Dynamic Combo Banner, Top-Right Compact Radar & Stars,
--- Bottom-Center Compact Action Dock, and Bottom-Right Context-Sensitive Vehicle Speedometer.
+-- 1. Top-Left Compact Pill at (14, 62) [196x56] (below Roblox TopBar): ONLY Cash ($140,581) + Smash Tier Badge (SMASH TIER 1 • LV. 1)
+-- 2. Top-Center Casino Jackpot & Next Car Unlock Bar at (0.5, 0, 0, 10) [380x68]:
+--    - Row 1: JACKPOT SPIN ([ 7 | 7 | 7 ]) + glowing gold progress bar (0..100%)
+--    - Row 2: NEXT CAR UNLOCK showing next car, what it smashes, and clickable green "GARAGE READY! UNLOCK NEW CAR [PRESS B]" button
+-- 3. Top-Center Combo Container: strictly hidden (Visible = false) whenever ComboCount == 0 (hides after 1.2s max)
+-- 4. Top-Right Compact Radar & Wanted Stars
+-- 5. Bottom-Center Tactile 3D Action Dock & Bottom-Right Vehicle Speedometer
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -13,7 +18,9 @@ local UserInputService = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
 
 -- Immediately disable Roblox's overlapping default leaderboard
-pcall(function() game:GetService("StarterGui"):SetCoreGuiEnabled(Enum.CoreGuiType.PlayerList, false) end)
+pcall(function()
+	StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.PlayerList, false)
+end)
 task.spawn(function()
 	for _ = 1, 5 do
 		local ok = pcall(function()
@@ -129,73 +136,166 @@ local function formatNumber(n: number): string
 	return formatted
 end
 
+-- Vehicle Smash Tier & Next Car Unlock Ladder
+type NextCarSpec = {
+	id: string,
+	shortName: string,
+	cost: number,
+	tier: number,
+	targetDesc: string,
+}
+
+local CAR_PROGRESSION_LADDER: { NextCarSpec } = {
+	{ id = "Sedan", shortName = "SEDAN", cost = 1500, tier = 2, targetDesc = "BREAKS GOLD ATMs & TAXIS!" },
+	{ id = "Muscle", shortName = "MUSCLE", cost = 4500, tier = 2, targetDesc = "DRIFT & SMASH HYDRANTS!" },
+	{ id = "SUV", shortName = "SUV", cost = 9000, tier = 3, targetDesc = "SMASH ARMORED CASH TRUCKS!" },
+	{ id = "Pickup", shortName = "PICKUP", cost = 15000, tier = 3, targetDesc = "RAM GAS STATIONS & COPS!" },
+	{ id = "Sports", shortName = "SPORTS", cost = 28000, tier = 3, targetDesc = "200 MPH HYPER SPEED!" },
+	{ id = "MonsterTruck", shortName = "MONSTER", cost = 50000, tier = 4, targetDesc = "CRUSH BUSES & SWAT TRUCKS!" },
+	{ id = "Bulldozer", shortName = "BULLDOZER", cost = 95000, tier = 5, targetDesc = "BREAK GOLDEN BANK VAULTS!" },
+}
+
+local VEHICLE_BASE_TIER: { [string]: number } = {
+	Compact = 1,
+	Sedan = 2,
+	Muscle = 2,
+	SUV = 3,
+	Pickup = 3,
+	Sports = 3,
+	MonsterTruck = 4,
+	Bulldozer = 5,
+}
+
+local function computeCurrentSmashTier(): number
+	local attrTier = tonumber(player:GetAttribute("SmashPowerTier"))
+	if attrTier and attrTier >= 1 then
+		return math.clamp(math.floor(attrTier), 1, 5)
+	end
+	local eq = tostring(player:GetAttribute("EquippedVehicle") or player:GetAttribute("SelectedVehicle") or "Compact")
+	local baseTier = VEHICLE_BASE_TIER[eq] or 1
+	local plowLvl = tonumber(player:GetAttribute("PlowLevel") or player:GetAttribute("Upgrade_Plow")) or 1
+	local bonusTier = if plowLvl >= 4 then 1 else 0
+	return math.clamp(baseTier + bonusTier, 1, 5)
+end
+
+local function getNextLockedCarSpec(): NextCarSpec?
+	local unlockedStr = tostring(player:GetAttribute("UnlockedVehicles") or "Compact")
+	local equippedStr = tostring(player:GetAttribute("EquippedVehicle") or player:GetAttribute("SelectedVehicle") or "Compact")
+	for _, spec in ipairs(CAR_PROGRESSION_LADDER) do
+		local isOwned = (string.find(unlockedStr, spec.id, 1, true) ~= nil) or (equippedStr == spec.id)
+		if not isOwned then
+			return spec
+		end
+	end
+	return nil
+end
+
+local function triggerQuickAction(actionId: string)
+	local remotes = ReplicatedStorage:FindFirstChild("Remotes")
+	if actionId == "Shop" then
+		player:SetAttribute("ToggleShopUI", not player:GetAttribute("ToggleShopUI"))
+	elseif actionId == "Avatar" then
+		player:SetAttribute("ToggleAvatarUI", not player:GetAttribute("ToggleAvatarUI"))
+	elseif actionId == "VIP" then
+		player:SetAttribute("ToggleVIPUI", not player:GetAttribute("ToggleVIPUI"))
+	elseif actionId == "MenuSettings" then
+		player:SetAttribute("ToggleSettingsUI", not player:GetAttribute("ToggleSettingsUI"))
+	elseif actionId == "Help" then
+		player:SetAttribute("ToggleHelpUI", not player:GetAttribute("ToggleHelpUI"))
+	elseif actionId == "SpawnCar" and remotes then
+		local r = remotes:FindFirstChild("SpawnVehicle") or remotes:FindFirstChild("RequestSpawnVehicle")
+		if r and r:IsA("RemoteEvent") then
+			r:FireServer(player:GetAttribute("EquippedVehicle") or player:GetAttribute("SelectedVehicle") or "Compact")
+		end
+	elseif actionId == "Repair" and remotes then
+		local r = remotes:FindFirstChild("RepairVehicle") or remotes:FindFirstChild("RequestRepair")
+		if r and r:IsA("RemoteEvent") then
+			r:FireServer()
+		end
+	end
+end
+
 -- ==========================================
--- 1. TOP-LEFT COMPACT PILL (230x78 at (14, 14))
+-- 1. TOP-LEFT COMPACT PILL (196x56 at (14, 62) — below Roblox TopBar!)
+-- Line 1: $140,581 (big green GothamBlack 24pt)
+-- Line 2: SMASH TIER 1 • LV. 1 (gold badge showing current car's Smash Power Tier 1..5)
 -- ==========================================
-local topLeft = makeFrame("TopLeftPanel", UDim2.fromOffset(230, 78), UDim2.fromOffset(14, 14), Vector2.new(0, 0), Color3.fromRGB(14, 16, 24), 0.18, gui)
+local topLeft = makeFrame("TopLeftPanel", UDim2.fromOffset(196, 56), UDim2.fromOffset(14, 62), Vector2.new(0, 0), Color3.fromRGB(14, 16, 24), 0.14, gui)
 addCorner(topLeft, 10)
-addStroke(topLeft, Color3.fromRGB(255, 165, 40), 1.5, 0.35)
+addStroke(topLeft, Color3.fromRGB(255, 190, 45), 1.6, 0.25)
 
-local cashLabel = makeLabel("CashLabel", "$500", UDim2.new(0.55, -10, 0, 20), UDim2.fromOffset(10, 4), Enum.Font.GothamBlack, 18, Color3.fromRGB(85, 255, 130), Enum.TextXAlignment.Left, topLeft)
-local chaosLabel = makeLabel("ChaosLabel", "CHAOS: 0", UDim2.new(0.45, -10, 0, 16), UDim2.new(0.55, 0, 0, 6), Enum.Font.GothamBold, 10, Color3.fromRGB(255, 185, 65), Enum.TextXAlignment.Right, topLeft)
+local cashLabel = makeLabel("CashLabel", "$500", UDim2.new(1, -20, 0, 26), UDim2.fromOffset(10, 4), Enum.Font.GothamBlack, 24, Color3.fromRGB(85, 255, 130), Enum.TextXAlignment.Left, topLeft)
+cashLabel.TextScaled = false
 
-local levelLabel = makeLabel("LevelLabel", "LV.1 • STREET ROOKIE", UDim2.new(1, -20, 0, 14), UDim2.fromOffset(10, 24), Enum.Font.GothamBold, 11, Color3.fromRGB(220, 235, 255), Enum.TextXAlignment.Left, topLeft)
-levelLabel.TextTruncate = Enum.TextTruncate.AtEnd
-
-local xpBarBg = makeFrame("XPBarBg", UDim2.new(1, -20, 0, 4), UDim2.fromOffset(10, 40), Vector2.new(0, 0), Color3.fromRGB(10, 12, 18), 0, topLeft)
-addCorner(xpBarBg, 2)
-local xpBarFill = makeFrame("XPBarFill", UDim2.fromScale(0.15, 1), UDim2.fromScale(0, 0), Vector2.new(0, 0), Color3.fromRGB(70, 180, 255), 0, xpBarBg)
-addCorner(xpBarFill, 2)
-
-local missionRowLabel = makeLabel("ChallengeRow", "Smash 10 Hydrants: 0/10 • $1,000", UDim2.new(1, -20, 0, 14), UDim2.fromOffset(10, 49), Enum.Font.GothamMedium, 10, Color3.fromRGB(185, 235, 195), Enum.TextXAlignment.Left, topLeft)
-missionRowLabel.TextTruncate = Enum.TextTruncate.AtEnd
-
-local missionBarBg = makeFrame("MissionBarBg", UDim2.new(1, -20, 0, 4), UDim2.fromOffset(10, 66), Vector2.new(0, 0), Color3.fromRGB(10, 12, 18), 0, topLeft)
-addCorner(missionBarBg, 2)
-local missionBarFill = makeFrame("MissionBarFill", UDim2.fromScale(0, 1), UDim2.fromScale(0, 0), Vector2.new(0, 0), Color3.fromRGB(255, 150, 40), 0, missionBarBg)
-addCorner(missionBarFill, 2)
+local smashTierBadge = makeLabel("SmashTierLabel", "SMASH TIER 1 • LV. 1", UDim2.new(1, -20, 0, 18), UDim2.fromOffset(10, 32), Enum.Font.GothamBlack, 12, Color3.fromRGB(255, 215, 65), Enum.TextXAlignment.Left, topLeft)
+smashTierBadge.TextTruncate = Enum.TextTruncate.AtEnd
 
 -- ==========================================
--- 2A. TOP-CENTER CASINO JACKPOT FEVER BAR + 3-REEL SPIN + NEXT RIDE UNLOCK BAR (430x72 at (0.5, 0, 0, 12))
+-- 2A. TOP-CENTER CASINO JACKPOT & NEXT CAR UNLOCK BAR (380x68 at (0.5, 0, 0, 10))
+-- Row 1: JACKPOT SPIN ([ 7 | 7 | 7 ]) + glowing gold progress bar (JackpotCharge 0..100%)
+-- Row 2: NEXT CAR UNLOCK showing what new targets it lets you smash + clickable emerald button when ready
 -- ==========================================
-local campaignTracker = makeFrame("CasinoJackpotHudCard", UDim2.fromOffset(430, 72), UDim2.new(0.5, 0, 0, 12), Vector2.new(0.5, 0), Color3.fromRGB(14, 18, 30), 0.12, gui)
+local campaignTracker = makeFrame("CasinoJackpotHudCard", UDim2.fromOffset(380, 68), UDim2.new(0.5, 0, 0, 10), Vector2.new(0.5, 0), Color3.fromRGB(14, 18, 30), 0.10, gui)
 addCorner(campaignTracker, 12)
 local campaignStroke = addStroke(campaignTracker, Color3.fromRGB(255, 200, 45), 2.0, 0.12)
 
--- 3-Reel Casino Slot Box on the Left of Top-Center Card (106x40)
-local slotBox = makeFrame("ThreeReelSlotBox", UDim2.fromOffset(104, 38), UDim2.fromOffset(8, 6), Vector2.new(0, 0), Color3.fromRGB(8, 10, 18), 0, campaignTracker)
-addCorner(slotBox, 8)
-local slotBoxStroke = addStroke(slotBox, Color3.fromRGB(255, 215, 55), 1.6, 0.15)
+-- Row 1 Left: 3-Reel Casino Slot Box ([ 7 | 7 | 7 ])
+local slotBox = makeFrame("ThreeReelSlotBox", UDim2.fromOffset(88, 26), UDim2.fromOffset(8, 6), Vector2.new(0, 0), Color3.fromRGB(8, 10, 18), 0, campaignTracker)
+addCorner(slotBox, 6)
+local slotBoxStroke = addStroke(slotBox, Color3.fromRGB(255, 215, 55), 1.5, 0.15)
 
 local reelLabels: { TextLabel } = {}
 local REEL_SYMBOLS = { "7", "$", "3X", "LV", "GT" }
 for r = 1, 3 do
-	local reelCell = makeFrame("ReelCell_" .. tostring(r), UDim2.fromOffset(29, 30), UDim2.fromOffset(4 + (r - 1) * 32, 4), Vector2.new(0, 0), Color3.fromRGB(20, 25, 42), 0, slotBox)
-	addCorner(reelCell, 5)
+	local reelCell = makeFrame("ReelCell_" .. tostring(r), UDim2.fromOffset(25, 20), UDim2.fromOffset(3 + (r - 1) * 28, 3), Vector2.new(0, 0), Color3.fromRGB(20, 25, 42), 0, slotBox)
+	addCorner(reelCell, 4)
 	addStroke(reelCell, Color3.fromRGB(95, 125, 185), 1, 0.4)
-	local rLbl = makeLabel("ReelSymbol_" .. tostring(r), "7", UDim2.fromScale(1, 1), UDim2.fromScale(0, 0), Enum.Font.GothamBlack, 15, Color3.fromRGB(255, 220, 55), Enum.TextXAlignment.Center, reelCell)
+	local rLbl = makeLabel("ReelSymbol_" .. tostring(r), "7", UDim2.fromScale(1, 1), UDim2.fromScale(0, 0), Enum.Font.GothamBlack, 13, Color3.fromRGB(255, 220, 55), Enum.TextXAlignment.Center, reelCell)
 	table.insert(reelLabels, rLbl)
 end
 
--- Casino Jackpot Fever Bar (Top-Right of Card)
-local campaignActBadge = makeLabel("JackpotFeverTitle", "CASINO JACKPOT FEVER", UDim2.fromOffset(205, 16), UDim2.fromOffset(120, 5), Enum.Font.GothamBlack, 11, Color3.fromRGB(255, 215, 65), Enum.TextXAlignment.Left, campaignTracker)
-local campaignRewardLabel = makeLabel("JackpotSpinBadge", "0% CHARGE", UDim2.fromOffset(96, 16), UDim2.new(1, -104, 0, 5), Enum.Font.GothamBlack, 11, Color3.fromRGB(95, 255, 140), Enum.TextXAlignment.Right, campaignTracker)
-
-local campaignBarBg = makeFrame("JackpotFeverBarBg", UDim2.new(1, -128, 0, 16), UDim2.fromOffset(120, 23), Vector2.new(0, 0), Color3.fromRGB(10, 12, 20), 0, campaignTracker)
+-- Row 1 Right: Glowing Gold Jackpot Spin Progress Bar
+local campaignBarBg = makeFrame("JackpotFeverBarBg", UDim2.new(1, -108, 0, 26), UDim2.fromOffset(100, 6), Vector2.new(0, 0), Color3.fromRGB(10, 12, 20), 0, campaignTracker)
 addCorner(campaignBarBg, 6)
+addStroke(campaignBarBg, Color3.fromRGB(255, 210, 60), 1.2, 0.35)
+
 local campaignBarFill = makeFrame("JackpotFeverBarFill", UDim2.fromScale(0.15, 1), UDim2.fromScale(0, 0), Vector2.new(0, 0), Color3.fromRGB(255, 195, 40), 0, campaignBarBg)
 addCorner(campaignBarFill, 6)
-local campaignBarText = makeLabel("JackpotFeverBarText", "SMASH PROPS & 777 CRATES TO SPIN!", UDim2.fromScale(1, 1), UDim2.fromScale(0, 0), Enum.Font.GothamBlack, 9, Color3.fromRGB(255, 255, 255), Enum.TextXAlignment.Center, campaignBarBg)
 
--- Next Ride Unlock Progress Bar (Bottom Row of Top-Center Card)
-local campaignObjLabel = makeLabel("NextRideUnlockLabel", "NEXT RIDE: CRUISER V8", UDim2.fromOffset(185, 16), UDim2.fromOffset(10, 48), Enum.Font.GothamBlack, 10, Color3.fromRGB(135, 220, 255), Enum.TextXAlignment.Left, campaignTracker)
-campaignObjLabel.TextTruncate = Enum.TextTruncate.AtEnd
+local campaignBarText = makeLabel("JackpotFeverBarText", "JACKPOT SPIN • 0%", UDim2.fromScale(1, 1), UDim2.fromScale(0, 0), Enum.Font.GothamBlack, 10, Color3.fromRGB(255, 255, 255), Enum.TextXAlignment.Center, campaignBarBg)
 
-local nextRideBarBg = makeFrame("NextRideUnlockBarBg", UDim2.new(1, -206, 0, 14), UDim2.fromOffset(198, 49), Vector2.new(0, 0), Color3.fromRGB(10, 12, 20), 0, campaignTracker)
-addCorner(nextRideBarBg, 5)
-local nextRideBarFill = makeFrame("NextRideUnlockBarFill", UDim2.fromScale(0.35, 1), UDim2.fromScale(0, 0), Vector2.new(0, 0), Color3.fromRGB(50, 225, 115), 0, nextRideBarBg)
-addCorner(nextRideBarFill, 5)
-local nextRideBarText = makeLabel("NextRideUnlockBarText", "$500 / $1,500", UDim2.fromScale(1, 1), UDim2.fromScale(0, 0), Enum.Font.GothamBlack, 9, Color3.fromRGB(255, 255, 255), Enum.TextXAlignment.Center, nextRideBarBg)
+-- Row 2: Next Car Unlock Bar (Clickable button that opens SpeedShopUI!)
+local nextRideBtn = Instance.new("TextButton")
+nextRideBtn.Name = "NextRideUnlockButton"
+nextRideBtn.Size = UDim2.new(1, -16, 0, 26)
+nextRideBtn.Position = UDim2.fromOffset(8, 36)
+nextRideBtn.BackgroundColor3 = Color3.fromRGB(10, 14, 24)
+nextRideBtn.BorderSizePixel = 0
+nextRideBtn.AutoButtonColor = false
+nextRideBtn.Text = ""
+nextRideBtn.Parent = campaignTracker
+addCorner(nextRideBtn, 6)
+local nextRideStroke = addStroke(nextRideBtn, Color3.fromRGB(65, 195, 255), 1.3, 0.25)
+
+local nextRideBarFill = makeFrame("NextRideUnlockBarFill", UDim2.fromScale(0.35, 1), UDim2.fromScale(0, 0), Vector2.new(0, 0), Color3.fromRGB(38, 175, 95), 0, nextRideBtn)
+addCorner(nextRideBarFill, 6)
+
+local nextRideBarText = makeLabel(
+	"NextRideUnlockBarText",
+	"NEXT: SEDAN ($1,500) -> BREAKS GOLD ATMs & TAXIS!",
+	UDim2.new(1, -10, 1, 0),
+	UDim2.fromOffset(5, 0),
+	Enum.Font.GothamBlack,
+	9,
+	Color3.fromRGB(255, 255, 255),
+	Enum.TextXAlignment.Center,
+	nextRideBtn
+)
+nextRideBarText.TextTruncate = Enum.TextTruncate.AtEnd
+
+nextRideBtn.MouseButton1Click:Connect(function()
+	triggerQuickAction("Shop")
+end)
 
 local isSpinningReels = false
 local function triggerThreeReelSpinAnimation(prizeTitle: string, prizeId: string?)
@@ -205,8 +305,7 @@ local function triggerThreeReelSpinAnimation(prizeTitle: string, prizeId: string
 	isSpinningReels = true
 	campaignStroke.Color = Color3.fromRGB(255, 235, 85)
 	slotBoxStroke.Color = Color3.fromRGB(255, 255, 140)
-	campaignActBadge.Text = "JACKPOT SPINNING..."
-	campaignBarText.Text = string.upper(prizeTitle)
+	campaignBarText.Text = "SPINNING: " .. string.upper(prizeTitle)
 
 	local finalSym = if prizeId == "GoldenFrenzy"
 		then "3X"
@@ -236,8 +335,8 @@ local function triggerThreeReelSpinAnimation(prizeTitle: string, prizeId: string
 			reelLabels[r].Text = finalSym
 			reelLabels[r].TextColor3 = Color3.fromRGB(255, 235, 75)
 		end
-		campaignActBadge.Text = "WINNER: " .. string.upper(prizeTitle)
-		task.wait(2.8)
+		campaignBarText.Text = "JACKPOT: " .. string.upper(prizeTitle)
+		task.wait(2.4)
 		isSpinningReels = false
 		campaignStroke.Color = Color3.fromRGB(255, 200, 45)
 		slotBoxStroke.Color = Color3.fromRGB(255, 215, 55)
@@ -245,13 +344,13 @@ local function triggerThreeReelSpinAnimation(prizeTitle: string, prizeId: string
 end
 
 -- ==========================================
--- 2B. TOP-CENTER COMBO BANNER (280x64 at (0.5, 0, 0, 90))
--- Completely hidden when ComboCount == 0 and no callout is active!
+-- 2B. TOP-CENTER COMBO BANNER (280x64 at (0.5, 0, 0, 84))
+-- Strictly hidden (Visible = false) whenever ComboCount == 0 (hides after 1.2s when ComboCount == 0!)
 -- ==========================================
-local topCenter = makeFrame("ComboContainer", UDim2.fromOffset(280, 64), UDim2.new(0.5, 0, 0, 90), Vector2.new(0.5, 0), Color3.fromRGB(15, 15, 22), 0.22, gui)
+local topCenter = makeFrame("ComboContainer", UDim2.fromOffset(280, 64), UDim2.new(0.5, 0, 0, 84), Vector2.new(0.5, 0), Color3.fromRGB(15, 15, 22), 0.22, gui)
 topCenter.Visible = false
 addCorner(topCenter, 10)
-local comboStroke = addStroke(topCenter, Color3.fromRGB(255, 95, 35), 1.8, 0.2)
+addStroke(topCenter, Color3.fromRGB(255, 95, 35), 1.8, 0.2)
 
 local comboTitle = makeLabel("ComboMultiplier", "1.0x CHAOS COMBO", UDim2.new(1, -16, 0, 20), UDim2.fromOffset(8, 4), Enum.Font.GothamBlack, 17, Color3.fromRGB(255, 210, 65), Enum.TextXAlignment.Center, topCenter)
 local comboHits = makeLabel("ComboHits", "1 HIT ACTIVE!", UDim2.new(1, -16, 0, 14), UDim2.fromOffset(8, 23), Enum.Font.GothamBold, 11, Color3.fromRGB(255, 140, 80), Enum.TextXAlignment.Center, topCenter)
@@ -323,31 +422,6 @@ dockLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
 dockLayout.VerticalAlignment = Enum.VerticalAlignment.Center
 dockLayout.Padding = UDim.new(0, 6)
 dockLayout.Parent = actionDock
-
-local function triggerQuickAction(actionId: string)
-	local remotes = ReplicatedStorage:FindFirstChild("Remotes")
-	if actionId == "Shop" then
-		player:SetAttribute("ToggleShopUI", not player:GetAttribute("ToggleShopUI"))
-	elseif actionId == "Avatar" then
-		player:SetAttribute("ToggleAvatarUI", not player:GetAttribute("ToggleAvatarUI"))
-	elseif actionId == "VIP" then
-		player:SetAttribute("ToggleVIPUI", not player:GetAttribute("ToggleVIPUI"))
-	elseif actionId == "MenuSettings" then
-		player:SetAttribute("ToggleSettingsUI", not player:GetAttribute("ToggleSettingsUI"))
-	elseif actionId == "Help" then
-		player:SetAttribute("ToggleHelpUI", not player:GetAttribute("ToggleHelpUI"))
-	elseif actionId == "SpawnCar" and remotes then
-		local r = remotes:FindFirstChild("SpawnVehicle") or remotes:FindFirstChild("RequestSpawnVehicle")
-		if r and r:IsA("RemoteEvent") then
-			r:FireServer(player:GetAttribute("EquippedVehicle") or player:GetAttribute("SelectedVehicle") or "Compact")
-		end
-	elseif actionId == "Repair" and remotes then
-		local r = remotes:FindFirstChild("RepairVehicle") or remotes:FindFirstChild("RequestRepair")
-		if r and r:IsA("RemoteEvent") then
-			r:FireServer()
-		end
-	end
-end
 
 local function makeTactile3DDockButton(order: number, id: string, keyText: string, labelText: string, baseColor: Color3)
 	local lip = Instance.new("Frame")
@@ -441,7 +515,7 @@ addCorner(bottomRight, 10)
 addStroke(bottomRight, Color3.fromRGB(80, 175, 255), 1.5, 0.35)
 
 local speedValueLabel = makeLabel("SpeedValue", "000", UDim2.fromOffset(74, 34), UDim2.fromOffset(12, 6), Enum.Font.GothamBlack, 30, Color3.fromRGB(245, 250, 255), Enum.TextXAlignment.Left, bottomRight)
-local speedUnitLabel = makeLabel("SpeedUnit", "MPH", UDim2.fromOffset(38, 16), UDim2.fromOffset(86, 20), Enum.Font.GothamBold, 11, Color3.fromRGB(130, 185, 255), Enum.TextXAlignment.Left, bottomRight)
+makeLabel("SpeedUnit", "MPH", UDim2.fromOffset(38, 16), UDim2.fromOffset(86, 20), Enum.Font.GothamBold, 11, Color3.fromRGB(130, 185, 255), Enum.TextXAlignment.Left, bottomRight)
 local gearBadge = makeLabel("GearBadge", "GEAR: N", UDim2.fromOffset(76, 20), UDim2.new(1, -88, 0, 12), Enum.Font.GothamBlack, 12, Color3.fromRGB(255, 200, 65), Enum.TextXAlignment.Right, bottomRight)
 
 makeLabel("HealthTag", "ARMOR", UDim2.fromOffset(48, 14), UDim2.fromOffset(12, 46), Enum.Font.GothamBold, 10, Color3.fromRGB(120, 255, 150), Enum.TextXAlignment.Left, bottomRight)
@@ -514,20 +588,32 @@ end
 -- ==========================================
 local lastCash = -1
 local calloutActiveUntil = 0
+local lastComboHitAt = 0
 
 local function updateComboVisibility()
 	local hits = tonumber(player:GetAttribute("ComboCount")) or 0
-	local calloutActive = (os.clock() < calloutActiveUntil) and (styleCalloutLabel.Text ~= "")
-	topCenter.Visible = (hits > 0) or calloutActive
+	if hits > 0 then
+		lastComboHitAt = os.clock()
+		topCenter.Visible = true
+		return
+	end
+	-- When ComboCount == 0, hide within 1.2s and never leave 0 HITS ACTIVE on screen
+	local withinFadeWindow = (os.clock() - lastComboHitAt < 1.2) and (os.clock() < calloutActiveUntil) and (styleCalloutLabel.Text ~= "")
+	if not withinFadeWindow then
+		topCenter.Visible = false
+		styleCalloutLabel.Text = ""
+	else
+		topCenter.Visible = true
+	end
 end
 
 local function spawnCashPopup(delta: number)
 	if delta <= 0 then
 		return
 	end
-	local pop = makeLabel("CashPopup", "+$" .. formatNumber(delta), UDim2.fromOffset(110, 20), UDim2.fromOffset(110, 4), Enum.Font.GothamBlack, 15, Color3.fromRGB(120, 255, 150), Enum.TextXAlignment.Left, topLeft)
+	local pop = makeLabel("CashPopup", "+$" .. formatNumber(delta), UDim2.fromOffset(110, 20), UDim2.fromOffset(96, 2), Enum.Font.GothamBlack, 15, Color3.fromRGB(120, 255, 150), Enum.TextXAlignment.Left, topLeft)
 	TweenService:Create(pop, TweenInfo.new(0.85, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-		Position = UDim2.fromOffset(110, -18),
+		Position = UDim2.fromOffset(96, -18),
 		TextTransparency = 1,
 		TextStrokeTransparency = 1,
 	}):Play()
@@ -540,11 +626,11 @@ local function showStyleCallout(text: string)
 	if #text == 0 then
 		return
 	end
-	calloutActiveUntil = os.clock() + 2.2
+	calloutActiveUntil = os.clock() + 1.2
 	styleCalloutLabel.Text = string.upper(text)
 	styleCalloutLabel.TextTransparency = 0
 	updateComboVisibility()
-	task.delay(2.25, function()
+	task.delay(1.2, function()
 		if os.clock() >= calloutActiveUntil then
 			styleCalloutLabel.Text = ""
 			updateComboVisibility()
@@ -565,31 +651,22 @@ local function readCashValue(): number
 	return 500
 end
 
+local isGarageReadyState = false
+
 local function refreshHUDStats()
 	local currentCash = readCashValue()
 	if lastCash >= 0 and currentCash > lastCash then
 		spawnCashPopup(currentCash - lastCash)
 	end
 	lastCash = currentCash
+
+	-- Top-Left Compact Pill: Line 1 = Cash, Line 2 = SMASH TIER X • LV. Y
 	cashLabel.Text = "$" .. formatNumber(currentCash)
-
-	local chaos = tonumber(player:GetAttribute("ChaosScore")) or 0
-	chaosLabel.Text = "CHAOS: " .. formatNumber(chaos)
-
 	local level = tonumber(player:GetAttribute("Level")) or 1
-	local rankTitle = tostring(player:GetAttribute("RankTitle") or "STREET ROOKIE")
-	local xpRatio = math.clamp(tonumber(player:GetAttribute("XPProgressRatio")) or 0.15, 0, 1)
-	levelLabel.Text = string.format("LV.%d • %s", level, string.upper(rankTitle))
-	xpBarFill.Size = UDim2.fromScale(xpRatio, 1)
+	local smashTier = computeCurrentSmashTier()
+	smashTierBadge.Text = string.format("SMASH TIER %d • LV. %d", smashTier, level)
 
-	local mTitle = tostring(player:GetAttribute("MissionTitle") or "Smash 12 MegaCorp Props")
-	local mProg = tonumber(player:GetAttribute("MissionProgress")) or 0
-	local mGoal = math.max(1, tonumber(player:GetAttribute("MissionGoal")) or 12)
-	local mRew = tonumber(player:GetAttribute("MissionReward")) or 2500
-	missionRowLabel.Text = string.format("%s: %d/%d • $%s", mTitle, math.floor(mProg), math.floor(mGoal), formatNumber(mRew))
-	missionBarFill.Size = UDim2.fromScale(math.clamp(mProg / mGoal, 0, 1), 1)
-
-	-- Update Top-Center Casino Jackpot Fever Bar + 3-Reel Spin + Next Ride Unlock Bar
+	-- Top-Center Row 1: JACKPOT SPIN ([ 7 | 7 | 7 ]) + glowing gold progress bar (0..100%)
 	local jackpotCharge = math.clamp(tonumber(player:GetAttribute("JackpotCharge")) or 0, 0, 100)
 	local frenzyActive = player:GetAttribute("Golden3xFrenzyActive") == true
 	local frenzyRem = math.ceil(tonumber(player:GetAttribute("Golden3xFrenzyRemaining")) or 0)
@@ -598,40 +675,46 @@ local function refreshHUDStats()
 	if bossActive then
 		local bHp = tonumber(player:GetAttribute("BossHealth")) or 1000
 		local bMax = math.max(1, tonumber(player:GetAttribute("BossMaxHealth")) or 1000)
-		campaignActBadge.Text = "ACT 5 BOSS GOLIATH"
-		campaignActBadge.TextColor3 = Color3.fromRGB(255, 85, 85)
-		campaignRewardLabel.Text = "+$50,000"
 		campaignBarFill.BackgroundColor3 = Color3.fromRGB(255, 60, 70)
 		campaignBarFill.Size = UDim2.fromScale(math.clamp(bHp / bMax, 0, 1), 1)
-		campaignBarText.Text = string.format("RAM BOSS GOLIATH: %d / %d HP", math.floor(bHp), math.floor(bMax))
+		campaignBarText.Text = string.format("BOSS GOLIATH: %d / %d HP", math.floor(bHp), math.floor(bMax))
 	elseif frenzyActive and frenzyRem > 0 then
-		campaignActBadge.Text = "GOLDEN 3X CASH FRENZY!"
-		campaignActBadge.TextColor3 = Color3.fromRGB(255, 235, 75)
-		campaignRewardLabel.Text = tostring(frenzyRem) .. "s LEFT"
 		campaignBarFill.BackgroundColor3 = Color3.fromRGB(255, 215, 35)
 		campaignBarFill.Size = UDim2.fromScale(math.clamp(frenzyRem / 30, 0, 1), 1)
-		campaignBarText.Text = "ALL SMASH COINS & CHAOS 3X!"
+		campaignBarText.Text = string.format("3X CASH FRENZY • %ds", frenzyRem)
 	elseif not isSpinningReels then
-		campaignActBadge.Text = "CASINO JACKPOT FEVER"
-		campaignActBadge.TextColor3 = Color3.fromRGB(255, 215, 65)
-		campaignRewardLabel.Text = string.format("%d%%", math.floor(jackpotCharge))
 		campaignBarFill.BackgroundColor3 = Color3.fromRGB(255, 195, 40)
 		campaignBarFill.Size = UDim2.fromScale(math.clamp(jackpotCharge / 100, 0.04, 1), 1)
-		campaignBarText.Text = string.format("JACKPOT SPIN METER: %d / 100%%", math.floor(jackpotCharge))
+		campaignBarText.Text = string.format("JACKPOT SPIN • %d%%", math.floor(jackpotCharge))
 	end
 
-	-- Next Ride Unlock Bar
-	local nextVehName = tostring(player:GetAttribute("NextUnlockVehicleName") or "CRUISER V8 Sedan")
-	local nextVehCost = math.max(1, tonumber(player:GetAttribute("NextUnlockVehicleCost")) or 250)
-	local nextVehRatio = math.clamp(tonumber(player:GetAttribute("NextUnlockProgressRatio")) or (currentCash / nextVehCost), 0, 1)
-	campaignObjLabel.Text = "NEXT RIDE: " .. string.upper(nextVehName)
-	nextRideBarFill.Size = UDim2.fromScale(nextVehRatio, 1)
-	if currentCash >= nextVehCost then
-		nextRideBarFill.BackgroundColor3 = Color3.fromRGB(255, 215, 45)
-		nextRideBarText.Text = "READY TO UNLOCK IN GARAGE [B]!"
+	-- Top-Center Row 2: NEXT CAR UNLOCK + target reason OR pulsing emerald button when Cash >= Cost
+	local nextSpec = getNextLockedCarSpec()
+	if nextSpec then
+		local ratio = math.clamp(currentCash / math.max(1, nextSpec.cost), 0, 1)
+		nextRideBarFill.Size = UDim2.fromScale(ratio, 1)
+		if currentCash >= nextSpec.cost then
+			isGarageReadyState = true
+			nextRideBarFill.BackgroundColor3 = Color3.fromRGB(28, 225, 105)
+			nextRideStroke.Color = Color3.fromRGB(80, 255, 145)
+			nextRideBarText.Text = "GARAGE READY! UNLOCK NEW CAR [PRESS B]"
+		else
+			isGarageReadyState = false
+			nextRideBarFill.BackgroundColor3 = Color3.fromRGB(36, 145, 225)
+			nextRideStroke.Color = Color3.fromRGB(65, 195, 255)
+			nextRideBarText.Text = string.format(
+				"NEXT: %s ($%s) -> %s",
+				nextSpec.shortName,
+				formatNumber(nextSpec.cost),
+				nextSpec.targetDesc
+			)
+		end
 	else
-		nextRideBarFill.BackgroundColor3 = Color3.fromRGB(50, 225, 115)
-		nextRideBarText.Text = string.format("$%s / $%s (%d%%)", formatNumber(currentCash), formatNumber(nextVehCost), math.floor(nextVehRatio * 100))
+		isGarageReadyState = false
+		nextRideBarFill.Size = UDim2.fromScale(1, 1)
+		nextRideBarFill.BackgroundColor3 = Color3.fromRGB(235, 180, 35)
+		nextRideStroke.Color = Color3.fromRGB(255, 215, 65)
+		nextRideBarText.Text = "ALL TIER 5 CARS UNLOCKED • UPGRADE IN GARAGE [B]"
 	end
 
 	-- Hide HUD cleanly while Home Menu is active
@@ -640,9 +723,11 @@ local function refreshHUDStats()
 	local mult = tonumber(player:GetAttribute("ComboMultiplier")) or 1.0
 	local hits = tonumber(player:GetAttribute("ComboCount")) or 0
 	local timerRatio = math.clamp(tonumber(player:GetAttribute("ComboTimerRatio") or player:GetAttribute("ComboTimer")) or 0, 0, 1)
-	comboTitle.Text = string.format("%.1fx CHAOS COMBO", mult)
-	comboHits.Text = string.format("%d %s ACTIVE!", hits, if hits == 1 then "HIT" else "HITS")
-	comboTimerFill.Size = UDim2.fromScale(timerRatio, 1)
+	if hits > 0 then
+		comboTitle.Text = string.format("%.1fx CHAOS COMBO", mult)
+		comboHits.Text = string.format("%d %s ACTIVE!", hits, if hits == 1 then "HIT" else "HITS")
+		comboTimerFill.Size = UDim2.fromScale(timerRatio, 1)
+	end
 	updateComboVisibility()
 
 	local stars = math.clamp(tonumber(player:GetAttribute("HeatStars") or player:GetAttribute("WantedLevel")) or 0, 0, 5)
@@ -714,7 +799,7 @@ UserInputService.InputBegan:Connect(function(input: InputObject, processed: bool
 	end
 end)
 
--- Real-time Vehicle Telemetry + Minimap Radar Loop
+-- Real-time Vehicle Telemetry + Minimap Radar + Casino Ready Pulse Loop
 local sirenClock = 0
 RunService.RenderStepped:Connect(function(dt: number)
 	sirenClock += dt * 7
@@ -726,6 +811,16 @@ RunService.RenderStepped:Connect(function(dt: number)
 	else
 		heatStroke.Color = Color3.fromRGB(90, 130, 255)
 		heatStroke.Transparency = 0.35
+	end
+
+	-- Pulse the Next Car Unlock bar bright emerald green when Cash >= Cost
+	if isGarageReadyState then
+		local pulse = (math.sin(sirenClock * 0.9) + 1) * 0.5
+		nextRideBarFill.BackgroundColor3 = Color3.fromRGB(
+			math.floor(24 + pulse * 45),
+			math.floor(195 + pulse * 60),
+			math.floor(90 + pulse * 45)
+		)
 	end
 
 	updateComboVisibility()

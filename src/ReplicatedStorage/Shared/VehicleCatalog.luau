@@ -686,6 +686,7 @@ function VehicleCatalog.AttachVisualUpgrades(
 	end
 
 	-- 2. ARMOR TRACK (Heavy Steel Exo-Rollcage & Side Impact Bull-Bars)
+	local roofTopY = h * 0.5 + h * 0.62
 	if armorLvl >= 1 then
 		local armorColor = if armorLvl >= 4 then Color3.fromRGB(235, 190, 50) else Color3.fromRGB(95, 108, 128)
 		for _, sx in ipairs({ -1, 1 }) do
@@ -702,14 +703,14 @@ function VehicleCatalog.AttachVisualUpgrades(
 
 			local roofRail = makePart(
 				"ArmorRoofCage_" .. tostring(sx),
-				Vector3.new(0.26, 0.26, len * 0.38),
+				Vector3.new(0.24, 0.24, len * 0.34),
 				armorColor,
 				Enum.Material.Metal,
 				container,
 				false,
 				true
 			)
-			placeAndWeld(chassis, roofRail, CFrame.new(sx * (w * 0.36), h * 1.42, 0.2))
+			placeAndWeld(chassis, roofRail, CFrame.new(sx * (w * 0.34), roofTopY + 0.14, 0.0))
 		end
 	end
 
@@ -730,7 +731,7 @@ function VehicleCatalog.AttachVisualUpgrades(
 			placeAndWeld(
 				chassis,
 				bottle,
-				CFrame.new(sx * (w * 0.24), h * 0.72, len * 0.30) * CFrame.Angles(0, math.rad(90), math.rad(12))
+				CFrame.new(sx * (w * 0.24), h * 0.66, len * 0.32) * CFrame.Angles(0, math.rad(90), math.rad(12))
 			)
 
 			local glowBand = makePart(
@@ -747,7 +748,7 @@ function VehicleCatalog.AttachVisualUpgrades(
 			placeAndWeld(
 				chassis,
 				glowBand,
-				CFrame.new(sx * (w * 0.24), h * 0.72, len * 0.30) * CFrame.Angles(0, math.rad(90), math.rad(12))
+				CFrame.new(sx * (w * 0.24), h * 0.66, len * 0.32) * CFrame.Angles(0, math.rad(90), math.rad(12))
 			)
 		end
 	end
@@ -759,18 +760,18 @@ function VehicleCatalog.AttachVisualUpgrades(
 	if magnetLvl >= 1 then
 		local magPedestal = makePart(
 			"MagnetPedestal",
-			Vector3.new(0.9, 0.45, 0.9),
+			Vector3.new(0.85, 0.36, 0.85),
 			Color3.fromRGB(45, 52, 65),
 			Enum.Material.Metal,
 			container,
 			false,
 			true
 		)
-		placeAndWeld(chassis, magPedestal, CFrame.new(0, h * 1.48, 0.4))
+		placeAndWeld(chassis, magPedestal, CFrame.new(0, roofTopY + 0.18, 0.2))
 
 		local magHalo = makePart(
 			"MagnetGoldCoil",
-			Vector3.new(0.28, 1.95, 1.95),
+			Vector3.new(0.26, 1.85, 1.85),
 			Color3.fromRGB(255, 215, 40),
 			Enum.Material.Neon,
 			container,
@@ -779,8 +780,149 @@ function VehicleCatalog.AttachVisualUpgrades(
 			0,
 			Enum.PartType.Cylinder
 		)
-		placeAndWeld(chassis, magHalo, CFrame.new(0, h * 1.72, 0.4) * CFrame.Angles(0, 0, math.rad(90)))
+		placeAndWeld(chassis, magHalo, CFrame.new(0, roofTopY + 0.38, 0.2) * CFrame.Angles(0, 0, math.rad(90)))
 	end
+end
+
+-- Builds a standalone 3D preview model for any of the 5 upgrade tracks (Engine, Armor, Nitro, Plow, Magnet)
+-- or a full upgraded vehicle preview if passed a vehicle archetype + upgrades table.
+function VehicleCatalog.BuildUpgradePreviewModel(
+	trackOrVehicle: string?,
+	levelOrOptions: any,
+	accentColorOpt: Color3?
+): Model
+	if type(levelOrOptions) == "table" then
+		return VehicleCatalog.BuildVehicle(trackOrVehicle, levelOrOptions)
+	end
+
+	local track = tostring(trackOrVehicle or "Engine")
+	local lowered = string.lower(track)
+	local level = math.clamp(tonumber(levelOrOptions) or 1, 1, 5)
+	local accent = accentColorOpt or Color3.fromRGB(255, 195, 45)
+
+	local model = Instance.new("Model")
+	model.Name = "UpgradePreview_" .. track
+
+	local root = makePart(
+		"PreviewRoot",
+		Vector3.new(3.2, 0.35, 3.2),
+		Color3.fromRGB(28, 32, 42),
+		Enum.Material.Metal,
+		model,
+		false,
+		true
+	)
+	root.Anchored = true
+	root.CFrame = CFrame.identity
+	model.PrimaryPart = root
+
+	local function addPreviewPart(
+		name: string,
+		size: Vector3,
+		color: Color3,
+		mat: Enum.Material,
+		offset: CFrame,
+		shape: Enum.PartType?
+	): Part
+		local p = makePart(name, size, color, mat, model, false, true, 0, shape)
+		p.Anchored = true
+		p.CFrame = root.CFrame * offset
+		return p
+	end
+
+	if lowered == "engine" then
+		addPreviewPart(
+			"EngineBlock",
+			Vector3.new(2.2, 1.2, 2.6),
+			Color3.fromRGB(185, 195, 210),
+			Enum.Material.Metal,
+			CFrame.new(0, 0.75, 0)
+		)
+		addPreviewPart(
+			"SuperchargerBlower",
+			Vector3.new(1.6, 0.65, 1.8),
+			Color3.fromRGB(220, 226, 236),
+			Enum.Material.Metal,
+			CFrame.new(0, 1.65, 0)
+		)
+		addPreviewPart(
+			"TurboIntakeGlow",
+			Vector3.new(1.4, 0.32, 0.35),
+			Color3.fromRGB(255, 110, 30),
+			Enum.Material.Neon,
+			CFrame.new(0, 1.68, -0.82)
+		)
+	elseif lowered == "armor" then
+		local armorColor = if level >= 4 then Color3.fromRGB(235, 190, 50) else Color3.fromRGB(95, 108, 128)
+		addPreviewPart(
+			"ArmorCenterShield",
+			Vector3.new(2.8, 1.5, 0.45),
+			armorColor,
+			Enum.Material.DiamondPlate,
+			CFrame.new(0, 0.95, 0)
+		)
+		for _, sx in ipairs({ -1, 1 }) do
+			addPreviewPart(
+				"ArmorBullBar_" .. tostring(sx),
+				Vector3.new(0.35, 1.7, 2.2),
+				armorColor,
+				Enum.Material.Metal,
+				CFrame.new(sx * 1.35, 1.0, 0)
+			)
+		end
+	elseif lowered == "nitro" then
+		for _, sx in ipairs({ -1, 1 }) do
+			addPreviewPart(
+				"NitroCylinder_" .. tostring(sx),
+				Vector3.new(2.6, 0.95, 0.95),
+				Color3.fromRGB(35, 165, 255),
+				Enum.Material.Metal,
+				CFrame.new(sx * 0.72, 0.85, 0) * CFrame.Angles(0, math.rad(90), math.rad(14)),
+				Enum.PartType.Cylinder
+			)
+			addPreviewPart(
+				"NitroBand_" .. tostring(sx),
+				Vector3.new(0.6, 1.02, 1.02),
+				Color3.fromRGB(95, 235, 255),
+				Enum.Material.Neon,
+				CFrame.new(sx * 0.72, 0.85, 0) * CFrame.Angles(0, math.rad(90), math.rad(14)),
+				Enum.PartType.Cylinder
+			)
+		end
+	elseif lowered == "plow" then
+		addPreviewPart(
+			"PlowMainBlade",
+			Vector3.new(3.4, 1.4, 0.65),
+			Color3.fromRGB(48, 52, 60),
+			Enum.Material.DiamondPlate,
+			CFrame.new(0, 0.95, -0.2) * CFrame.Angles(math.rad(14), 0, 0)
+		)
+		addPreviewPart(
+			"PlowLowerScoop",
+			Vector3.new(3.5, 0.75, 0.75),
+			accent,
+			Enum.Material.Metal,
+			CFrame.new(0, 0.45, -0.55) * CFrame.Angles(math.rad(-26), 0, 0)
+		)
+	elseif lowered == "magnet" then
+		addPreviewPart(
+			"MagnetBasePedestal",
+			Vector3.new(1.2, 0.55, 1.2),
+			Color3.fromRGB(45, 52, 65),
+			Enum.Material.Metal,
+			CFrame.new(0, 0.45, 0)
+		)
+		addPreviewPart(
+			"MagnetGoldenCoil",
+			Vector3.new(0.38, 2.3, 2.3),
+			Color3.fromRGB(255, 215, 40),
+			Enum.Material.Neon,
+			CFrame.new(0, 1.15, 0) * CFrame.Angles(0, 0, math.rad(90)),
+			Enum.PartType.Cylinder
+		)
+	end
+
+	return model
 end
 
 -- Creates particle emitters used for Nitro, Drift Tire Smoke, and Low-Health Engine Damage
@@ -991,7 +1133,7 @@ function VehicleCatalog.BuildVehicle(vehicleType: string?, options: BuildOptions
 	seat.Parent = model
 
 	local seatZ = if cfg.HasTruckBed then -len * 0.08 elseif cfg.HasBulldozerBlade then len * 0.06 else -len * 0.02
-	placeAndWeld(chassis, seat, CFrame.new(0, -h * 0.42, seatZ))
+	placeAndWeld(chassis, seat, CFrame.new(0, -h * 0.45, seatZ))
 
 	-- ProximityPrompt on DriveSeat for quick E enter / hijack on foot
 	local prompt = Instance.new("ProximityPrompt")
@@ -1152,13 +1294,14 @@ function VehicleCatalog.BuildVehicle(vehicleType: string?, options: BuildOptions
 		end
 	end
 
-	-- 4. Cabin / Greenhouse, Angled Front WedgePart Windshield with A-Pillars, Painted Roof Panel & Sloped Rear WedgePart Fastback
-	local glassColor = Color3.fromRGB(38, 52, 72)
-	local cabW = w * 0.84
-	local cabH = math.max(3.4 * scale, h * 1.38)
-	local cabLen = if cfg.HasTruckBed then len * 0.32 elseif cfg.Id == "Compact" or cfg.Id == "SUV" then len * 0.48 else len * 0.38
-	local cabCenterZ = if cfg.HasTruckBed then -len * 0.06 elseif cfg.Id == "Compact" or cfg.Id == "SUV" then len * 0.06 else 0.0
-	local cabBaseY = h * 0.5 + cabH * 0.5 - 0.08 * scale
+	-- 4. Low-Profile Sleek Aerodynamic Greenhouse (Cabin), 38° Raked Front WedgePart Windshield,
+	--    Thin Flush Roof Panel (0.18 studs thick), and 32° Long Fastback WedgePart Rear Window
+	local glassColor = Color3.fromRGB(24, 30, 38)
+	local cabW = w * 0.78
+	local cabH = h * 0.62
+	local cabLen = if cfg.HasTruckBed then len * 0.24 elseif cfg.Id == "SUV" then len * 0.34 else len * 0.26
+	local cabCenterZ = if cfg.HasTruckBed then -len * 0.08 elseif cfg.Id == "SUV" then 0.0 else -len * 0.02
+	local cabBaseY = h * 0.5 + cabH * 0.5 - 0.04 * scale
 
 	local cabin = makePart(
 		"Cabin",
@@ -1170,14 +1313,14 @@ function VehicleCatalog.BuildVehicle(vehicleType: string?, options: BuildOptions
 		true,
 		0.25
 	)
+	cabin.Reflectance = 0.25
 	placeAndWeld(chassis, cabin, CFrame.new(0, cabBaseY, cabCenterZ))
 
-	-- Sleek dark-tinted Driver Silhouette Helmet/Headrest inside the cabin at cabin-eye level
-	-- so from outside the car you see a cool driver silhouette inside the glass instead of a blocky head clipping through the roof
+	-- Sleek low-profile dark-tinted Driver Silhouette inside the smoked glass greenhouse (never pokes above roof)
 	local silhouetteColor = Color3.fromRGB(18, 22, 28)
 	local headrest = makePart(
 		"DriverHeadrest",
-		Vector3.new(1.55 * scale, 1.35 * scale, 0.42 * scale),
+		Vector3.new(1.35 * scale, cabH * 0.52, 0.34 * scale),
 		Color3.fromRGB(24, 28, 36),
 		Enum.Material.SmoothPlastic,
 		model
@@ -1185,12 +1328,12 @@ function VehicleCatalog.BuildVehicle(vehicleType: string?, options: BuildOptions
 	placeAndWeld(
 		chassis,
 		headrest,
-		CFrame.new(0, h * 0.5 + cabH * 0.34, seatZ + 0.72 * scale) * CFrame.Angles(math.rad(-10), 0, 0)
+		CFrame.new(0, h * 0.5 + cabH * 0.28, seatZ + 0.62 * scale) * CFrame.Angles(math.rad(-10), 0, 0)
 	)
 
 	local driverTorso = makePart(
 		"DriverSilhouetteTorso",
-		Vector3.new(1.75 * scale, cabH * 0.42, 0.85 * scale),
+		Vector3.new(1.45 * scale, cabH * 0.42, 0.72 * scale),
 		silhouetteColor,
 		Enum.Material.SmoothPlastic,
 		model
@@ -1198,12 +1341,12 @@ function VehicleCatalog.BuildVehicle(vehicleType: string?, options: BuildOptions
 	placeAndWeld(
 		chassis,
 		driverTorso,
-		CFrame.new(0, h * 0.5 + cabH * 0.24, seatZ + 0.08 * scale) * CFrame.Angles(math.rad(-8), 0, 0)
+		CFrame.new(0, h * 0.5 + cabH * 0.22, seatZ + 0.06 * scale) * CFrame.Angles(math.rad(-8), 0, 0)
 	)
 
 	local driverHelmet = makePart(
 		"DriverSilhouetteHelmet",
-		Vector3.new(1.22 * scale, 1.24 * scale, 1.28 * scale),
+		Vector3.new(cabH * 0.56, cabH * 0.56, cabH * 0.60),
 		silhouetteColor,
 		Enum.Material.SmoothPlastic,
 		model,
@@ -1215,12 +1358,12 @@ function VehicleCatalog.BuildVehicle(vehicleType: string?, options: BuildOptions
 	placeAndWeld(
 		chassis,
 		driverHelmet,
-		CFrame.new(0, h * 0.5 + cabH * 0.56, seatZ + 0.04 * scale)
+		CFrame.new(0, h * 0.5 + cabH * 0.50, seatZ + 0.04 * scale)
 	)
 
 	local driverVisor = makePart(
 		"DriverHelmetVisor",
-		Vector3.new(1.06 * scale, 0.34 * scale, 0.36 * scale),
+		Vector3.new(cabH * 0.48, cabH * 0.18, cabH * 0.20),
 		accentColor,
 		Enum.Material.Neon,
 		model
@@ -1228,29 +1371,30 @@ function VehicleCatalog.BuildVehicle(vehicleType: string?, options: BuildOptions
 	placeAndWeld(
 		chassis,
 		driverVisor,
-		CFrame.new(0, h * 0.5 + cabH * 0.58, seatZ - 0.48 * scale)
+		CFrame.new(0, h * 0.5 + cabH * 0.52, seatZ - 0.26 * scale)
 	)
 
-	-- Painted roof panel
+	-- Thin flush roof panel (0.18 studs thick)
 	local roofCap = makePart(
 		"RoofCap",
-		Vector3.new(cabW * 1.02, 0.24 * scale, cabLen * 0.98),
+		Vector3.new(cabW * 0.98, 0.18 * scale, cabLen * 0.98),
 		if cfg.Id == "Sports" or cfg.Id == "Muscle" then secondaryColor else primaryColor,
 		Enum.Material.SmoothPlastic,
 		model
 	)
-	placeAndWeld(chassis, roofCap, CFrame.new(0, h * 0.5 + cabH, cabCenterZ))
+	placeAndWeld(chassis, roofCap, CFrame.new(0, h * 0.5 + cabH - 0.04 * scale, cabCenterZ))
 
-	-- Angled front WedgePart windshield with left/right sculpted A-pillars
-	local wsSlopeLen = math.min(cabH * 0.65, len * 0.16)
+	-- Steeply raked front WedgePart windshield (38° angle) with left/right sculpted A-pillars
+	local wsSlopeLen = cabH / math.tan(math.rad(38))
 	local windshield = makeWedge(
 		"Windshield",
-		Vector3.new(cabW * 0.96, cabH, wsSlopeLen),
+		Vector3.new(cabW * 0.98, cabH, wsSlopeLen),
 		glassColor,
 		Enum.Material.Glass,
 		model,
-		0.22
+		0.25
 	)
+	windshield.Reflectance = 0.25
 	placeAndWeld(
 		chassis,
 		windshield,
@@ -1261,7 +1405,7 @@ function VehicleCatalog.BuildVehicle(vehicleType: string?, options: BuildOptions
 		local pillarTag = if sx < 0 then "L" else "R"
 		local aPillar = makePart(
 			"APillar" .. pillarTag,
-			Vector3.new(0.22 * scale, math.sqrt(cabH * cabH + wsSlopeLen * wsSlopeLen), 0.24 * scale),
+			Vector3.new(0.18 * scale, math.sqrt(cabH * cabH + wsSlopeLen * wsSlopeLen), 0.20 * scale),
 			primaryColor,
 			Enum.Material.SmoothPlastic,
 			model
@@ -1302,26 +1446,30 @@ function VehicleCatalog.BuildVehicle(vehicleType: string?, options: BuildOptions
 		)
 	end
 
-	-- Sloped rear WedgePart fastback / rear window (rotated 180 deg around Y so slope faces +Z)
-	local rwSlopeLen = math.min(cabH * (if cfg.Id == "Sports" or cfg.Id == "Muscle" then 0.78 else 0.52), len * 0.16)
+	-- Long fastback WedgePart rear window (32° angle) that slopes smoothly into the rear decklid
+	local rwSlopeLen = if cfg.HasTruckBed
+		then cabH * 0.55
+		else (cabH / math.tan(math.rad(32)))
 	local rearWindow = makeWedge(
 		"RearWindow",
-		Vector3.new(cabW * 0.94, cabH * 0.96, rwSlopeLen),
+		Vector3.new(cabW * 0.96, cabH, rwSlopeLen),
 		glassColor,
 		Enum.Material.Glass,
 		model,
 		0.25
 	)
+	rearWindow.Reflectance = 0.25
 	placeAndWeld(
 		chassis,
 		rearWindow,
-		CFrame.new(0, cabBaseY - 0.02 * scale, cabCenterZ + cabLen * 0.5 + rwSlopeLen * 0.5)
+		CFrame.new(0, cabBaseY, cabCenterZ + cabLen * 0.5 + rwSlopeLen * 0.5)
 			* CFrame.Angles(0, math.rad(180), 0)
 	)
 
-	-- Rear trunk deck (for non-truck / non-SUV fastbacks & sedans)
-	if not cfg.HasTruckBed and cfg.Id ~= "Compact" and cfg.Id ~= "SUV" then
-		local trunkLen = math.max(1.2 * scale, (len * 0.5) - (cabCenterZ + cabLen * 0.5 + rwSlopeLen * 0.6))
+	-- Rear trunk decklid (sloping fastback transitions smoothly into decklid)
+	if not cfg.HasTruckBed then
+		local rearGlassEndZ = cabCenterZ + cabLen * 0.5 + rwSlopeLen
+		local trunkLen = math.max(1.1 * scale, (len * 0.5) - rearGlassEndZ + 0.35 * scale)
 		local trunkDeck = makePart(
 			"TrunkDeck",
 			Vector3.new(w * 0.92, h * 0.34, trunkLen),
@@ -1329,7 +1477,7 @@ function VehicleCatalog.BuildVehicle(vehicleType: string?, options: BuildOptions
 			Enum.Material.SmoothPlastic,
 			model
 		)
-		placeAndWeld(chassis, trunkDeck, CFrame.new(0, h * 0.46, len * 0.5 - trunkLen * 0.5 - 0.15 * scale))
+		placeAndWeld(chassis, trunkDeck, CFrame.new(0, h * 0.44, len * 0.5 - trunkLen * 0.5 - 0.12 * scale))
 	end
 
 	-- 5. Truck Bed (Pickup & MonsterTruck)
@@ -1595,26 +1743,49 @@ function VehicleCatalog.BuildVehicle(vehicleType: string?, options: BuildOptions
 		spot.Parent = headlight
 	end
 
-	-- Detailed Rear Fascia: Distinct Left/Right LED Taillight Clusters + Center Light Bar
-	local taillight = makePart(
-		"TaillightBar",
-		Vector3.new(w * 0.78, h * 0.14, 0.18 * scale),
-		Color3.fromRGB(220, 22, 22),
-		Enum.Material.Neon,
+	-- Detailed Rear Fascia: Recessed dark-red LED taillight strips inside a black rear diffuser housing (no giant pink neon slab!)
+	local taillightLedColor = Color3.fromRGB(185, 24, 30)
+	local rearHousingColor = Color3.fromRGB(16, 18, 24)
+
+	local taillightHousing = makePart(
+		"RearTaillightHousing",
+		Vector3.new(w * 0.88, h * 0.22, 0.18 * scale),
+		rearHousingColor,
+		Enum.Material.Metal,
 		model
 	)
-	placeAndWeld(chassis, taillight, CFrame.new(0, h * 0.14, len * 0.5 + 0.08 * scale))
+	placeAndWeld(chassis, taillightHousing, CFrame.new(0, h * 0.14, len * 0.5 + 0.05 * scale))
+
+	local taillight = makePart(
+		"TaillightBar",
+		Vector3.new(w * 0.74, 0.08 * scale, 0.14 * scale),
+		taillightLedColor,
+		Enum.Material.SmoothPlastic,
+		model
+	)
+	taillight.Reflectance = 0.15
+	placeAndWeld(chassis, taillight, CFrame.new(0, h * 0.15, len * 0.5 + 0.08 * scale))
 
 	for _, sx in ipairs({ -1, 1 }) do
 		local tlSide = if sx < 0 then "L" else "R"
-		local tlCluster = makePart(
-			"TaillightCluster" .. tlSide,
-			Vector3.new(w * 0.22, h * 0.24, 0.22 * scale),
-			Color3.fromRGB(255, 32, 24),
-			Enum.Material.Neon,
+		local tlBezel = makePart(
+			"TaillightBezel" .. tlSide,
+			Vector3.new(w * 0.23, h * 0.20, 0.18 * scale),
+			rearHousingColor,
+			Enum.Material.Metal,
 			model
 		)
-		placeAndWeld(chassis, tlCluster, CFrame.new(sx * (w * 0.35), h * 0.14, len * 0.5 + 0.10 * scale))
+		placeAndWeld(chassis, tlBezel, CFrame.new(sx * (w * 0.34), h * 0.14, len * 0.5 + 0.06 * scale))
+
+		local tlCluster = makePart(
+			"TaillightCluster" .. tlSide,
+			Vector3.new(w * 0.19, 0.12 * scale, 0.16 * scale),
+			taillightLedColor,
+			Enum.Material.SmoothPlastic,
+			model
+		)
+		tlCluster.Reflectance = 0.15
+		placeAndWeld(chassis, tlCluster, CFrame.new(sx * (w * 0.34), h * 0.14, len * 0.5 + 0.09 * scale))
 	end
 
 	-- License Plate Badge ("LEO-01")
@@ -1832,6 +2003,8 @@ function VehicleCatalog.BuildVehicle(vehicleType: string?, options: BuildOptions
 	model:SetAttribute("ArmorLevel", armorLevel)
 	model:SetAttribute("NitroLevel", nitroLevel)
 	model:SetAttribute("PlowLevel", plowLevel)
+	model:SetAttribute("MagnetLevel", magnetLevel)
+	model:SetAttribute("BaseSmashTier", VehicleCatalog.GetBaseSmashTier(cfg.Id))
 	model:SetAttribute("BulkScale", scale)
 	model:SetAttribute("IsTraffic", opts.IsTraffic == true)
 	model:SetAttribute("OwnerUserId", opts.OwnerUserId or 0)
@@ -1844,6 +2017,24 @@ function VehicleCatalog.BuildVehicle(vehicleType: string?, options: BuildOptions
 	end
 
 	return model
+end
+
+local BASE_SMASH_TIER_BY_CLASS: { [string]: number } = {
+	Compact = 1,
+	Sedan = 2,
+	Muscle = 2,
+	SUV = 3,
+	Pickup = 3,
+	Sports = 3,
+	MonsterTruck = 4,
+	Bulldozer = 5,
+	Tank = 5,
+	ArmoredTank = 5,
+}
+
+function VehicleCatalog.GetBaseSmashTier(vehicleType: string?): number
+	local resolved = VehicleCatalog.ResolveArchetypeId(vehicleType)
+	return BASE_SMASH_TIER_BY_CLASS[resolved] or 1
 end
 
 -- Alias for compatibility with other scripts
