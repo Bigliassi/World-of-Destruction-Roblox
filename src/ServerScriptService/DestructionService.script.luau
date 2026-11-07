@@ -301,6 +301,7 @@ end
 local WOOD_PROPS: { [string]: boolean } = {
 	WoodenCrate = true,
 	Crate = true,
+	JackpotCrate = true,
 	Fence = true,
 	Bench = true,
 	PalmTree = true,
@@ -462,8 +463,16 @@ destroyProp = function(inst: Instance, attacker: Player?, hitVel: Vector3, isFro
 	local propPos = primary.Position
 	local originCF = (inst:GetAttribute("OriginCFrame") :: CFrame?) or primary.CFrame
 	local propType = (inst:GetAttribute("PropType") :: string?) or inst.Name
+	local isJackpotCrate = (propType == "JackpotCrate")
+		or (inst:GetAttribute("IsJackpotCrate") == true)
+		or (string.find(string.lower(propType), "jackpot") ~= nil)
 	local cashValue = (inst:GetAttribute("CashValue") :: number?) or 20
 	local chaosPoints = (inst:GetAttribute("ChaosPoints") :: number?) or 15
+	if isJackpotCrate then
+		propType = "JackpotCrate"
+		cashValue = math.floor(cashValue * 3)
+		chaosPoints = math.floor(chaosPoints * 3)
+	end
 	local isExplosive = ((inst:GetAttribute("Explosive") :: boolean?) == true)
 		or (propType == "ExplosiveBarrel")
 		or (propType == "GasPump")
@@ -571,6 +580,9 @@ destroyProp = function(inst: Instance, attacker: Player?, hitVel: Vector3, isFro
 		isExplosion = isExplosive,
 		IsExplosion = isExplosive,
 		isFromExplosion = isFromExplosion,
+		isJackpotCrate = isJackpotCrate,
+		IsJackpotCrate = isJackpotCrate,
+		jackpotChargeGain = if isJackpotCrate then 35 else nil,
 	}
 	if DestructionBindable then
 		DestructionBindable:Fire(payload)

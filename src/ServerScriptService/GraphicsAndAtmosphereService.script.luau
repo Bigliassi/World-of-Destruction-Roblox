@@ -39,60 +39,61 @@ local function ensurePostEffect<T>(className: string, name: string): any
 end
 
 local function configureCrispLighting()
-	-- Core Lighting properties tuned for vibrant sunlit Los Angeles / Miami arcade clarity
+	-- Core Lighting properties tuned for moody, cinematic New York Winter Overcast / Snowy & Rainy Dusk
 	Lighting.GlobalShadows = true
-	Lighting.ShadowSoftness = 0.16
-	Lighting.EnvironmentDiffuseScale = 0.92
-	Lighting.EnvironmentSpecularScale = 0.95
-	Lighting.ClockTime = 13.5
-	Lighting.Brightness = 3.6
-	Lighting.Ambient = Color3.fromRGB(155, 162, 175)
-	Lighting.OutdoorAmbient = Color3.fromRGB(185, 192, 205)
-	Lighting.ColorShift_Top = Color3.fromRGB(255, 252, 240)
+	Lighting.ShadowSoftness = 0.28
+	Lighting.EnvironmentDiffuseScale = 0.85
+	Lighting.EnvironmentSpecularScale = 0.92
+	Lighting.ClockTime = 16.4
+	Lighting.Brightness = 1.85
+	Lighting.Ambient = Color3.fromRGB(78, 88, 105)
+	Lighting.OutdoorAmbient = Color3.fromRGB(95, 108, 128)
+	Lighting.FogColor = Color3.fromRGB(85, 96, 115)
+	Lighting.ColorShift_Top = Color3.fromRGB(165, 182, 210)
 
-	-- Atmosphere (crystal clear sunlit horizon)
+	-- Atmosphere (moody slate-blue NYC winter overcast haze)
 	local atmosphere: Atmosphere = ensurePostEffect("Atmosphere", "WoDAtmosphere")
-	atmosphere.Density = 0.16
-	atmosphere.Offset = 0.10
-	atmosphere.Color = Color3.fromRGB(205, 228, 255)
-	atmosphere.Decay = Color3.fromRGB(165, 190, 225)
-	atmosphere.Glare = 0.05
-	atmosphere.Haze = 0.4
+	atmosphere.Density = 0.34
+	atmosphere.Offset = 0.18
+	atmosphere.Color = Color3.fromRGB(110, 124, 145)
+	atmosphere.Decay = Color3.fromRGB(68, 78, 96)
+	atmosphere.Glare = 0.08
+	atmosphere.Haze = 1.65
 
 	-- Sky
 	local sky: Sky = ensurePostEffect("Sky", "WoDSky")
-	sky.CelestialBodiesShown = true
-	sky.SunAngularSize = 15
+	sky.CelestialBodiesShown = false
+	sky.SunAngularSize = 12
 	sky.MoonAngularSize = 11
-	sky.StarCount = 3000
+	sky.StarCount = 600
 
-	-- BloomEffect (subtle, clean glow that never blows out neon into blurry blobs)
+	-- BloomEffect (subtle so taillights and neon signs look crisp and NEVER bloom into blurry blobs!)
 	local bloom: BloomEffect = ensurePostEffect("BloomEffect", "WoDBloom")
 	bloom.Enabled = true
-	bloom.Intensity = 0.30
-	bloom.Size = 18
-	bloom.Threshold = 1.70
+	bloom.Intensity = 0.24
+	bloom.Size = 16
+	bloom.Threshold = 1.85
 
-	-- ColorCorrectionEffect (saturated, warm sunlit arcade palette)
+	-- ColorCorrectionEffect (cinematic NYC steel-blue & warm-amber contrast)
 	local cc: ColorCorrectionEffect = ensurePostEffect("ColorCorrectionEffect", "WoDColorCorrection")
 	cc.Enabled = true
-	cc.Brightness = 0.04
-	cc.Contrast = 0.14
-	cc.Saturation = 0.18
-	cc.TintColor = Color3.fromRGB(255, 252, 246)
+	cc.Brightness = 0.01
+	cc.Contrast = 0.16
+	cc.Saturation = -0.08
+	cc.TintColor = Color3.fromRGB(232, 238, 248)
 
-	-- SunRaysEffect (volumetric rays between skyscrapers)
+	-- SunRaysEffect (subtle winter dusk rays between Manhattan skyscrapers)
 	local sunRays: SunRaysEffect = ensurePostEffect("SunRaysEffect", "WoDSunRays")
 	sunRays.Enabled = true
-	sunRays.Intensity = 0.08
-	sunRays.Spread = 0.65
+	sunRays.Intensity = 0.04
+	sunRays.Spread = 0.55
 
-	-- Subtle DepthOfFieldEffect (keeps foreground razor-sharp, softens far horizon)
+	-- Subtle DepthOfFieldEffect (keeps foreground razor-sharp, softens distant misty skyline)
 	local dof: DepthOfFieldEffect = ensurePostEffect("DepthOfFieldEffect", "WoDDepthOfField")
 	dof.Enabled = true
-	dof.FarIntensity = 0.08
-	dof.FocusDistance = 180
-	dof.InFocusRadius = 260
+	dof.FarIntensity = 0.10
+	dof.FocusDistance = 175
+	dof.InFocusRadius = 250
 	dof.NearIntensity = 0
 
 	Lighting:SetAttribute("GraphicsConfiguredV1", true)
@@ -101,7 +102,7 @@ end
 configureCrispLighting()
 
 --------------------------------------------------------------------------------
--- 2. High-Visibility City Landmark Beacons & Floating Signage
+-- 2. Subtle Ground Halo Rings on Speed Shop & Repair Bay Pads (NO Floating BillboardGui Overlap!)
 --------------------------------------------------------------------------------
 type LandmarkBeaconSpec = {
 	Id: string,
@@ -150,42 +151,6 @@ local LANDMARK_BEACONS: { LandmarkBeaconSpec } = {
 		PillarHeight = 0,
 		RingRadius = 13,
 	},
-	{
-		Id = "LeoPlazaMegaRamp",
-		Title = "MEGA-RAMP",
-		Subtitle = "2X STUNT AIR BONUS",
-		Position = Vector3.new(0, 0, -72),
-		Color = Color3.fromRGB(255, 155, 40),
-		PillarHeight = 0,
-		RingRadius = 12,
-	},
-	{
-		Id = "BoardwalkMegaRamp",
-		Title = "PIER STUNT JUMP",
-		Subtitle = "BOARDWALK LAUNCH",
-		Position = Vector3.new(810, 0, 0),
-		Color = Color3.fromRGB(255, 155, 40),
-		PillarHeight = 0,
-		RingRadius = 12,
-	},
-	{
-		Id = "LeoTowerIcon",
-		Title = "LEO TOWER",
-		Subtitle = "DOWNTOWN SKYLINE",
-		Position = Vector3.new(-48, 0, -226),
-		Color = Color3.fromRGB(255, 215, 55),
-		PillarHeight = 0,
-		RingRadius = 12,
-	},
-	{
-		Id = "BoomGasStation",
-		Title = "BOOM GAS & NITRO",
-		Subtitle = "EXPLOSIVE COMBO ZONE",
-		Position = Vector3.new(44, 0, -400),
-		Color = Color3.fromRGB(255, 95, 70),
-		PillarHeight = 0,
-		RingRadius = 14,
-	},
 }
 
 local animatedRings: { { Part: BasePart, BasePos: Vector3, BaseRadius: number, Phase: number } } = {}
@@ -208,7 +173,7 @@ local function buildLandmarkBeacons()
 		model:SetAttribute("LandmarkTitle", spec.Title)
 		model.Parent = beaconsFolder
 
-		-- Subtle Ground Pad Halo Ring (no vertical neon sky-beam cylinders cluttering the view!)
+		-- Subtle Ground Pad Halo Ring only (NO floating BillboardGui text cards that overlap on screen!)
 		local groundRing = Instance.new("Part")
 		groundRing.Name = "GroundHaloRing"
 		groundRing.Shape = Enum.PartType.Cylinder
@@ -238,68 +203,6 @@ local function buildLandmarkBeacons()
 			BaseRadius = spec.RingRadius,
 			Phase = idx * 0.85,
 		})
-
-		-- Compact, clean floating destination badge above roof level
-		local signAnchor = Instance.new("Part")
-		signAnchor.Name = "SignAnchor"
-		signAnchor.Size = Vector3.new(1, 1, 1)
-		signAnchor.Transparency = 1
-		signAnchor.Anchored = true
-		signAnchor.CanCollide = false
-		signAnchor.CanQuery = false
-		signAnchor.CanTouch = false
-		signAnchor.Position = spec.Position + Vector3.new(0, 29, 0)
-		signAnchor.Parent = model
-
-		local billboard = Instance.new("BillboardGui")
-		billboard.Name = "LandmarkSignGui"
-		billboard.Size = UDim2.fromOffset(148, 36)
-		billboard.StudsOffset = Vector3.new(0, 1.5, 0)
-		billboard.AlwaysOnTop = false
-		billboard.MaxDistance = 290
-		billboard.LightInfluence = 0
-		billboard.Parent = signAnchor
-
-		local card = Instance.new("Frame")
-		card.Name = "Card"
-		card.Size = UDim2.fromScale(1, 1)
-		card.BackgroundColor3 = Color3.fromRGB(12, 16, 26)
-		card.BackgroundTransparency = 0.18
-		card.BorderSizePixel = 0
-		card.Parent = billboard
-
-		local corner = Instance.new("UICorner")
-		corner.CornerRadius = UDim.new(0, 10)
-		corner.Parent = card
-
-		local stroke = Instance.new("UIStroke")
-		stroke.Color = spec.Color
-		stroke.Thickness = 2
-		stroke.Parent = card
-
-		local titleLabel = Instance.new("TextLabel")
-		titleLabel.Name = "Title"
-		titleLabel.Size = UDim2.new(1, -12, 0, 28)
-		titleLabel.Position = UDim2.fromOffset(6, 4)
-		titleLabel.BackgroundTransparency = 1
-		titleLabel.Font = Enum.Font.GothamBlack
-		titleLabel.Text = spec.Title
-		titleLabel.TextColor3 = spec.Color
-		titleLabel.TextSize = 15
-		titleLabel.TextScaled = true
-		titleLabel.Parent = card
-
-		local subLabel = Instance.new("TextLabel")
-		subLabel.Name = "Subtitle"
-		subLabel.Size = UDim2.new(1, -12, 0, 18)
-		subLabel.Position = UDim2.fromOffset(6, 32)
-		subLabel.BackgroundTransparency = 1
-		subLabel.Font = Enum.Font.GothamBold
-		subLabel.Text = spec.Subtitle
-		subLabel.TextColor3 = Color3.fromRGB(225, 232, 245)
-		subLabel.TextSize = 11
-		subLabel.TextScaled = true
-		subLabel.Parent = card
 	end
 end
 

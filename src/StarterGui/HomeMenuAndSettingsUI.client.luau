@@ -1,27 +1,23 @@
 --!strict
 --[[
 	HomeMenuAndSettingsUI.client.luau
-	World of Destruction (Roblox) — Version 1.0
+	World of Destruction (Roblox)
 	
-	Provides:
-	1. AAA Console-Style Home Menu Screen (opens on first launch and anytime via [M]/[Tab]/[P] or HUD Menu button):
-	   - Smooth orbital camera over sunlit Leo Plaza & Leo Tower while active (`HomeMenuActive = true`)
-	   - Left Column: "WORLD OF DESTRUCTION — OPERATION: TAKE BACK LEO CITY" hero branding +
-	     4 Large 3D Tactile Beveled Buttons (Play Campaign Act 1–5, Freeplay Sandbox, Garage & Avatar Shop, Settings)
-	   - Right Column: "THE STORY: BEGINNING TO END (5-ACT CAMPAIGN ROADMAP)" showing Act 1 (Beginning) through
-	     Act 5 (Boss Goliath Convoy Finale) with live progress highlighting
-	2. Full Settings Modal (accessible from Home Menu or In-Game [P] / Settings button):
-	   - SFX Volume (100% / 60% / 25% / Mute)
-	   - Vehicle Engine Sound (ON / OFF)
-	   - Lighting & Time of Day (Bright Sunny Day / Golden Sunset / Neon Night)
-	   - Driving Physics Mode (Progressive Realistic / Arcade Boost)
-	   - Camera Shake (Normal / Reduced / Off)
-	   - 3D Waypoint Guide Beam (ON / OFF)
-	3. Grand Finale Victory Celebration Modal when `CampaignCompleted` transitions to `true`.
+	Simple, High-Impact, Emoji-Free Home Card & Settings UI:
+	- Centered Home Card (540x430):
+	  * Title: "WORLD OF DESTRUCTION"
+	  * Subtitle: "NEW YORK DEMOLITION EDITION"
+	  * Live Next-Goal Progress Bar: "NEXT RIDE UNLOCK: [Progress Bar] $Cash / $Price"
+	  * 4 Big, Bold, 3D Tactile Beveled Buttons (zero emojis, zero subtext paragraphs):
+	    1. PLAY NOW (Emerald green)
+	    2. GARAGE & UPGRADES (Electric blue -> opens SpeedShopUI & closes Home Menu)
+	    3. AVATAR SHOP (Royal purple -> opens CharacterCreatorAndWardrobeUI & closes Home Menu)
+	    4. SETTINGS (Slate -> opens Settings modal with Weather selector, Volume, Driving Mode, Control Scheme)
 ]]
 
 local Lighting = game:GetService("Lighting")
 local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
@@ -36,17 +32,20 @@ end
 if localPlayer:GetAttribute("EngineSoundEnabled") == nil then
 	localPlayer:SetAttribute("EngineSoundEnabled", true)
 end
+if localPlayer:GetAttribute("WeatherPreference") == nil then
+	localPlayer:SetAttribute("WeatherPreference", "Snowy NYC")
+end
 if localPlayer:GetAttribute("TimeOfDayPreference") == nil then
-	localPlayer:SetAttribute("TimeOfDayPreference", "Sunny")
+	localPlayer:SetAttribute("TimeOfDayPreference", "Snowy")
 end
 if localPlayer:GetAttribute("DrivingMode") == nil then
 	localPlayer:SetAttribute("DrivingMode", "Progressive")
 end
+if localPlayer:GetAttribute("ControlScheme") == nil then
+	localPlayer:SetAttribute("ControlScheme", "Standard")
+end
 if localPlayer:GetAttribute("CameraShakeScale") == nil then
 	localPlayer:SetAttribute("CameraShakeScale", 1.0)
-end
-if localPlayer:GetAttribute("ShowWaypointBeam") == nil then
-	localPlayer:SetAttribute("ShowWaypointBeam", true)
 end
 if localPlayer:GetAttribute("HomeMenuActive") == nil then
 	localPlayer:SetAttribute("HomeMenuActive", true)
@@ -80,7 +79,7 @@ local function updateMenuScale()
 	end
 	local vp = cam.ViewportSize
 	if vp.X > 0 and vp.Y > 0 then
-		uiScale.Scale = math.clamp(math.min(vp.X / 1366, vp.Y / 768), 0.64, 1.05)
+		uiScale.Scale = math.clamp(math.min(vp.X / 1280, vp.Y / 720), 0.68, 1.05)
 	end
 end
 Workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(function()
@@ -96,7 +95,7 @@ if Workspace.CurrentCamera then
 end
 
 --------------------------------------------------------------------------------
--- 3D Tactile Beveled UI Helpers
+-- 3D Tactile Beveled UI Helpers (Zero Emojis)
 --------------------------------------------------------------------------------
 local function addCorner(parent: Instance, radius: number)
 	local c = Instance.new("UICorner")
@@ -129,19 +128,33 @@ local function brightenColor(c: Color3, boost: number): Color3
 	)
 end
 
+local function formatNumber(n: number): string
+	local formatted = tostring(math.floor(n))
+	while true do
+		local k
+		formatted, k = string.gsub(formatted, "^(-?%d+)(%d%d%d)", "%1,%2")
+		if k == 0 then
+			break
+		end
+	end
+	return formatted
+end
+
 local function makeTactile3DButton(params: {
 	name: string,
 	title: string,
-	subtitle: string?,
 	badgeText: string?,
 	size: UDim2,
 	position: UDim2?,
 	layoutOrder: number?,
 	baseColor: Color3,
+	textSize: number?,
+	zIndex: number?,
 	parent: Instance,
 	onClick: () -> (),
 }): (Frame, TextLabel)
 	local lipDepth = 5
+	local zBase = params.zIndex or 2
 	local container = Instance.new("Frame")
 	container.Name = params.name
 	container.Size = params.size
@@ -151,8 +164,9 @@ local function makeTactile3DButton(params: {
 	if params.layoutOrder then
 		container.LayoutOrder = params.layoutOrder
 	end
-	container.BackgroundColor3 = darkenColor(params.baseColor, 0.52)
+	container.BackgroundColor3 = darkenColor(params.baseColor, 0.50)
 	container.BorderSizePixel = 0
+	container.ZIndex = zBase
 	container.Parent = params.parent
 	addCorner(container, 12)
 	addStroke(container, darkenColor(params.baseColor, 0.35), 1.5, 0.15)
@@ -165,9 +179,10 @@ local function makeTactile3DButton(params: {
 	face.BorderSizePixel = 0
 	face.AutoButtonColor = false
 	face.Text = ""
+	face.ZIndex = zBase + 1
 	face.Parent = container
 	addCorner(face, 11)
-	addStroke(face, brightenColor(params.baseColor, 0.28), 1.5, 0.25)
+	addStroke(face, brightenColor(params.baseColor, 0.28), 1.5, 0.22)
 
 	local grad = Instance.new("UIGradient")
 	grad.Rotation = 90
@@ -177,7 +192,6 @@ local function makeTactile3DButton(params: {
 	})
 	grad.Parent = face
 
-	-- Top 38% white gloss sheen
 	local gloss = Instance.new("Frame")
 	gloss.Name = "TopGlossSheen"
 	gloss.Size = UDim2.new(1, -6, 0.38, 0)
@@ -185,60 +199,47 @@ local function makeTactile3DButton(params: {
 	gloss.BackgroundColor3 = Color3.new(1, 1, 1)
 	gloss.BackgroundTransparency = 0.84
 	gloss.BorderSizePixel = 0
+	gloss.ZIndex = zBase + 2
 	gloss.Parent = face
 	addCorner(gloss, 8)
 
-	local textOffsetLeft = 14
 	if params.badgeText and #params.badgeText > 0 then
-		textOffsetLeft = 58
 		local badge = Instance.new("Frame")
 		badge.Name = "KeyBadge"
-		badge.Size = UDim2.fromOffset(38, 34)
-		badge.Position = UDim2.new(0, 10, 0.5, -17)
-		badge.BackgroundColor3 = Color3.fromRGB(14, 18, 28)
-		badge.BackgroundTransparency = 0.2
+		badge.Size = UDim2.fromOffset(44, 30)
+		badge.Position = UDim2.new(0, 12, 0.5, -15)
+		badge.BackgroundColor3 = Color3.fromRGB(12, 16, 26)
+		badge.BackgroundTransparency = 0.18
 		badge.BorderSizePixel = 0
+		badge.ZIndex = zBase + 3
 		badge.Parent = face
-		addCorner(badge, 8)
-		addStroke(badge, brightenColor(params.baseColor, 0.3), 1, 0.35)
+		addCorner(badge, 7)
+		addStroke(badge, brightenColor(params.baseColor, 0.32), 1, 0.3)
 
 		local badgeLbl = Instance.new("TextLabel")
 		badgeLbl.Size = UDim2.fromScale(1, 1)
 		badgeLbl.BackgroundTransparency = 1
 		badgeLbl.Font = Enum.Font.GothamBlack
 		badgeLbl.Text = params.badgeText
-		badgeLbl.TextColor3 = Color3.fromRGB(255, 235, 120)
-		badgeLbl.TextSize = 15
+		badgeLbl.TextColor3 = Color3.fromRGB(255, 230, 110)
+		badgeLbl.TextSize = 12
+		badgeLbl.ZIndex = zBase + 4
 		badgeLbl.Parent = badge
 	end
 
 	local titleLbl = Instance.new("TextLabel")
 	titleLbl.Name = "Title"
-	titleLbl.Size = UDim2.new(1, -(textOffsetLeft + 12), 0, if params.subtitle then 22 else 28)
-	titleLbl.Position = UDim2.new(0, textOffsetLeft, 0.5, if params.subtitle then -18 else -14)
+	titleLbl.Size = UDim2.new(1, -24, 1, 0)
+	titleLbl.Position = UDim2.fromOffset(12, 0)
 	titleLbl.BackgroundTransparency = 1
 	titleLbl.Font = Enum.Font.GothamBlack
 	titleLbl.Text = params.title
 	titleLbl.TextColor3 = Color3.new(1, 1, 1)
-	titleLbl.TextSize = if params.subtitle then 16 else 15
-	titleLbl.TextXAlignment = if params.badgeText then Enum.TextXAlignment.Left else Enum.TextXAlignment.Center
-	titleLbl.TextStrokeTransparency = 0.45
+	titleLbl.TextSize = params.textSize or 20
+	titleLbl.TextXAlignment = Enum.TextXAlignment.Center
+	titleLbl.TextStrokeTransparency = 0.40
+	titleLbl.ZIndex = zBase + 3
 	titleLbl.Parent = face
-
-	if params.subtitle then
-		local subLbl = Instance.new("TextLabel")
-		subLbl.Name = "Subtitle"
-		subLbl.Size = UDim2.new(1, -(textOffsetLeft + 12), 0, 15)
-		subLbl.Position = UDim2.new(0, textOffsetLeft, 0.5, 4)
-		subLbl.BackgroundTransparency = 1
-		subLbl.Font = Enum.Font.GothamBold
-		subLbl.Text = params.subtitle
-		subLbl.TextColor3 = Color3.fromRGB(235, 242, 255)
-		subLbl.TextSize = 11
-		subLbl.TextXAlignment = Enum.TextXAlignment.Left
-		subLbl.TextTransparency = 0.12
-		subLbl.Parent = face
-	end
 
 	face.MouseEnter:Connect(function()
 		TweenService:Create(face, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
@@ -268,101 +269,196 @@ local function makeTactile3DButton(params: {
 end
 
 --------------------------------------------------------------------------------
--- 1. HOME MENU OVERLAY
+-- Next Vehicle Unlock Calculator
+--------------------------------------------------------------------------------
+local NEXT_RIDE_LADDER = {
+	{ id = "Sedan", name = "CRUISER V8", price = 1500 },
+	{ id = "Muscle", name = "HELLFIRE GT", price = 4500 },
+	{ id = "SUV", name = "TITAN 4X4", price = 9000 },
+	{ id = "Pickup", name = "RANCH RAMMER", price = 15000 },
+	{ id = "Sports", name = "APEX HYPER GT", price = 28000 },
+	{ id = "MonsterTruck", name = "CRUSHER XL", price = 50000 },
+	{ id = "Bulldozer", name = "GOLIATH DOZER", price = 95000 },
+}
+
+-- Sync prices with VehicleCatalog if present and lower/higher
+task.spawn(function()
+	local shared = ReplicatedStorage:WaitForChild("Shared", 5)
+	local vcMod = shared and shared:FindFirstChild("VehicleCatalog")
+	if vcMod and vcMod:IsA("ModuleScript") then
+		local ok, vc = pcall(require, vcMod)
+		if ok and type(vc) == "table" and type(vc.Archetypes) == "table" then
+			for _, entry in ipairs(NEXT_RIDE_LADDER) do
+				local arch = vc.Archetypes[entry.id]
+				if arch and type(arch.DisplayName) == "string" then
+					entry.name = string.upper(arch.DisplayName)
+				end
+			end
+		end
+	end
+end)
+
+local function getPlayerCash(): number
+	local attrCash = localPlayer:GetAttribute("Cash")
+	if typeof(attrCash) == "number" then
+		return attrCash
+	end
+	local ls = localPlayer:FindFirstChild("leaderstats")
+	local cashObj = ls and ls:FindFirstChild("Cash")
+	if cashObj and cashObj:IsA("ValueBase") then
+		return tonumber(cashObj.Value) or 0
+	end
+	return 500
+end
+
+local function getNextLockedRide(): (string, number)
+	local unlockedStr = tostring(localPlayer:GetAttribute("UnlockedVehicles") or "Compact")
+	local selectedStr = tostring(localPlayer:GetAttribute("SelectedVehicle") or localPlayer:GetAttribute("EquippedVehicle") or "Compact")
+	for _, item in ipairs(NEXT_RIDE_LADDER) do
+		local isOwned = string.find(unlockedStr, item.id, 1, true) ~= nil or selectedStr == item.id
+		if not isOwned then
+			return item.name, item.price
+		end
+	end
+	return "GOLIATH DOZER", 95000
+end
+
+--------------------------------------------------------------------------------
+-- 1. CENTERED HIGH-IMPACT HOME CARD (540 x 430)
 --------------------------------------------------------------------------------
 local homeRoot = Instance.new("Frame")
 homeRoot.Name = "HomeMenuOverlay"
 homeRoot.Size = UDim2.fromScale(1, 1)
-homeRoot.BackgroundColor3 = Color3.fromRGB(8, 12, 22)
-homeRoot.BackgroundTransparency = 0.32
+homeRoot.BackgroundColor3 = Color3.fromRGB(6, 10, 18)
+homeRoot.BackgroundTransparency = 0.35
 homeRoot.BorderSizePixel = 0
 homeRoot.Visible = true
 homeRoot.Parent = screenGui
 
--- Main Content Wrapper (1120 x 610 centered)
-local homeContent = Instance.new("Frame")
-homeContent.Name = "HomeContent"
-homeContent.Size = UDim2.fromOffset(1120, 610)
-homeContent.Position = UDim2.fromScale(0.5, 0.5)
-homeContent.AnchorPoint = Vector2.new(0.5, 0.5)
-homeContent.BackgroundTransparency = 1
-homeContent.Parent = homeRoot
+local homeCard = Instance.new("Frame")
+homeCard.Name = "HomeCard"
+homeCard.Size = UDim2.fromOffset(540, 430)
+homeCard.Position = UDim2.fromScale(0.5, 0.5)
+homeCard.AnchorPoint = Vector2.new(0.5, 0.5)
+homeCard.BackgroundColor3 = Color3.fromRGB(13, 18, 30)
+homeCard.BackgroundTransparency = 0.06
+homeCard.BorderSizePixel = 0
+homeCard.Parent = homeRoot
+addCorner(homeCard, 18)
+addStroke(homeCard, Color3.fromRGB(255, 190, 50), 2.5, 0.12)
 
--- LEFT COLUMN: Hero Title + 4 Large 3D Tactile Action Buttons
-local leftCol = Instance.new("Frame")
-leftCol.Name = "LeftColumn"
-leftCol.Size = UDim2.fromOffset(470, 590)
-leftCol.Position = UDim2.fromOffset(0, 10)
-leftCol.BackgroundColor3 = Color3.fromRGB(14, 18, 30)
-leftCol.BackgroundTransparency = 0.12
-leftCol.BorderSizePixel = 0
-leftCol.Parent = homeContent
-addCorner(leftCol, 16)
-addStroke(leftCol, Color3.fromRGB(255, 185, 50), 2, 0.2)
+-- Header Section inside Home Card
+local headerBox = Instance.new("Frame")
+headerBox.Name = "HeaderBanner"
+headerBox.Size = UDim2.new(1, -36, 0, 82)
+headerBox.Position = UDim2.fromOffset(18, 16)
+headerBox.BackgroundColor3 = Color3.fromRGB(20, 27, 44)
+headerBox.BorderSizePixel = 0
+headerBox.Parent = homeCard
+addCorner(headerBox, 12)
+addStroke(headerBox, Color3.fromRGB(255, 200, 65), 1.5, 0.28)
 
-local titleBanner = Instance.new("Frame")
-titleBanner.Name = "HeroTitleBanner"
-titleBanner.Size = UDim2.new(1, -28, 0, 124)
-titleBanner.Position = UDim2.fromOffset(14, 14)
-titleBanner.BackgroundColor3 = Color3.fromRGB(22, 28, 46)
-titleBanner.BorderSizePixel = 0
-titleBanner.Parent = leftCol
-addCorner(titleBanner, 12)
-addStroke(titleBanner, Color3.fromRGB(255, 200, 60), 1.5, 0.25)
-
-local heroTag = Instance.new("TextLabel")
-heroTag.Size = UDim2.new(1, -20, 0, 20)
-heroTag.Position = UDim2.fromOffset(12, 10)
-heroTag.BackgroundTransparency = 1
-heroTag.Font = Enum.Font.GothamBlack
-heroTag.Text = "★ LEO CITY OPEN-WORLD VEHICULAR MAYHEM ★"
-heroTag.TextColor3 = Color3.fromRGB(255, 210, 70)
-heroTag.TextSize = 12
-heroTag.TextXAlignment = Enum.TextXAlignment.Left
-heroTag.Parent = titleBanner
-
-local heroMain = Instance.new("TextLabel")
-heroMain.Size = UDim2.new(1, -20, 0, 42)
-heroMain.Position = UDim2.fromOffset(12, 30)
-heroMain.BackgroundTransparency = 1
-heroMain.Font = Enum.Font.GothamBlack
-heroMain.Text = "WORLD OF DESTRUCTION"
-heroMain.TextColor3 = Color3.fromRGB(255, 255, 255)
-heroMain.TextSize = 30
-heroMain.TextScaled = true
-heroMain.TextXAlignment = Enum.TextXAlignment.Left
-heroMain.Parent = titleBanner
+local heroTitle = Instance.new("TextLabel")
+heroTitle.Name = "HeroTitle"
+heroTitle.Size = UDim2.new(1, -24, 0, 44)
+heroTitle.Position = UDim2.fromOffset(12, 8)
+heroTitle.BackgroundTransparency = 1
+heroTitle.Font = Enum.Font.GothamBlack
+heroTitle.Text = "WORLD OF DESTRUCTION"
+heroTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+heroTitle.TextSize = 32
+heroTitle.TextScaled = true
+heroTitle.TextXAlignment = Enum.TextXAlignment.Center
+heroTitle.Parent = headerBox
 
 local heroGrad = Instance.new("UIGradient")
 heroGrad.Color = ColorSequence.new({
-	ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 245, 150)),
-	ColorSequenceKeypoint.new(0.5, Color3.fromRGB(255, 180, 50)),
-	ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 110, 45)),
+	ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 245, 155)),
+	ColorSequenceKeypoint.new(0.5, Color3.fromRGB(255, 185, 50)),
+	ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 115, 40)),
 })
-heroGrad.Parent = heroMain
+heroGrad.Parent = heroTitle
 
-local heroSub = Instance.new("TextLabel")
-heroSub.Size = UDim2.new(1, -20, 0, 38)
-heroSub.Position = UDim2.fromOffset(12, 76)
-heroSub.BackgroundTransparency = 1
-heroSub.Font = Enum.Font.GothamBold
-heroSub.Text = "OPERATION: TAKE BACK LEO CITY • 5-ACT CAMPAIGN & FREEPLAY"
-heroSub.TextColor3 = Color3.fromRGB(165, 220, 255)
-heroSub.TextSize = 12
-heroSub.TextWrapped = true
-heroSub.TextXAlignment = Enum.TextXAlignment.Left
-heroSub.Parent = titleBanner
+local heroSubtitle = Instance.new("TextLabel")
+heroSubtitle.Name = "HeroSubtitle"
+heroSubtitle.Size = UDim2.new(1, -24, 0, 22)
+heroSubtitle.Position = UDim2.fromOffset(12, 52)
+heroSubtitle.BackgroundTransparency = 1
+heroSubtitle.Font = Enum.Font.GothamBlack
+heroSubtitle.Text = "NEW YORK DEMOLITION EDITION"
+heroSubtitle.TextColor3 = Color3.fromRGB(115, 215, 255)
+heroSubtitle.TextSize = 13
+heroSubtitle.TextXAlignment = Enum.TextXAlignment.Center
+heroSubtitle.Parent = headerBox
 
+-- Live Next-Goal Progress Bar right on the Home Card
+local nextGoalBox = Instance.new("Frame")
+nextGoalBox.Name = "NextGoalProgressCard"
+nextGoalBox.Size = UDim2.new(1, -36, 0, 48)
+nextGoalBox.Position = UDim2.fromOffset(18, 108)
+nextGoalBox.BackgroundColor3 = Color3.fromRGB(18, 24, 38)
+nextGoalBox.BorderSizePixel = 0
+nextGoalBox.Parent = homeCard
+addCorner(nextGoalBox, 10)
+addStroke(nextGoalBox, Color3.fromRGB(70, 175, 255), 1.2, 0.3)
+
+local nextGoalLabel = Instance.new("TextLabel")
+nextGoalLabel.Name = "NextGoalLabel"
+nextGoalLabel.Size = UDim2.new(1, -24, 0, 18)
+nextGoalLabel.Position = UDim2.fromOffset(12, 5)
+nextGoalLabel.BackgroundTransparency = 1
+nextGoalLabel.Font = Enum.Font.GothamBlack
+nextGoalLabel.Text = "NEXT RIDE UNLOCK: CRUISER V8  -  $500 / $1,500"
+nextGoalLabel.TextColor3 = Color3.fromRGB(255, 220, 75)
+nextGoalLabel.TextSize = 12
+nextGoalLabel.TextXAlignment = Enum.TextXAlignment.Left
+nextGoalLabel.Parent = nextGoalBox
+
+local nextGoalBarBg = Instance.new("Frame")
+nextGoalBarBg.Name = "ProgressBarBg"
+nextGoalBarBg.Size = UDim2.new(1, -24, 0, 14)
+nextGoalBarBg.Position = UDim2.fromOffset(12, 27)
+nextGoalBarBg.BackgroundColor3 = Color3.fromRGB(10, 13, 22)
+nextGoalBarBg.BorderSizePixel = 0
+nextGoalBarBg.Parent = nextGoalBox
+addCorner(nextGoalBarBg, 7)
+
+local nextGoalBarFill = Instance.new("Frame")
+nextGoalBarFill.Name = "ProgressBarFill"
+nextGoalBarFill.Size = UDim2.fromScale(0.33, 1)
+nextGoalBarFill.BackgroundColor3 = Color3.fromRGB(50, 225, 115)
+nextGoalBarFill.BorderSizePixel = 0
+nextGoalBarFill.Parent = nextGoalBarBg
+addCorner(nextGoalBarFill, 7)
+
+local fillGrad = Instance.new("UIGradient")
+fillGrad.Color = ColorSequence.new({
+	ColorSequenceKeypoint.new(0, Color3.fromRGB(45, 215, 110)),
+	ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 215, 55)),
+})
+fillGrad.Parent = nextGoalBarFill
+
+local nextGoalPctText = Instance.new("TextLabel")
+nextGoalPctText.Size = UDim2.fromScale(1, 1)
+nextGoalPctText.BackgroundTransparency = 1
+nextGoalPctText.Font = Enum.Font.GothamBlack
+nextGoalPctText.Text = "33%"
+nextGoalPctText.TextColor3 = Color3.new(1, 1, 1)
+nextGoalPctText.TextSize = 10
+nextGoalPctText.TextStrokeTransparency = 0.3
+nextGoalPctText.Parent = nextGoalBarBg
+
+-- 4 Big, Bold, 3D Tactile Beveled Buttons Stack
 local buttonsStack = Instance.new("Frame")
 buttonsStack.Name = "MainButtonsStack"
-buttonsStack.Size = UDim2.new(1, -28, 0, 360)
-buttonsStack.Position = UDim2.fromOffset(14, 152)
+buttonsStack.Size = UDim2.new(1, -36, 0, 246)
+buttonsStack.Position = UDim2.fromOffset(18, 168)
 buttonsStack.BackgroundTransparency = 1
-buttonsStack.Parent = leftCol
+buttonsStack.Parent = homeCard
 
 local stackLayout = Instance.new("UIListLayout")
 stackLayout.FillDirection = Enum.FillDirection.Vertical
-stackLayout.Padding = UDim.new(0, 12)
+stackLayout.Padding = UDim.new(0, 10)
 stackLayout.SortOrder = Enum.SortOrder.LayoutOrder
 stackLayout.Parent = buttonsStack
 
@@ -374,293 +470,89 @@ local function setHomeMenuOpen(isOpen: boolean)
 	localPlayer:SetAttribute("HomeMenuCameraActive", isOpen)
 end
 
-local _, playCampaignBtnLabel = makeTactile3DButton({
-	name = "PlayCampaignBtn",
-	title = "▶ PLAY CAMPAIGN (ACT 1–5)",
-	subtitle = "Dismantle MegaCorp across 5 Acts & defeat the Boss Goliath!",
-	badgeText = "▶",
-	size = UDim2.new(1, 0, 0, 76),
+-- 1. PLAY NOW (Large emerald green 3D button)
+makeTactile3DButton({
+	name = "PlayNowBtn",
+	title = "PLAY NOW",
+	badgeText = "GO",
+	size = UDim2.new(1, 0, 0, 58),
 	layoutOrder = 1,
-	baseColor = Color3.fromRGB(32, 185, 95),
+	baseColor = Color3.fromRGB(28, 190, 92),
+	textSize = 22,
 	parent = buttonsStack,
 	onClick = function()
 		setHomeMenuOpen(false)
 	end,
 })
 
+-- 2. GARAGE & UPGRADES (Electric blue 3D button)
 makeTactile3DButton({
-	name = "FreeplaySandboxBtn",
-	title = "🔥 FREEPLAY SANDBOX",
-	subtitle = "Jump straight into open-world sunlit destruction, ramps & combos!",
-	badgeText = "🔥",
-	size = UDim2.new(1, 0, 0, 76),
+	name = "GarageAndUpgradesBtn",
+	title = "GARAGE & UPGRADES",
+	badgeText = "B",
+	size = UDim2.new(1, 0, 0, 52),
 	layoutOrder = 2,
-	baseColor = Color3.fromRGB(235, 125, 30),
+	baseColor = Color3.fromRGB(36, 128, 240),
+	textSize = 18,
 	parent = buttonsStack,
 	onClick = function()
 		setHomeMenuOpen(false)
+		localPlayer:SetAttribute("ToggleShopUI", not localPlayer:GetAttribute("ToggleShopUI"))
 	end,
 })
 
+-- 3. AVATAR SHOP (Royal purple 3D button)
 makeTactile3DButton({
-	name = "GarageAndAvatarBtn",
-	title = "🚗 GARAGE & AVATAR SHOP",
-	subtitle = "Unlock 8 vehicle classes, 5 upgrade tracks & custom outfits!",
-	badgeText = "B/C",
-	size = UDim2.new(1, 0, 0, 76),
+	name = "AvatarShopBtn",
+	title = "AVATAR SHOP",
+	badgeText = "C",
+	size = UDim2.new(1, 0, 0, 52),
 	layoutOrder = 3,
-	baseColor = Color3.fromRGB(38, 128, 235),
+	baseColor = Color3.fromRGB(128, 62, 225),
+	textSize = 18,
 	parent = buttonsStack,
 	onClick = function()
 		setHomeMenuOpen(false)
-		localPlayer:SetAttribute("ToggleShopUI", true)
+		localPlayer:SetAttribute("ToggleAvatarUI", not localPlayer:GetAttribute("ToggleAvatarUI"))
 	end,
 })
 
+-- 4. SETTINGS (Slate 3D button)
 makeTactile3DButton({
-	name = "OpenSettingsBtn",
-	title = "⚙ SETTINGS & AUDIO/GRAPHICS",
-	subtitle = "Configure SFX volume, sunny/sunset/night lighting & driving mode!",
+	name = "SettingsBtn",
+	title = "SETTINGS",
 	badgeText = "P",
-	size = UDim2.new(1, 0, 0, 76),
+	size = UDim2.new(1, 0, 0, 52),
 	layoutOrder = 4,
-	baseColor = Color3.fromRGB(115, 72, 215),
+	baseColor = Color3.fromRGB(64, 78, 104),
+	textSize = 18,
 	parent = buttonsStack,
 	onClick = function()
 		settingsModal.Visible = true
 	end,
 })
 
-local footerControls = Instance.new("TextLabel")
-footerControls.Size = UDim2.new(1, -28, 0, 44)
-footerControls.Position = UDim2.new(0, 14, 1, -54)
-footerControls.BackgroundTransparency = 1
-footerControls.Font = Enum.Font.GothamBold
-footerControls.Text = "QUICK KEYS: [WASD] Drive • [Shift] Nitro • [Space] Drift • [V] Summon Car • [B] Garage • [P/Tab] Menu"
-footerControls.TextColor3 = Color3.fromRGB(185, 200, 225)
-footerControls.TextSize = 11
-footerControls.TextWrapped = true
-footerControls.Parent = leftCol
-
---------------------------------------------------------------------------------
--- RIGHT COLUMN: 5-ACT STORY ROADMAP (BEGINNING -> END)
---------------------------------------------------------------------------------
-local rightCol = Instance.new("Frame")
-rightCol.Name = "RightStoryColumn"
-rightCol.Size = UDim2.fromOffset(630, 590)
-rightCol.Position = UDim2.fromOffset(490, 10)
-rightCol.BackgroundColor3 = Color3.fromRGB(14, 18, 30)
-rightCol.BackgroundTransparency = 0.12
-rightCol.BorderSizePixel = 0
-rightCol.Parent = homeContent
-addCorner(rightCol, 16)
-addStroke(rightCol, Color3.fromRGB(85, 195, 255), 2, 0.2)
-
-local roadmapHeader = Instance.new("Frame")
-roadmapHeader.Size = UDim2.new(1, -28, 0, 96)
-roadmapHeader.Position = UDim2.fromOffset(14, 14)
-roadmapHeader.BackgroundColor3 = Color3.fromRGB(20, 28, 46)
-roadmapHeader.BorderSizePixel = 0
-roadmapHeader.Parent = rightCol
-addCorner(roadmapHeader, 12)
-addStroke(roadmapHeader, Color3.fromRGB(95, 205, 255), 1.5, 0.3)
-
-local roadmapTitle = Instance.new("TextLabel")
-roadmapTitle.Size = UDim2.new(1, -20, 0, 26)
-roadmapTitle.Position = UDim2.fromOffset(12, 8)
-roadmapTitle.BackgroundTransparency = 1
-roadmapTitle.Font = Enum.Font.GothamBlack
-roadmapTitle.Text = "THE STORY: BEGINNING TO END (5-ACT CAMPAIGN ROADMAP)"
-roadmapTitle.TextColor3 = Color3.fromRGB(255, 215, 65)
-roadmapTitle.TextSize = 16
-roadmapTitle.TextXAlignment = Enum.TextXAlignment.Left
-roadmapTitle.Parent = roadmapHeader
-
-local roadmapPremise = Instance.new("TextLabel")
-roadmapPremise.Size = UDim2.new(1, -20, 0, 52)
-roadmapPremise.Position = UDim2.fromOffset(12, 36)
-roadmapPremise.BackgroundTransparency = 1
-roadmapPremise.Font = Enum.Font.GothamMedium
-roadmapPremise.Text = "THE MISSION: Corrupt Mayor Vance & MegaCorp have locked down Leo City with surveillance towers and blockades. Smash their property across 5 escalating Acts, upgrade your ride, and defeat Mayor Vance's Armored Goliath Convoy at Leo Tower to liberate the city!"
-roadmapPremise.TextColor3 = Color3.fromRGB(225, 235, 250)
-roadmapPremise.TextSize = 12
-roadmapPremise.TextWrapped = true
-roadmapPremise.TextXAlignment = Enum.TextXAlignment.Left
-roadmapPremise.Parent = roadmapHeader
-
-local actsContainer = Instance.new("Frame")
-actsContainer.Name = "ActsRoadmapList"
-actsContainer.Size = UDim2.new(1, -28, 0, 450)
-actsContainer.Position = UDim2.fromOffset(14, 122)
-actsContainer.BackgroundTransparency = 1
-actsContainer.Parent = rightCol
-
-local actsLayout = Instance.new("UIListLayout")
-actsLayout.FillDirection = Enum.FillDirection.Vertical
-actsLayout.Padding = UDim.new(0, 8)
-actsLayout.SortOrder = Enum.SortOrder.LayoutOrder
-actsLayout.Parent = actsContainer
-
-local ROADMAP_SPECS = {
-	{
-		act = 1,
-		tag = "ACT 1 • THE BEGINNING",
-		title = "Break Out of Leo Plaza",
-		desc = "Smash 12 MegaCorp Props or Barriers around Leo Plaza to spark the uprising!",
-		reward = "$2,500",
-	},
-	{
-		act = 2,
-		tag = "ACT 2 • CHAPTER 2",
-		title = "Flood the Midtown Grid",
-		desc = "Smash 6 Fire Hydrants or Streetlights & reach a 3x Chaos Combo!",
-		reward = "$5,000",
-	},
-	{
-		act = 3,
-		tag = "ACT 3 • CHAPTER 3",
-		title = "Industrial Sabotage",
-		desc = "Cause $15,000 in Destruction Value or detonate Boom Gas Station!",
-		reward = "$10,000",
-	},
-	{
-		act = 4,
-		tag = "ACT 4 • CHAPTER 4",
-		title = "Break the Blockade",
-		desc = "Land 2 Stunt Jumps or Drifts & Wreck 1 Enforcer Cruiser!",
-		reward = "$18,000",
-	},
-	{
-		act = 5,
-		tag = "ACT 5 • THE END / BOSS FINALE",
-		title = "Defeat Mayor Vance's Boss Goliath Convoy",
-		desc = "Ram & Destroy the Armored Boss Goliath on Grand Central Ave to liberate Leo City!",
-		reward = "$50,000 + CROWN",
-	},
-}
-
-type ActCardRefs = {
-	frame: Frame,
-	stroke: UIStroke,
-	statusBadge: TextLabel,
-	progFill: Frame,
-}
-local actCards: { [number]: ActCardRefs } = {}
-
-for _, spec in ipairs(ROADMAP_SPECS) do
-	local card = Instance.new("Frame")
-	card.Name = "ActCard_" .. tostring(spec.act)
-	card.LayoutOrder = spec.act
-	card.Size = UDim2.new(1, 0, 0, 82)
-	card.BackgroundColor3 = Color3.fromRGB(22, 28, 44)
-	card.BorderSizePixel = 0
-	card.Parent = actsContainer
-	addCorner(card, 10)
-	local st = addStroke(card, Color3.fromRGB(70, 90, 130), 1.5, 0.3)
-
-	local tagLbl = Instance.new("TextLabel")
-	tagLbl.Size = UDim2.new(0.65, -12, 0, 18)
-	tagLbl.Position = UDim2.fromOffset(12, 6)
-	tagLbl.BackgroundTransparency = 1
-	tagLbl.Font = Enum.Font.GothamBlack
-	tagLbl.Text = spec.tag .. " — " .. string.upper(spec.title)
-	tagLbl.TextColor3 = if spec.act == 5 then Color3.fromRGB(255, 200, 55) else Color3.fromRGB(115, 215, 255)
-	tagLbl.TextSize = 13
-	tagLbl.TextXAlignment = Enum.TextXAlignment.Left
-	tagLbl.Parent = card
-
-	local statusBadge = Instance.new("TextLabel")
-	statusBadge.Size = UDim2.fromOffset(170, 20)
-	statusBadge.Position = UDim2.new(1, -180, 0, 6)
-	statusBadge.BackgroundColor3 = Color3.fromRGB(32, 42, 64)
-	statusBadge.Font = Enum.Font.GothamBlack
-	statusBadge.Text = "REWARD: " .. spec.reward
-	statusBadge.TextColor3 = Color3.fromRGB(110, 255, 145)
-	statusBadge.TextSize = 11
-	statusBadge.Parent = card
-	addCorner(statusBadge, 6)
-
-	local descLbl = Instance.new("TextLabel")
-	descLbl.Size = UDim2.new(1, -24, 0, 28)
-	descLbl.Position = UDim2.fromOffset(12, 26)
-	descLbl.BackgroundTransparency = 1
-	descLbl.Font = Enum.Font.GothamMedium
-	descLbl.Text = spec.desc
-	descLbl.TextColor3 = Color3.fromRGB(220, 228, 242)
-	descLbl.TextSize = 12
-	descLbl.TextWrapped = true
-	descLbl.TextXAlignment = Enum.TextXAlignment.Left
-	descLbl.Parent = card
-
-	local progBg = Instance.new("Frame")
-	progBg.Size = UDim2.new(1, -24, 0, 10)
-	progBg.Position = UDim2.fromOffset(12, 62)
-	progBg.BackgroundColor3 = Color3.fromRGB(12, 15, 24)
-	progBg.BorderSizePixel = 0
-	progBg.Parent = card
-	addCorner(progBg, 5)
-
-	local progFill = Instance.new("Frame")
-	progFill.Size = UDim2.fromScale(0, 1)
-	progFill.BackgroundColor3 = Color3.fromRGB(50, 225, 115)
-	progFill.BorderSizePixel = 0
-	progFill.Parent = progBg
-	addCorner(progFill, 5)
-
-	actCards[spec.act] = {
-		frame = card,
-		stroke = st,
-		statusBadge = statusBadge,
-		progFill = progFill,
-	}
-end
-
-local function refreshCampaignRoadmapUI()
-	local currentAct = math.clamp(tonumber(localPlayer:GetAttribute("CampaignAct")) or 1, 1, 5)
-	local completed = localPlayer:GetAttribute("CampaignCompleted") == true
-	local prog = tonumber(localPlayer:GetAttribute("CampaignProgress")) or 0
-	local goal = math.max(1, tonumber(localPlayer:GetAttribute("CampaignGoal")) or 12)
-	local ratio = math.clamp(prog / goal, 0, 1)
-
-	if completed then
-		playCampaignBtnLabel.Text = "▶ CONTINUE ENDLESS OVERDRIVE"
-	else
-		playCampaignBtnLabel.Text = string.format("▶ PLAY CAMPAIGN (ACT %d OF 5)", currentAct)
-	end
-
-	for actNum, refs in pairs(actCards) do
-		local spec = ROADMAP_SPECS[actNum]
-		if completed or actNum < currentAct then
-			refs.frame.BackgroundColor3 = Color3.fromRGB(18, 42, 34)
-			refs.stroke.Color = Color3.fromRGB(65, 235, 125)
-			refs.stroke.Transparency = 0.1
-			refs.statusBadge.Text = "✓ COMPLETED (" .. spec.reward .. ")"
-			refs.statusBadge.TextColor3 = Color3.fromRGB(120, 255, 155)
-			refs.progFill.Size = UDim2.fromScale(1, 1)
-		elseif actNum == currentAct then
-			refs.frame.BackgroundColor3 = Color3.fromRGB(32, 38, 62)
-			refs.stroke.Color = Color3.fromRGB(255, 205, 55)
-			refs.stroke.Transparency = 0
-			refs.statusBadge.Text = string.format("ACTIVE: %d/%d • %s", math.floor(prog), math.floor(goal), spec.reward)
-			refs.statusBadge.TextColor3 = Color3.fromRGB(255, 225, 85)
-			refs.progFill.Size = UDim2.fromScale(ratio, 1)
-		else
-			refs.frame.BackgroundColor3 = Color3.fromRGB(20, 24, 36)
-			refs.stroke.Color = Color3.fromRGB(60, 75, 105)
-			refs.stroke.Transparency = 0.45
-			refs.statusBadge.Text = "REWARD: " .. spec.reward
-			refs.statusBadge.TextColor3 = Color3.fromRGB(170, 185, 210)
-			refs.progFill.Size = UDim2.fromScale(0, 1)
-		end
-	end
+local function refreshHomeCardProgress()
+	local cash = getPlayerCash()
+	local rideName, ridePrice = getNextLockedRide()
+	local ratio = math.clamp(cash / math.max(1, ridePrice), 0, 1)
+	local pct = math.floor(ratio * 100)
+	nextGoalLabel.Text = string.format(
+		"NEXT RIDE UNLOCK: %s  |  $%s / $%s",
+		rideName,
+		formatNumber(cash),
+		formatNumber(ridePrice)
+	)
+	nextGoalBarFill.Size = UDim2.fromScale(ratio, 1)
+	nextGoalPctText.Text = string.format("%d%%", pct)
 end
 
 --------------------------------------------------------------------------------
--- 2. FULL SETTINGS MODAL (AUDIO, LIGHTING, DRIVING MODE, CAMERA SHAKE, WAYPOINT)
+-- 2. CLEAN SETTINGS MODAL (WEATHER, VOLUME, DRIVING MODE, CONTROL SCHEME)
 --------------------------------------------------------------------------------
 settingsModal = Instance.new("Frame")
 settingsModal.Name = "SettingsModal"
-settingsModal.Size = UDim2.fromOffset(660, 510)
+settingsModal.Size = UDim2.fromOffset(580, 420)
 settingsModal.Position = UDim2.fromScale(0.5, 0.5)
 settingsModal.AnchorPoint = Vector2.new(0.5, 0.5)
 settingsModal.BackgroundColor3 = Color3.fromRGB(14, 18, 30)
@@ -670,26 +562,28 @@ settingsModal.Visible = false
 settingsModal.ZIndex = 30
 settingsModal.Parent = screenGui
 addCorner(settingsModal, 16)
-addStroke(settingsModal, Color3.fromRGB(130, 95, 255), 2.2, 0.1)
+addStroke(settingsModal, Color3.fromRGB(95, 135, 220), 2.2, 0.1)
 
 local settingsTitle = Instance.new("TextLabel")
-settingsTitle.Size = UDim2.new(1, -140, 0, 36)
+settingsTitle.Size = UDim2.new(1, -140, 0, 38)
 settingsTitle.Position = UDim2.fromOffset(20, 14)
 settingsTitle.BackgroundTransparency = 1
 settingsTitle.Font = Enum.Font.GothamBlack
-settingsTitle.Text = "⚙ GAME SETTINGS • AUDIO, LIGHTING & PHYSICS"
+settingsTitle.Text = "SETTINGS"
 settingsTitle.TextColor3 = Color3.fromRGB(255, 220, 75)
-settingsTitle.TextSize = 18
+settingsTitle.TextSize = 22
 settingsTitle.TextXAlignment = Enum.TextXAlignment.Left
 settingsTitle.ZIndex = 31
 settingsTitle.Parent = settingsModal
 
 makeTactile3DButton({
 	name = "CloseSettingsBtn",
-	title = "✕ CLOSE",
-	size = UDim2.fromOffset(104, 38),
-	position = UDim2.new(1, -120, 0, 14),
+	title = "CLOSE [X]",
+	size = UDim2.fromOffset(108, 38),
+	position = UDim2.new(1, -124, 0, 14),
 	baseColor = Color3.fromRGB(215, 55, 65),
+	textSize = 14,
+	zIndex = 32,
 	parent = settingsModal,
 	onClick = function()
 		settingsModal.Visible = false
@@ -697,8 +591,8 @@ makeTactile3DButton({
 })
 
 local rowsFrame = Instance.new("Frame")
-rowsFrame.Size = UDim2.new(1, -40, 0, 380)
-rowsFrame.Position = UDim2.fromOffset(20, 64)
+rowsFrame.Size = UDim2.new(1, -40, 0, 270)
+rowsFrame.Position = UDim2.fromOffset(20, 66)
 rowsFrame.BackgroundTransparency = 1
 rowsFrame.ZIndex = 31
 rowsFrame.Parent = settingsModal
@@ -712,7 +606,7 @@ rowsLayout.Parent = rowsFrame
 local function makeSettingRow(order: number, labelText: string, initialValueText: string, btnColor: Color3, onCycle: (TextLabel) -> ())
 	local row = Instance.new("Frame")
 	row.LayoutOrder = order
-	row.Size = UDim2.new(1, 0, 0, 54)
+	row.Size = UDim2.new(1, 0, 0, 58)
 	row.BackgroundColor3 = Color3.fromRGB(22, 28, 44)
 	row.BorderSizePixel = 0
 	row.ZIndex = 31
@@ -721,10 +615,10 @@ local function makeSettingRow(order: number, labelText: string, initialValueText
 	addStroke(row, Color3.fromRGB(65, 85, 125), 1.2, 0.3)
 
 	local lbl = Instance.new("TextLabel")
-	lbl.Size = UDim2.new(0.52, -16, 1, 0)
+	lbl.Size = UDim2.new(0.46, -16, 1, 0)
 	lbl.Position = UDim2.fromOffset(14, 0)
 	lbl.BackgroundTransparency = 1
-	lbl.Font = Enum.Font.GothamBold
+	lbl.Font = Enum.Font.GothamBlack
 	lbl.Text = labelText
 	lbl.TextColor3 = Color3.fromRGB(235, 242, 255)
 	lbl.TextSize = 14
@@ -738,6 +632,8 @@ local function makeSettingRow(order: number, labelText: string, initialValueText
 		size = UDim2.fromOffset(270, 42),
 		position = UDim2.new(1, -282, 0.5, -21),
 		baseColor = btnColor,
+		textSize = 14,
+		zIndex = 32,
 		parent = row,
 		onClick = function() end,
 	})
@@ -749,80 +645,72 @@ local function makeSettingRow(order: number, labelText: string, initialValueText
 	end
 end
 
--- 1. SFX Volume
+-- 1. Weather Selector: Snowy NYC, Rainy NYC, Cloudy Dusk, Sunny Day
+local weatherPresets = {
+	{ name = "SNOWY NYC", attr = "Snowy NYC", mode = "Snowy", clock = 16.4, bright = 1.85, fogEnd = 900 },
+	{ name = "RAINY NYC", attr = "Rainy NYC", mode = "Rainy", clock = 16.4, bright = 1.85, fogEnd = 750 },
+	{ name = "CLOUDY DUSK", attr = "Cloudy Dusk", mode = "Sunset", clock = 16.4, bright = 1.85, fogEnd = 1100 },
+	{ name = "SUNNY DAY", attr = "Sunny Day", mode = "Sunny", clock = 13.5, bright = 3.2, fogEnd = 2200 },
+}
+local weatherIdx = 1
+makeSettingRow(1, "NYC WEATHER & SKY", weatherPresets[1].name, Color3.fromRGB(220, 138, 35), function(lbl)
+	weatherIdx = (weatherIdx % #weatherPresets) + 1
+	local wp = weatherPresets[weatherIdx]
+	localPlayer:SetAttribute("WeatherPreference", wp.attr)
+	localPlayer:SetAttribute("WeatherMode", wp.mode)
+	localPlayer:SetAttribute("TimeOfDayPreference", wp.mode)
+	Lighting.ClockTime = wp.clock
+	Lighting.Brightness = wp.bright
+	Lighting.FogEnd = wp.fogEnd
+	lbl.Text = wp.name
+end)
+
+-- 2. Audio Volume
 local sfxPresets = {
-	{ label = "🔊 100% (FULL)", val = 1.0 },
-	{ label = "🔉 60% (MEDIUM)", val = 0.6 },
-	{ label = "🔈 25% (LOW)", val = 0.25 },
-	{ label = "🔇 MUTE (0%)", val = 0.0 },
+	{ label = "100% (FULL)", val = 1.0 },
+	{ label = "60% (MEDIUM)", val = 0.6 },
+	{ label = "25% (LOW)", val = 0.25 },
+	{ label = "MUTE (0%)", val = 0.0 },
 }
 local sfxIndex = 1
-makeSettingRow(1, "SFX & Impact Volume", sfxPresets[1].label, Color3.fromRGB(42, 138, 225), function(lbl)
+makeSettingRow(2, "AUDIO VOLUME", sfxPresets[1].label, Color3.fromRGB(42, 138, 225), function(lbl)
 	sfxIndex = (sfxIndex % #sfxPresets) + 1
 	local p = sfxPresets[sfxIndex]
 	localPlayer:SetAttribute("SFXVolume", p.val)
 	lbl.Text = p.label
 end)
 
--- 2. Vehicle Engine Sound
-makeSettingRow(2, "Vehicle Engine Hum Audio", "ON (ACTIVE)", Color3.fromRGB(38, 175, 95), function(lbl)
-	local nextState = not (localPlayer:GetAttribute("EngineSoundEnabled") == true)
-	localPlayer:SetAttribute("EngineSoundEnabled", nextState)
-	lbl.Text = if nextState then "ON (ACTIVE)" else "OFF (MUTED)"
-end)
-
--- 3. Lighting & Time of Day
-local timePresets = {
-	{ mode = "Sunny", label = "☀ BRIGHT SUNNY DAY (13:30)", clock = 13.5, bright = 3.6 },
-	{ mode = "Sunset", label = "🌅 GOLDEN SUNSET (15:30)", clock = 15.5, bright = 3.35 },
-	{ mode = "Night", label = "🌃 NEON NIGHT (00:30)", clock = 0.5, bright = 1.6 },
-}
-local timeIdx = 1
-makeSettingRow(3, "Lighting & Time of Day", timePresets[1].label, Color3.fromRGB(230, 145, 35), function(lbl)
-	timeIdx = (timeIdx % #timePresets) + 1
-	local tp = timePresets[timeIdx]
-	localPlayer:SetAttribute("TimeOfDayPreference", tp.mode)
-	Lighting.ClockTime = tp.clock
-	Lighting.Brightness = tp.bright
-	lbl.Text = tp.label
-end)
-
--- 4. Driving Physics Mode
-makeSettingRow(4, "Driving Physics Mode", "⚙ PROGRESSIVE REALISTIC", Color3.fromRGB(125, 78, 220), function(lbl)
+-- 3. Driving Mode
+makeSettingRow(3, "DRIVING MODE", "PROGRESSIVE REALISTIC", Color3.fromRGB(38, 175, 95), function(lbl)
 	local cur = tostring(localPlayer:GetAttribute("DrivingMode") or "Progressive")
 	local nextMode = if cur == "Progressive" then "Arcade" else "Progressive"
 	localPlayer:SetAttribute("DrivingMode", nextMode)
-	lbl.Text = if nextMode == "Progressive" then "⚙ PROGRESSIVE REALISTIC" else "⚡ ARCADE BOOST (+18%)"
+	lbl.Text = if nextMode == "Progressive" then "PROGRESSIVE REALISTIC" else "ARCADE BOOST (+18%)"
 end)
 
--- 5. Camera Shake
-local shakePresets = {
-	{ label = "NORMAL (100%)", val = 1.0 },
-	{ label = "REDUCED (45%)", val = 0.45 },
-	{ label = "OFF (0%)", val = 0.0 },
+-- 4. Control Scheme
+local controlSchemes = {
+	{ label = "STANDARD (WASD)", val = "Standard" },
+	{ label = "ARROW KEYS / ALT", val = "Arrows" },
+	{ label = "GAMEPAD PRO", val = "Gamepad" },
 }
-local shakeIdx = 1
-makeSettingRow(5, "Impact Camera Shake", shakePresets[1].label, Color3.fromRGB(55, 145, 185), function(lbl)
-	shakeIdx = (shakeIdx % #shakePresets) + 1
-	local sp = shakePresets[shakeIdx]
-	localPlayer:SetAttribute("CameraShakeScale", sp.val)
-	lbl.Text = sp.label
+local schemeIdx = 1
+makeSettingRow(4, "CONTROL SCHEME", controlSchemes[1].label, Color3.fromRGB(125, 78, 220), function(lbl)
+	schemeIdx = (schemeIdx % #controlSchemes) + 1
+	local cs = controlSchemes[schemeIdx]
+	localPlayer:SetAttribute("ControlScheme", cs.val)
+	lbl.Text = cs.label
 end)
 
--- 6. 3D Waypoint Guide Beam
-makeSettingRow(6, "3D Objective Waypoint Beam", "ON (VISIBLE)", Color3.fromRGB(45, 175, 125), function(lbl)
-	local nextBeam = not (localPlayer:GetAttribute("ShowWaypointBeam") == true)
-	localPlayer:SetAttribute("ShowWaypointBeam", nextBeam)
-	lbl.Text = if nextBeam then "ON (VISIBLE)" else "OFF (HIDDEN)"
-end)
-
--- Bottom button in Settings Modal to toggle Home Menu screen
+-- Bottom button in Settings Modal to toggle Home Card
 makeTactile3DButton({
 	name = "ReturnToHomeMenuBtn",
-	title = "🏠 OPEN / CLOSE MAIN HOME SCREEN",
-	size = UDim2.new(1, -40, 0, 44),
-	position = UDim2.new(0, 20, 1, -56),
+	title = "TOGGLE HOME MENU [TAB]",
+	size = UDim2.new(1, -40, 0, 46),
+	position = UDim2.new(0, 20, 1, -60),
 	baseColor = Color3.fromRGB(48, 118, 215),
+	textSize = 15,
+	zIndex = 32,
 	parent = settingsModal,
 	onClick = function()
 		settingsModal.Visible = false
@@ -831,14 +719,14 @@ makeTactile3DButton({
 })
 
 --------------------------------------------------------------------------------
--- 3. GRAND FINALE VICTORY CELEBRATION MODAL
+-- 3. GRAND FINALE VICTORY CELEBRATION MODAL (Emoji-Free)
 --------------------------------------------------------------------------------
 local victoryModal = Instance.new("Frame")
 victoryModal.Name = "GrandFinaleVictoryModal"
-victoryModal.Size = UDim2.fromOffset(640, 360)
+victoryModal.Size = UDim2.fromOffset(580, 320)
 victoryModal.Position = UDim2.fromScale(0.5, 0.5)
 victoryModal.AnchorPoint = Vector2.new(0.5, 0.5)
-victoryModal.BackgroundColor3 = Color3.fromRGB(18, 22, 36)
+victoryModal.BackgroundColor3 = Color3.fromRGB(16, 20, 34)
 victoryModal.BorderSizePixel = 0
 victoryModal.Visible = false
 victoryModal.ZIndex = 40
@@ -847,11 +735,11 @@ addCorner(victoryModal, 18)
 addStroke(victoryModal, Color3.fromRGB(255, 215, 55), 3, 0)
 
 local vicHeader = Instance.new("TextLabel")
-vicHeader.Size = UDim2.new(1, -32, 0, 48)
+vicHeader.Size = UDim2.new(1, -32, 0, 44)
 vicHeader.Position = UDim2.fromOffset(16, 20)
 vicHeader.BackgroundTransparency = 1
 vicHeader.Font = Enum.Font.GothamBlack
-vicHeader.Text = "🏆 LEO CITY LIBERATED! CAMPAIGN COMPLETE! 🏆"
+vicHeader.Text = "NEW YORK LIBERATED - CAMPAIGN COMPLETE"
 vicHeader.TextColor3 = Color3.fromRGB(255, 220, 65)
 vicHeader.TextSize = 22
 vicHeader.TextScaled = true
@@ -859,11 +747,11 @@ vicHeader.ZIndex = 41
 vicHeader.Parent = victoryModal
 
 local vicBody = Instance.new("TextLabel")
-vicBody.Size = UDim2.new(1, -48, 0, 140)
-vicBody.Position = UDim2.fromOffset(24, 80)
+vicBody.Size = UDim2.new(1, -48, 0, 120)
+vicBody.Position = UDim2.fromOffset(24, 76)
 vicBody.BackgroundTransparency = 1
 vicBody.Font = Enum.Font.GothamBold
-vicBody.Text = "You shattered MegaCorp's lockdown across all 5 Acts and wrecked Mayor Vance's Armored Boss Goliath Convoy on Grand Central Avenue!\n\nCHAMPIONSHIP REWARDS UNLOCKED:\n• +$50,000 GRAND FINALE JACKPOT\n• +5,000 XP & CHAMPION OF LEO CITY STATUS\n• ENDLESS OVERDRIVE FREEPLAY MODE UNLOCKED!"
+vicBody.Text = "You shattered MegaCorp's lockdown and wrecked the Armored Boss Goliath Convoy!\n\nREWARDS UNLOCKED:\n- +$50,000 GRAND FINALE JACKPOT\n- +5,000 XP & CHAMPION STATUS\n- ENDLESS OVERDRIVE MODE UNLOCKED"
 vicBody.TextColor3 = Color3.fromRGB(235, 245, 255)
 vicBody.TextSize = 15
 vicBody.TextWrapped = true
@@ -872,10 +760,12 @@ vicBody.Parent = victoryModal
 
 makeTactile3DButton({
 	name = "ContinueOverdriveBtn",
-	title = "🔥 CONTINUE IN ENDLESS OVERDRIVE",
-	size = UDim2.fromOffset(420, 64),
-	position = UDim2.new(0.5, -210, 1, -84),
+	title = "CONTINUE OVERDRIVE",
+	size = UDim2.fromOffset(360, 58),
+	position = UDim2.new(0.5, -180, 1, -78),
 	baseColor = Color3.fromRGB(35, 195, 95),
+	textSize = 18,
+	zIndex = 42,
 	parent = victoryModal,
 	onClick = function()
 		victoryModal.Visible = false
@@ -888,8 +778,9 @@ makeTactile3DButton({
 local wasCompleted = localPlayer:GetAttribute("CampaignCompleted") == true
 
 localPlayer.AttributeChanged:Connect(function(attr: string)
-	if attr == "CampaignAct" or attr == "CampaignProgress" or attr == "CampaignGoal" or attr == "CampaignCompleted" then
-		refreshCampaignRoadmapUI()
+	if attr == "Cash" or attr == "UnlockedVehicles" or attr == "SelectedVehicle" or attr == "EquippedVehicle" then
+		refreshHomeCardProgress()
+	elseif attr == "CampaignCompleted" then
 		local nowCompleted = localPlayer:GetAttribute("CampaignCompleted") == true
 		if nowCompleted and not wasCompleted then
 			wasCompleted = true
@@ -910,7 +801,11 @@ UserInputService.InputBegan:Connect(function(input: InputObject, processed: bool
 		settingsModal.Visible = not settingsModal.Visible
 	elseif input.KeyCode == Enum.KeyCode.Tab then
 		setHomeMenuOpen(not homeRoot.Visible)
+	elseif input.KeyCode == Enum.KeyCode.ButtonB or input.KeyCode == Enum.KeyCode.Backspace then
+		if settingsModal.Visible then
+			settingsModal.Visible = false
+		end
 	end
 end)
 
-refreshCampaignRoadmapUI()
+refreshHomeCardProgress()

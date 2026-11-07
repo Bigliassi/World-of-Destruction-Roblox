@@ -281,129 +281,74 @@ def build_stunt_ramp_preview(
     label_text: str,
     indent: int = 4,
 ) -> str:
+    """
+    Seamless 1-piece low-angle steel stunt ramp (no stepped blocks or giant yellow walls).
+    """
     ramp_width = max(width, 26.0)
-    total_len = max(length, 32.0)
-    len1 = total_len * 0.36
-    len2 = total_len * 0.34
-    len3 = total_len * 0.30
-    h1 = len1 * math.tan(math.radians(10.0))
-    h2 = len2 * math.tan(math.radians(17.0))
-    h3 = len3 * math.tan(math.radians(23.0))
-    y0 = -0.2
-    y1 = y0 + h1
-    y2 = y1 + h2
-    y3 = y2 + h3
-    z_start = total_len * 0.5
-    z1_center = z_start - len1 * 0.5
-    z1_end = z_start - len1
-    z2_center = z1_end - len2 * 0.5
-    z2_end = z1_end - len2
-    z3_center = z2_end - len3 * 0.5
+    total_len = max(length, 38.0)
+    ramp_h = min(max(height, 5.5), 7.2)
+    y0 = -0.15
 
-    parts: List[str] = []
-    parts.append(
+    parts: List[str] = [
+        # Seamless 1-piece low-angle dark steel WedgePart
         make_part_xml(
             ref,
-            "RampWedge",
-            (ramp_width, h1, len1),
-            rotate_offset(pos, yaw_deg, (0.0, y0 + h1 * 0.5, z1_center)),
-            (132, 138, 152),
-            MAT_CONCRETE,
+            "RampDeckWedge",
+            (ramp_width, ramp_h, total_len),
+            rotate_offset(pos, yaw_deg, (0.0, y0 + ramp_h * 0.5, 0.0)),
+            (42, 48, 58),
+            MAT_METAL,
             yaw_deg,
             class_name="WedgePart",
             indent=indent + 1,
-        )
-    )
-    parts.append(
+        ),
+        # Flush ground transition plate so tires never snag
         make_part_xml(
             ref,
-            "MidSupportBase",
-            (ramp_width, max(0.2, y1), len2 - 0.1),
-            rotate_offset(pos, yaw_deg, (0.0, y1 * 0.5, z2_center - 0.05)),
-            (118, 125, 140),
-            MAT_CONCRETE,
+            "ApproachTransitionPlate",
+            (ramp_width, 0.25, 4.0),
+            rotate_offset(pos, yaw_deg, (0.0, 0.05, total_len * 0.5 + 1.8)),
+            (54, 60, 72),
+            MAT_METAL,
             yaw_deg,
             indent=indent + 1,
-        )
-    )
-    parts.append(
+        ),
+        # Low-profile side guide curbs
         make_part_xml(
             ref,
-            "MidRampWedge",
-            (ramp_width, h2, len2),
-            rotate_offset(pos, yaw_deg, (0.0, y1 + h2 * 0.5, z2_center)),
-            (118, 125, 140),
-            MAT_CONCRETE,
-            yaw_deg,
-            class_name="WedgePart",
-            indent=indent + 1,
-        )
-    )
-    parts.append(
-        make_part_xml(
-            ref,
-            "LipSupportBase",
-            (ramp_width, max(0.2, y2), len3 - 0.1),
-            rotate_offset(pos, yaw_deg, (0.0, y2 * 0.5, z3_center - 0.05)),
-            (106, 114, 130),
-            MAT_CONCRETE,
-            yaw_deg,
-            indent=indent + 1,
-        )
-    )
-    parts.append(
-        make_part_xml(
-            ref,
-            "LaunchLipWedge",
-            (ramp_width, h3, len3),
-            rotate_offset(pos, yaw_deg, (0.0, y2 + h3 * 0.5, z3_center)),
-            (106, 114, 130),
-            MAT_CONCRETE,
-            yaw_deg,
-            class_name="WedgePart",
-            indent=indent + 1,
-        )
-    )
-    parts.append(
-        make_part_xml(
-            ref,
-            "LeftRail",
-            (0.8, y3 + 0.8, total_len),
-            rotate_offset(pos, yaw_deg, (-ramp_width * 0.5 + 0.4, y3 * 0.5, 0.0)),
-            (255, 155, 25),
+            "LeftEdgeTrim",
+            (0.55, 0.45, total_len),
+            rotate_offset(pos, yaw_deg, (-ramp_width * 0.5 + 0.28, ramp_h * 0.48, 0.0)),
+            (255, 190, 45),
             MAT_NEON,
             yaw_deg,
             can_collide=False,
             indent=indent + 1,
-        )
-    )
-    parts.append(
+        ),
         make_part_xml(
             ref,
-            "RightRail",
-            (0.8, y3 + 0.8, total_len),
-            rotate_offset(pos, yaw_deg, (ramp_width * 0.5 - 0.4, y3 * 0.5, 0.0)),
-            (255, 155, 25),
+            "RightEdgeTrim",
+            (0.55, 0.45, total_len),
+            rotate_offset(pos, yaw_deg, (ramp_width * 0.5 - 0.28, ramp_h * 0.48, 0.0)),
+            (255, 190, 45),
             MAT_NEON,
             yaw_deg,
             can_collide=False,
             indent=indent + 1,
-        )
-    )
-    parts.append(
+        ),
+        # Subtle launch lip strip
         make_part_xml(
             ref,
-            "JumpLipGlow",
-            (ramp_width, 1.2, 3.0),
-            rotate_offset(pos, yaw_deg, (0.0, y3 + 0.6, -total_len * 0.5 + 1.5)),
-            (255, 220, 40),
+            "LaunchLipStrip",
+            (ramp_width - 1.2, 0.35, 1.4),
+            rotate_offset(pos, yaw_deg, (0.0, ramp_h - 0.1, -total_len * 0.5 + 0.7)),
+            (85, 225, 255),
             MAT_NEON,
             yaw_deg,
-            transparency=0.35,
             can_collide=False,
             indent=indent + 1,
-        )
-    )
+        ),
+    ]
     return make_model_xml(ref, label_text, parts, indent=indent)
 
 
@@ -594,38 +539,80 @@ def build_skyscraper_preview(
     is_leo_tower: bool = False,
     indent: int = 4,
 ) -> str:
+    """
+    High-detail Gotham / NYC Art Deco stepped setback tower with cornice ledges,
+    vertical stone piers, and warm golden / cool ice-blue night windows.
+    """
     cx, cy, cz = center
+    lower_h = height * 0.68
+    mid_h = height * 0.22
+    upper_h = height * 0.10
+    pier_col = (max(18, tint[0] - 16), max(20, tint[1] - 16), max(24, tint[2] - 14))
+    trim_col = (188, 156, 88) if is_leo_tower else (96, 104, 118)
+
     parts: List[str] = [
+        # Base Podium & Art Deco Main Shaft
         make_part_xml(
             ref,
             "Shaft",
-            (width, height, depth),
-            (cx, cy + height * 0.5, cz),
+            (width, lower_h, depth),
+            (cx, cy + lower_h * 0.5, cz),
             tint,
             MAT_CONCRETE,
             indent=indent + 1,
         ),
+        # First Art Deco Setback Tier
+        make_part_xml(
+            ref,
+            "MidTierSetback",
+            (width * 0.80, mid_h, depth * 0.80),
+            (cx, cy + lower_h + mid_h * 0.5, cz),
+            tint,
+            MAT_CONCRETE,
+            indent=indent + 1,
+        ),
+        # Upper Art Deco Penthouse Tier
+        make_part_xml(
+            ref,
+            "UpperTierSetback",
+            (width * 0.62, upper_h, depth * 0.62),
+            (cx, cy + lower_h + mid_h + upper_h * 0.5, cz),
+            pier_col,
+            MAT_CONCRETE,
+            indent=indent + 1,
+        ),
+        # Cornice Ledge
+        make_part_xml(
+            ref,
+            "ArtDecoCornice",
+            (width + 1.4, 1.4, depth + 1.4),
+            (cx, cy + lower_h, cz),
+            trim_col,
+            MAT_METAL,
+            indent=indent + 1,
+        ),
+        # Recessed Dark Brass & Glass Lobby
         make_part_xml(
             ref,
             "GlassLobby",
             (width * 0.82, 14.0, depth + 0.6),
             (cx, cy + 7.0, cz),
-            (110, 200, 255),
+            (255, 205, 125),
             MAT_GLASS,
-            transparency=0.45,
+            transparency=0.35,
             indent=indent + 1,
         ),
     ]
 
-    floors = max(3, min(10, int(height // 16)))
+    floors = max(3, min(10, int(lower_h // 14)))
     for f in range(1, floors + 1):
-        y = cy + 16.0 + (f - 0.5) * ((height - 20.0) / floors)
-        win_col = (255, 215, 135) if (f % 2 == 0) else (120, 195, 255)
+        y = cy + 15.0 + (f - 0.5) * ((lower_h - 18.0) / floors)
+        win_col = (255, 204, 118) if (f % 2 == 0) else (135, 190, 245)
         parts.append(
             make_part_xml(
                 ref,
                 "WindowBandZ",
-                (width * 0.86, 3.2, depth + 0.4),
+                (width * 0.86, 3.0, depth + 0.35),
                 (cx, y, cz),
                 win_col,
                 MAT_NEON,
@@ -636,7 +623,7 @@ def build_skyscraper_preview(
             make_part_xml(
                 ref,
                 "WindowBandX",
-                (width + 0.4, 3.2, depth * 0.86),
+                (width + 0.35, 3.0, depth * 0.86),
                 (cx, y, cz),
                 win_col,
                 MAT_NEON,
@@ -644,7 +631,7 @@ def build_skyscraper_preview(
             )
         )
 
-    crown_h = height * 0.18
+    crown_h = height * 0.14
     crown_children: List[str] = []
     if is_leo_tower:
         crown_children = [
@@ -655,9 +642,9 @@ def build_skyscraper_preview(
         make_part_xml(
             ref,
             "Crown",
-            (width * 0.7, crown_h, depth * 0.7),
+            (width * 0.48, crown_h, depth * 0.48),
             (cx, cy + height + crown_h * 0.5, cz),
-            tint,
+            trim_col,
             MAT_METAL,
             children_xml=crown_children,
             indent=indent + 1,
@@ -669,9 +656,9 @@ def build_skyscraper_preview(
             make_part_xml(
                 ref,
                 "LeoSpire",
-                (6.0, 28.0, 6.0),
-                (cx, cy + height + crown_h + 14.0, cz),
-                (255, 215, 55),
+                (3.8, 32.0, 3.8),
+                (cx, cy + height + crown_h + 16.0, cz),
+                (255, 215, 75),
                 MAT_NEON,
                 can_collide=False,
                 indent=indent + 1,
@@ -684,8 +671,8 @@ def build_skyscraper_preview(
 def build_leo_city_edit_preview_xml(ref: RefGen) -> str:
     """
     Builds Workspace.LeoCity_EditPreview so that opening WorldOfDestruction.rbxlx in Roblox Studio
-    Edit Mode immediately displays the full 3D sunlit Leo City (9x9 blocks, 2,200x2,200 studs) in front
-    of the viewport camera. Replaced cleanly at runtime by WorldBuilderService.script.luau when Play is pressed.
+    Edit Mode immediately displays the moody dark cloudy/snowy NYC Leo City (9x9 blocks, 2,200x2,200 studs)
+    in front of the viewport camera. Replaced cleanly at runtime by WorldBuilderService.script.luau.
     """
     block_size = 200.0
     road_width = 42.0
@@ -700,7 +687,7 @@ def build_leo_city_edit_preview_xml(ref: RefGen) -> str:
             "CityBaseplate",
             (total_span, 4.0, total_span),
             (0.0, -2.0, 0.0),
-            (138, 144, 155),
+            (36, 40, 48),
             MAT_CONCRETE,
             indent=4,
         ),
@@ -709,7 +696,7 @@ def build_leo_city_edit_preview_xml(ref: RefGen) -> str:
             "OceanWater",
             (380.0, 3.6, total_span),
             ((grid_radius + 1.2) * block_size, -1.6, 0.0),
-            (38, 158, 238),
+            (22, 46, 70),
             MAT_GLASS,
             indent=4,
         ),
@@ -727,7 +714,7 @@ def build_leo_city_edit_preview_xml(ref: RefGen) -> str:
             "GrandCentralAveNS",
             (road_width, 0.34, grid_extent * 2.0),
             (0.0, 0.17, 0.0),
-            (62, 66, 76),
+            (24, 28, 36),
             MAT_ASPHALT,
             indent=4,
         )
@@ -739,7 +726,7 @@ def build_leo_city_edit_preview_xml(ref: RefGen) -> str:
                 "RoadNS",
                 (road_width, 0.3, grid_extent * 2.0),
                 (rx, 0.15, 0.0),
-                (64, 68, 78),
+                (26, 30, 38),
                 MAT_ASPHALT,
                 indent=4,
             )
@@ -751,7 +738,7 @@ def build_leo_city_edit_preview_xml(ref: RefGen) -> str:
                     "LaneDashNS",
                     (0.8, 0.34, 14.0),
                     (rx, 0.17, float(z)),
-                    (250, 210, 60),
+                    (230, 185, 55),
                     MAT_SMOOTH_PLASTIC,
                     indent=4,
                 )
@@ -764,7 +751,7 @@ def build_leo_city_edit_preview_xml(ref: RefGen) -> str:
                 "RoadEW",
                 (grid_extent * 2.0, 0.32, road_width),
                 (0.0, 0.16, rz),
-                (64, 68, 78),
+                (26, 30, 38),
                 MAT_ASPHALT,
                 indent=4,
             )
@@ -776,7 +763,7 @@ def build_leo_city_edit_preview_xml(ref: RefGen) -> str:
                     "LaneDashEW",
                     (14.0, 0.35, 0.8),
                     (float(x), 0.175, rz),
-                    (250, 210, 60),
+                    (230, 185, 55),
                     MAT_SMOOTH_PLASTIC,
                     indent=4,
                 )
@@ -792,7 +779,7 @@ def build_leo_city_edit_preview_xml(ref: RefGen) -> str:
                         "CrosswalkN",
                         (3.2, 0.36, 1.2),
                         (rx + s * 5.5, 0.18, rz - road_width * 0.5 - 2.0),
-                        (242, 245, 250),
+                        (212, 218, 228),
                         MAT_SMOOTH_PLASTIC,
                         indent=4,
                     )
@@ -803,13 +790,13 @@ def build_leo_city_edit_preview_xml(ref: RefGen) -> str:
                         "CrosswalkE",
                         (1.2, 0.36, 3.2),
                         (rx + road_width * 0.5 + 2.0, 0.18, rz + s * 5.5),
-                        (242, 245, 250),
+                        (212, 218, 228),
                         MAT_SMOOTH_PLASTIC,
                         indent=4,
                     )
                 )
 
-    # City blocks, sidewalks, Leo Plaza fountain, Speed Shops, Mechanic Bays, Stunt Ramps, and Skyscrapers
+    # City blocks, wet slate sidewalks, snowbanks, Leo Plaza fountain, Speed Shops, Mechanic Bays, Stunt Ramps, and Art Deco Skyscrapers
     for bx in range(-grid_radius, grid_radius + 1):
         for bz in range(-grid_radius, grid_radius + 1):
             ox, oz = bx * block_size, bz * block_size
@@ -820,7 +807,7 @@ def build_leo_city_edit_preview_xml(ref: RefGen) -> str:
                         "SidewalkBlock",
                         (usable, 0.26, usable),
                         (ox, 0.13, oz),
-                        (192, 188, 178),
+                        (68, 74, 84),
                         MAT_CONCRETE,
                         indent=4,
                     )
@@ -833,7 +820,7 @@ def build_leo_city_edit_preview_xml(ref: RefGen) -> str:
                         "SidewalkBlockW",
                         (side_w, 0.26, usable),
                         (ox - (road_width * 0.5 + side_w * 0.5), 0.13, oz),
-                        (192, 188, 178),
+                        (68, 74, 84),
                         MAT_CONCRETE,
                         indent=4,
                     )
@@ -844,7 +831,7 @@ def build_leo_city_edit_preview_xml(ref: RefGen) -> str:
                         "SidewalkBlockE",
                         (side_w, 0.26, usable),
                         (ox + (road_width * 0.5 + side_w * 0.5), 0.13, oz),
-                        (192, 188, 178),
+                        (68, 74, 84),
                         MAT_CONCRETE,
                         indent=4,
                     )
@@ -858,7 +845,7 @@ def build_leo_city_edit_preview_xml(ref: RefGen) -> str:
                         "LeoPlazaFountain",
                         (18.0, 3.2, 18.0),
                         (ox - 42.0, 1.8, oz + 12.0),
-                        (215, 222, 232),
+                        (112, 120, 134),
                         MAT_MARBLE,
                         indent=4,
                     )
@@ -869,7 +856,7 @@ def build_leo_city_edit_preview_xml(ref: RefGen) -> str:
                         "FountainWaterTier",
                         (14.0, 1.4, 14.0),
                         (ox - 42.0, 3.6, oz + 12.0),
-                        (65, 195, 245),
+                        (145, 205, 245),
                         MAT_GLASS,
                         transparency=0.25,
                         indent=4,
@@ -881,7 +868,7 @@ def build_leo_city_edit_preview_xml(ref: RefGen) -> str:
                         "FountainWaterSpire",
                         (2.8, 7.5, 2.8),
                         (ox - 42.0, 7.2, oz + 12.0),
-                        (185, 235, 255),
+                        (210, 235, 255),
                         MAT_MARBLE,
                         can_collide=False,
                         indent=4,
@@ -895,7 +882,7 @@ def build_leo_city_edit_preview_xml(ref: RefGen) -> str:
                             "PlazaCrateStack",
                             (6.4, 6.4, 3.2),
                             (ox + cx_off, 3.5, oz + cz_off),
-                            (145, 98, 56),
+                            (128, 86, 48),
                             MAT_WOOD_PLANKS,
                             indent=4,
                         )
@@ -907,14 +894,14 @@ def build_leo_city_edit_preview_xml(ref: RefGen) -> str:
                             "FireHydrant",
                             (1.6, 3.2, 1.6),
                             (ox + hx, 1.9, oz),
-                            (220, 35, 35),
+                            (205, 32, 32),
                             MAT_METAL,
                             indent=4,
                         )
                     )
-                # Leo Plaza Stunt Mega-Ramp, Plaza Speed Shop & Plaza Mechanic Repair Bay
+                # Leo Plaza Seamless Steel Stunt Ramp, Plaza Speed Shop & Plaza Mechanic Repair Bay
                 zones_items.append(
-                    build_stunt_ramp_preview(ref, (ox, 0.3, oz - 68.0), 0.0, 16.0, 7.5, 24.0, "LeoPlazaRamp", indent=4)
+                    build_stunt_ramp_preview(ref, (ox, 0.3, oz - 68.0), 0.0, 26.0, 6.2, 38.0, "LeoPlazaRamp", indent=4)
                 )
                 zones_items.append(
                     build_speed_shop_preview(ref, (ox + 54.0, 0.3, oz - 24.0), -90.0, "PlazaSpeedShop", indent=4)
@@ -934,7 +921,7 @@ def build_leo_city_edit_preview_xml(ref: RefGen) -> str:
                         "BoomGasStationCanopy",
                         (52.0, 2.2, 32.0),
                         (ox, 18.6, oz + 36.0),
-                        (230, 45, 45),
+                        (185, 38, 38),
                         MAT_METAL,
                         indent=4,
                     )
@@ -945,11 +932,11 @@ def build_leo_city_edit_preview_xml(ref: RefGen) -> str:
                 ground_items.append(
                     make_part_xml(
                         ref,
-                        "BeachSand",
+                        "FrostyPierDeck",
                         (usable, 0.7, usable),
                         (ox, 0.35, oz),
-                        (235, 205, 145),
-                        MAT_SAND,
+                        (82, 88, 98),
+                        MAT_CONCRETE,
                         indent=4,
                     )
                 )
@@ -959,13 +946,13 @@ def build_leo_city_edit_preview_xml(ref: RefGen) -> str:
                         "BoardwalkDeck",
                         (28.0, 1.0, usable),
                         (ox - 38.0, 0.5, oz),
-                        (155, 108, 68),
+                        (96, 68, 48),
                         MAT_WOOD_PLANKS,
                         indent=4,
                     )
                 )
                 zones_items.append(
-                    build_stunt_ramp_preview(ref, (ox + 10.0, 0.7, oz), 0.0, 18.0, 8.0, 24.0, "BoardwalkStuntJump", indent=4)
+                    build_stunt_ramp_preview(ref, (ox + 10.0, 0.7, oz), 0.0, 26.0, 6.5, 38.0, "BoardwalkStuntJump", indent=4)
                 )
             elif bx <= -2 and bz <= -1:
                 buildings_items.append(
@@ -974,7 +961,7 @@ def build_leo_city_edit_preview_xml(ref: RefGen) -> str:
                         "IndustrialWarehouse",
                         (56.0, 26.0, 40.0),
                         (ox + 28.0, 13.6, oz + 25.0),
-                        (95, 65, 55),
+                        (74, 52, 46),
                         MAT_CORRODED_METAL,
                         indent=4,
                     )
@@ -985,7 +972,7 @@ def build_leo_city_edit_preview_xml(ref: RefGen) -> str:
                         "ConstructionCraneMast",
                         (5.0, 85.0, 5.0),
                         (ox - 35.0, 45.1, oz - 35.0),
-                        (245, 185, 30),
+                        (215, 155, 28),
                         MAT_METAL,
                         indent=4,
                     )
@@ -996,7 +983,7 @@ def build_leo_city_edit_preview_xml(ref: RefGen) -> str:
                         "ConstructionCraneJib",
                         (75.0, 4.0, 4.0),
                         (ox - 10.0, 86.6, oz - 35.0),
-                        (245, 185, 30),
+                        (215, 155, 28),
                         MAT_METAL,
                         indent=4,
                     )
@@ -1005,28 +992,28 @@ def build_leo_city_edit_preview_xml(ref: RefGen) -> str:
                 ground_items.append(
                     make_part_xml(
                         ref,
-                        "ParkLawn",
+                        "SnowyParkLawn",
                         (usable - 16.0, 0.8, usable - 16.0),
                         (ox, 0.4, oz),
-                        (52, 135, 65),
-                        MAT_GRASS,
+                        (214, 224, 238),
+                        MAT_SAND,
                         indent=4,
                     )
                 )
                 ground_items.append(
                     make_part_xml(
                         ref,
-                        "ParkPond",
+                        "FrozenParkPond",
                         (46.0, 0.9, 34.0),
                         (ox - 22.0, 0.5, oz + 18.0),
-                        (45, 155, 235),
+                        (142, 188, 225),
                         MAT_GLASS,
                         indent=4,
                     )
                 )
                 zones_items.append(
                     build_stunt_ramp_preview(
-                        ref, (ox - 22.0, 0.8, oz - 18.0), 180.0, 20.0, 9.0, 26.0, "ParkLakeMegaJump", indent=4
+                        ref, (ox - 22.0, 0.8, oz - 18.0), 180.0, 26.0, 6.8, 38.0, "ParkLakeMegaJump", indent=4
                     )
                 )
             elif abs(bx) <= 1 and abs(bz) <= 1:
@@ -1037,7 +1024,7 @@ def build_leo_city_edit_preview_xml(ref: RefGen) -> str:
                     h = 175.0
                 else:
                     h = 110.0 + ((abs(bx * 3 + bz * 5) % 4) * 18.0)
-                col = (182, 206, 232) if is_leo else (210, 220, 235)
+                col = (52, 58, 72) if is_leo else (64, 70, 84)
                 t_name = "LeoTower" if (bx == 0 and bz == -1) else "DowntownTower"
                 x_off = 44.0 if bx == 0 else 28.0
                 buildings_items.append(
@@ -1060,8 +1047,8 @@ def build_leo_city_edit_preview_xml(ref: RefGen) -> str:
                             (ox - x_off, 0.6 + h, oz - 26.0 - 40.0 * 0.3),
                             0.0,
                             26.0,
-                            8.0,
-                            32.0,
+                            6.5,
+                            38.0,
                             "RooftopMegaJump",
                             indent=4,
                         )
@@ -1073,7 +1060,7 @@ def build_leo_city_edit_preview_xml(ref: RefGen) -> str:
                         38.0,
                         38.0,
                         92.0,
-                        (226, 218, 204),
+                        (76, 72, 68),
                         "GlassOfficeTower",
                         is_leo_tower=False,
                         indent=4,
@@ -1086,9 +1073,9 @@ def build_leo_city_edit_preview_xml(ref: RefGen) -> str:
                         (ox - 26.0, 0.6, oz - 24.0),
                         36.0,
                         36.0,
-                        48.0,
-                        (228, 178, 152),
-                        "CityBlockBuilding",
+                        54.0,
+                        (96, 68, 58),
+                        "NYCBrickBrownstone",
                         is_leo_tower=False,
                         indent=4,
                     )
@@ -1099,9 +1086,9 @@ def build_leo_city_edit_preview_xml(ref: RefGen) -> str:
                         (ox + 26.0, 0.6, oz + 24.0),
                         34.0,
                         34.0,
-                        38.0,
-                        (195, 215, 232),
-                        "CommercialStore",
+                        44.0,
+                        (58, 66, 78),
+                        "GothamMidtownBlock",
                         is_leo_tower=False,
                         indent=4,
                     )
@@ -1176,27 +1163,32 @@ def build_lighting_xml(ref: RefGen) -> str:
     return f"""\t<Item class="Lighting" referent="{ref.next()}">
 \t\t<Properties>
 \t\t\t<string name="Name">Lighting</string>
-\t\t\t<float name="Brightness">3.6</float>
-\t\t\t<float name="ClockTime">13.5</float>
-\t\t\t<float name="GeographicLatitude">34</float>
+\t\t\t<float name="Brightness">2.15</float>
+\t\t\t<float name="ClockTime">16.4</float>
+\t\t\t<float name="GeographicLatitude">40.7</float>
 \t\t\t<bool name="GlobalShadows">true</bool>
-\t\t\t<Color3 name="Ambient"><R>0.6078</R><G>0.6353</G><B>0.6863</B></Color3>
-\t\t\t<Color3 name="OutdoorAmbient"><R>0.7255</R><G>0.7529</G><B>0.8039</B></Color3>
+\t\t\t<Color3 name="Ambient"><R>0.3059</R><G>0.3451</G><B>0.4235</B></Color3>
+\t\t\t<Color3 name="OutdoorAmbient"><R>0.4000</R><G>0.4471</G><B>0.5333</B></Color3>
+\t\t\t<Color3 name="ColorShift_Top"><R>0.7255</R><G>0.7843</G><B>0.8824</B></Color3>
 \t\t</Properties>
 \t\t<Item class="Atmosphere" referent="{ref.next()}">
 \t\t\t<Properties>
 \t\t\t\t<string name="Name">Atmosphere</string>
-\t\t\t\t<float name="Density">0.16</float>
-\t\t\t\t<float name="Offset">0.10</float>
+\t\t\t\t<float name="Density">0.34</float>
+\t\t\t\t<float name="Offset">0.18</float>
+\t\t\t\t<float name="Haze">1.85</float>
+\t\t\t\t<float name="Glare">0.20</float>
+\t\t\t\t<Color3 name="Color"><R>0.5176</R><G>0.5647</G><B>0.6510</B></Color3>
+\t\t\t\t<Color3 name="Decay"><R>0.2902</R><G>0.3294</G><B>0.4078</B></Color3>
 \t\t\t</Properties>
 \t\t</Item>
 \t\t<Item class="BloomEffect" referent="{ref.next()}">
 \t\t\t<Properties>
 \t\t\t\t<string name="Name">Bloom</string>
 \t\t\t\t<bool name="Enabled">true</bool>
-\t\t\t\t<float name="Intensity">0.30</float>
-\t\t\t\t<float name="Size">18</float>
-\t\t\t\t<float name="Threshold">1.70</float>
+\t\t\t\t<float name="Intensity">0.52</float>
+\t\t\t\t<float name="Size">24</float>
+\t\t\t\t<float name="Threshold">1.15</float>
 \t\t\t</Properties>
 \t\t</Item>
 \t</Item>"""

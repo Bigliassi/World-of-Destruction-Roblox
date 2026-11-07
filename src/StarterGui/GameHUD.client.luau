@@ -156,28 +156,99 @@ local missionBarFill = makeFrame("MissionBarFill", UDim2.fromScale(0, 1), UDim2.
 addCorner(missionBarFill, 2)
 
 -- ==========================================
--- 2A. TOP-CENTER CAMPAIGN ACT & BOSS TRACKER CARD (380x58 at (0.5, 0, 0, 14))
+-- 2A. TOP-CENTER CASINO JACKPOT FEVER BAR + 3-REEL SPIN + NEXT RIDE UNLOCK BAR (430x72 at (0.5, 0, 0, 12))
 -- ==========================================
-local campaignTracker = makeFrame("CampaignTrackerCard", UDim2.fromOffset(390, 58), UDim2.new(0.5, 0, 0, 14), Vector2.new(0.5, 0), Color3.fromRGB(14, 18, 30), 0.14, gui)
-addCorner(campaignTracker, 11)
-local campaignStroke = addStroke(campaignTracker, Color3.fromRGB(255, 195, 55), 1.8, 0.15)
+local campaignTracker = makeFrame("CasinoJackpotHudCard", UDim2.fromOffset(430, 72), UDim2.new(0.5, 0, 0, 12), Vector2.new(0.5, 0), Color3.fromRGB(14, 18, 30), 0.12, gui)
+addCorner(campaignTracker, 12)
+local campaignStroke = addStroke(campaignTracker, Color3.fromRGB(255, 200, 45), 2.0, 0.12)
 
-local campaignActBadge = makeLabel("CampaignActBadge", "ACT 1 OF 5 • BEGINNING", UDim2.new(0.68, -12, 0, 16), UDim2.fromOffset(10, 4), Enum.Font.GothamBlack, 11, Color3.fromRGB(255, 215, 65), Enum.TextXAlignment.Left, campaignTracker)
-local campaignRewardLabel = makeLabel("CampaignRewardLabel", "+$2,500", UDim2.new(0.32, -10, 0, 16), UDim2.new(0.68, 0, 0, 4), Enum.Font.GothamBlack, 11, Color3.fromRGB(95, 255, 140), Enum.TextXAlignment.Right, campaignTracker)
-local campaignObjLabel = makeLabel("CampaignObjective", "Smash 12 MegaCorp Props or Barriers to spark the uprising!", UDim2.new(1, -20, 0, 16), UDim2.fromOffset(10, 21), Enum.Font.GothamBold, 11, Color3.fromRGB(230, 240, 255), Enum.TextXAlignment.Left, campaignTracker)
+-- 3-Reel Casino Slot Box on the Left of Top-Center Card (106x40)
+local slotBox = makeFrame("ThreeReelSlotBox", UDim2.fromOffset(104, 38), UDim2.fromOffset(8, 6), Vector2.new(0, 0), Color3.fromRGB(8, 10, 18), 0, campaignTracker)
+addCorner(slotBox, 8)
+local slotBoxStroke = addStroke(slotBox, Color3.fromRGB(255, 215, 55), 1.6, 0.15)
+
+local reelLabels: { TextLabel } = {}
+local REEL_SYMBOLS = { "7", "$", "3X", "LV", "GT" }
+for r = 1, 3 do
+	local reelCell = makeFrame("ReelCell_" .. tostring(r), UDim2.fromOffset(29, 30), UDim2.fromOffset(4 + (r - 1) * 32, 4), Vector2.new(0, 0), Color3.fromRGB(20, 25, 42), 0, slotBox)
+	addCorner(reelCell, 5)
+	addStroke(reelCell, Color3.fromRGB(95, 125, 185), 1, 0.4)
+	local rLbl = makeLabel("ReelSymbol_" .. tostring(r), "7", UDim2.fromScale(1, 1), UDim2.fromScale(0, 0), Enum.Font.GothamBlack, 15, Color3.fromRGB(255, 220, 55), Enum.TextXAlignment.Center, reelCell)
+	table.insert(reelLabels, rLbl)
+end
+
+-- Casino Jackpot Fever Bar (Top-Right of Card)
+local campaignActBadge = makeLabel("JackpotFeverTitle", "CASINO JACKPOT FEVER", UDim2.fromOffset(205, 16), UDim2.fromOffset(120, 5), Enum.Font.GothamBlack, 11, Color3.fromRGB(255, 215, 65), Enum.TextXAlignment.Left, campaignTracker)
+local campaignRewardLabel = makeLabel("JackpotSpinBadge", "0% CHARGE", UDim2.fromOffset(96, 16), UDim2.new(1, -104, 0, 5), Enum.Font.GothamBlack, 11, Color3.fromRGB(95, 255, 140), Enum.TextXAlignment.Right, campaignTracker)
+
+local campaignBarBg = makeFrame("JackpotFeverBarBg", UDim2.new(1, -128, 0, 16), UDim2.fromOffset(120, 23), Vector2.new(0, 0), Color3.fromRGB(10, 12, 20), 0, campaignTracker)
+addCorner(campaignBarBg, 6)
+local campaignBarFill = makeFrame("JackpotFeverBarFill", UDim2.fromScale(0.15, 1), UDim2.fromScale(0, 0), Vector2.new(0, 0), Color3.fromRGB(255, 195, 40), 0, campaignBarBg)
+addCorner(campaignBarFill, 6)
+local campaignBarText = makeLabel("JackpotFeverBarText", "SMASH PROPS & 777 CRATES TO SPIN!", UDim2.fromScale(1, 1), UDim2.fromScale(0, 0), Enum.Font.GothamBlack, 9, Color3.fromRGB(255, 255, 255), Enum.TextXAlignment.Center, campaignBarBg)
+
+-- Next Ride Unlock Progress Bar (Bottom Row of Top-Center Card)
+local campaignObjLabel = makeLabel("NextRideUnlockLabel", "NEXT RIDE: CRUISER V8", UDim2.fromOffset(185, 16), UDim2.fromOffset(10, 48), Enum.Font.GothamBlack, 10, Color3.fromRGB(135, 220, 255), Enum.TextXAlignment.Left, campaignTracker)
 campaignObjLabel.TextTruncate = Enum.TextTruncate.AtEnd
 
-local campaignBarBg = makeFrame("CampaignBarBg", UDim2.new(1, -20, 0, 10), UDim2.fromOffset(10, 41), Vector2.new(0, 0), Color3.fromRGB(10, 12, 20), 0, campaignTracker)
-addCorner(campaignBarBg, 5)
-local campaignBarFill = makeFrame("CampaignBarFill", UDim2.fromScale(0, 1), UDim2.fromScale(0, 0), Vector2.new(0, 0), Color3.fromRGB(50, 225, 115), 0, campaignBarBg)
-addCorner(campaignBarFill, 5)
-local campaignBarText = makeLabel("CampaignBarText", "0 / 12", UDim2.fromScale(1, 1), UDim2.fromScale(0, 0), Enum.Font.GothamBlack, 9, Color3.fromRGB(255, 255, 255), Enum.TextXAlignment.Center, campaignBarBg)
+local nextRideBarBg = makeFrame("NextRideUnlockBarBg", UDim2.new(1, -206, 0, 14), UDim2.fromOffset(198, 49), Vector2.new(0, 0), Color3.fromRGB(10, 12, 20), 0, campaignTracker)
+addCorner(nextRideBarBg, 5)
+local nextRideBarFill = makeFrame("NextRideUnlockBarFill", UDim2.fromScale(0.35, 1), UDim2.fromScale(0, 0), Vector2.new(0, 0), Color3.fromRGB(50, 225, 115), 0, nextRideBarBg)
+addCorner(nextRideBarFill, 5)
+local nextRideBarText = makeLabel("NextRideUnlockBarText", "$500 / $1,500", UDim2.fromScale(1, 1), UDim2.fromScale(0, 0), Enum.Font.GothamBlack, 9, Color3.fromRGB(255, 255, 255), Enum.TextXAlignment.Center, nextRideBarBg)
+
+local isSpinningReels = false
+local function triggerThreeReelSpinAnimation(prizeTitle: string, prizeId: string?)
+	if isSpinningReels then
+		return
+	end
+	isSpinningReels = true
+	campaignStroke.Color = Color3.fromRGB(255, 235, 85)
+	slotBoxStroke.Color = Color3.fromRGB(255, 255, 140)
+	campaignActBadge.Text = "JACKPOT SPINNING..."
+	campaignBarText.Text = string.upper(prizeTitle)
+
+	local finalSym = if prizeId == "GoldenFrenzy"
+		then "3X"
+		elseif prizeId == "InstantLevelUp" then "LV"
+		elseif prizeId == "SuperNitroRepair" then "GT"
+		elseif prizeId == "MegaCash" then "$"
+		else "7"
+
+	task.spawn(function()
+		local startAt = os.clock()
+		while os.clock() - startAt < 1.15 do
+			local elapsed = os.clock() - startAt
+			for r = 1, 3 do
+				local lockTime = 0.45 + (r - 1) * 0.30
+				if elapsed >= lockTime then
+					reelLabels[r].Text = finalSym
+					reelLabels[r].TextColor3 = Color3.fromRGB(95, 255, 145)
+				else
+					local sym = REEL_SYMBOLS[math.random(1, #REEL_SYMBOLS)]
+					reelLabels[r].Text = sym
+					reelLabels[r].TextColor3 = Color3.fromRGB(255, 220, 65)
+				end
+			end
+			task.wait(0.06)
+		end
+		for r = 1, 3 do
+			reelLabels[r].Text = finalSym
+			reelLabels[r].TextColor3 = Color3.fromRGB(255, 235, 75)
+		end
+		campaignActBadge.Text = "WINNER: " .. string.upper(prizeTitle)
+		task.wait(2.8)
+		isSpinningReels = false
+		campaignStroke.Color = Color3.fromRGB(255, 200, 45)
+		slotBoxStroke.Color = Color3.fromRGB(255, 215, 55)
+	end)
+end
 
 -- ==========================================
--- 2B. TOP-CENTER COMBO BANNER (280x64 at (0.5, 0, 0, 78))
+-- 2B. TOP-CENTER COMBO BANNER (280x64 at (0.5, 0, 0, 90))
 -- Completely hidden when ComboCount == 0 and no callout is active!
 -- ==========================================
-local topCenter = makeFrame("ComboContainer", UDim2.fromOffset(280, 64), UDim2.new(0.5, 0, 0, 78), Vector2.new(0.5, 0), Color3.fromRGB(15, 15, 22), 0.22, gui)
+local topCenter = makeFrame("ComboContainer", UDim2.fromOffset(280, 64), UDim2.new(0.5, 0, 0, 90), Vector2.new(0.5, 0), Color3.fromRGB(15, 15, 22), 0.22, gui)
 topCenter.Visible = false
 addCorner(topCenter, 10)
 local comboStroke = addStroke(topCenter, Color3.fromRGB(255, 95, 35), 1.8, 0.2)
@@ -518,45 +589,49 @@ local function refreshHUDStats()
 	missionRowLabel.Text = string.format("%s: %d/%d • $%s", mTitle, math.floor(mProg), math.floor(mGoal), formatNumber(mRew))
 	missionBarFill.Size = UDim2.fromScale(math.clamp(mProg / mGoal, 0, 1), 1)
 
-	-- Update Top-Center 5-Act Campaign & Boss Goliath Tracker Bar
-	local cAct = math.clamp(tonumber(player:GetAttribute("CampaignAct")) or 1, 1, 5)
-	local cTotal = tonumber(player:GetAttribute("CampaignTotalActs")) or 5
-	local cDone = player:GetAttribute("CampaignCompleted") == true
+	-- Update Top-Center Casino Jackpot Fever Bar + 3-Reel Spin + Next Ride Unlock Bar
+	local jackpotCharge = math.clamp(tonumber(player:GetAttribute("JackpotCharge")) or 0, 0, 100)
+	local frenzyActive = player:GetAttribute("Golden3xFrenzyActive") == true
+	local frenzyRem = math.ceil(tonumber(player:GetAttribute("Golden3xFrenzyRemaining")) or 0)
 	local bossActive = player:GetAttribute("BossActive") == true
+
 	if bossActive then
 		local bHp = tonumber(player:GetAttribute("BossHealth")) or 1000
 		local bMax = math.max(1, tonumber(player:GetAttribute("BossMaxHealth")) or 1000)
-		campaignActBadge.Text = "ACT 5 FINALE • MEGACORP BOSS GOLIATH"
+		campaignActBadge.Text = "ACT 5 BOSS GOLIATH"
 		campaignActBadge.TextColor3 = Color3.fromRGB(255, 85, 85)
-		campaignRewardLabel.Text = "+$50,000 JACKPOT"
-		campaignObjLabel.Text = "Ram Mayor Vance's Armored Boss Goliath on Grand Central Ave!"
+		campaignRewardLabel.Text = "+$50,000"
 		campaignBarFill.BackgroundColor3 = Color3.fromRGB(255, 60, 70)
 		campaignBarFill.Size = UDim2.fromScale(math.clamp(bHp / bMax, 0, 1), 1)
-		campaignBarText.Text = string.format("BOSS GOLIATH HP: %d / %d", math.floor(bHp), math.floor(bMax))
-		campaignStroke.Color = Color3.fromRGB(255, 65, 75)
-	elseif cDone then
-		campaignActBadge.Text = "🏆 LEO CITY LIBERATED • ENDLESS OVERDRIVE"
-		campaignActBadge.TextColor3 = Color3.fromRGB(255, 220, 65)
-		campaignRewardLabel.Text = "+$" .. formatNumber(mRew)
-		campaignObjLabel.Text = mTitle
-		campaignBarFill.BackgroundColor3 = Color3.fromRGB(50, 225, 115)
-		campaignBarFill.Size = UDim2.fromScale(math.clamp(mProg / mGoal, 0, 1), 1)
-		campaignBarText.Text = string.format("%d / %d", math.floor(mProg), math.floor(mGoal))
-		campaignStroke.Color = Color3.fromRGB(65, 235, 130)
-	else
-		local actStage = if cAct == 1 then "THE BEGINNING" elseif cAct == 5 then "BOSS FINALE" else ("CHAPTER " .. tostring(cAct))
-		local cObj = tostring(player:GetAttribute("CampaignObjectiveText") or "Smash 12 MegaCorp Props or Barriers to spark the uprising!")
-		local cProg = tonumber(player:GetAttribute("CampaignProgress")) or mProg
-		local cGoal = math.max(1, tonumber(player:GetAttribute("CampaignGoal")) or mGoal)
-		local cRew = tonumber(player:GetAttribute("CampaignRewardCash")) or mRew
-		campaignActBadge.Text = string.format("ACT %d OF %d • %s", cAct, cTotal, actStage)
+		campaignBarText.Text = string.format("RAM BOSS GOLIATH: %d / %d HP", math.floor(bHp), math.floor(bMax))
+	elseif frenzyActive and frenzyRem > 0 then
+		campaignActBadge.Text = "GOLDEN 3X CASH FRENZY!"
+		campaignActBadge.TextColor3 = Color3.fromRGB(255, 235, 75)
+		campaignRewardLabel.Text = tostring(frenzyRem) .. "s LEFT"
+		campaignBarFill.BackgroundColor3 = Color3.fromRGB(255, 215, 35)
+		campaignBarFill.Size = UDim2.fromScale(math.clamp(frenzyRem / 30, 0, 1), 1)
+		campaignBarText.Text = "ALL SMASH COINS & CHAOS 3X!"
+	elseif not isSpinningReels then
+		campaignActBadge.Text = "CASINO JACKPOT FEVER"
 		campaignActBadge.TextColor3 = Color3.fromRGB(255, 215, 65)
-		campaignRewardLabel.Text = "+$" .. formatNumber(cRew)
-		campaignObjLabel.Text = cObj
-		campaignBarFill.BackgroundColor3 = Color3.fromRGB(50, 225, 115)
-		campaignBarFill.Size = UDim2.fromScale(math.clamp(cProg / cGoal, 0, 1), 1)
-		campaignBarText.Text = string.format("%d / %d", math.floor(cProg), math.floor(cGoal))
-		campaignStroke.Color = Color3.fromRGB(255, 195, 55)
+		campaignRewardLabel.Text = string.format("%d%%", math.floor(jackpotCharge))
+		campaignBarFill.BackgroundColor3 = Color3.fromRGB(255, 195, 40)
+		campaignBarFill.Size = UDim2.fromScale(math.clamp(jackpotCharge / 100, 0.04, 1), 1)
+		campaignBarText.Text = string.format("JACKPOT SPIN METER: %d / 100%%", math.floor(jackpotCharge))
+	end
+
+	-- Next Ride Unlock Bar
+	local nextVehName = tostring(player:GetAttribute("NextUnlockVehicleName") or "CRUISER V8 Sedan")
+	local nextVehCost = math.max(1, tonumber(player:GetAttribute("NextUnlockVehicleCost")) or 250)
+	local nextVehRatio = math.clamp(tonumber(player:GetAttribute("NextUnlockProgressRatio")) or (currentCash / nextVehCost), 0, 1)
+	campaignObjLabel.Text = "NEXT RIDE: " .. string.upper(nextVehName)
+	nextRideBarFill.Size = UDim2.fromScale(nextVehRatio, 1)
+	if currentCash >= nextVehCost then
+		nextRideBarFill.BackgroundColor3 = Color3.fromRGB(255, 215, 45)
+		nextRideBarText.Text = "READY TO UNLOCK IN GARAGE [B]!"
+	else
+		nextRideBarFill.BackgroundColor3 = Color3.fromRGB(50, 225, 115)
+		nextRideBarText.Text = string.format("$%s / $%s (%d%%)", formatNumber(currentCash), formatNumber(nextVehCost), math.floor(nextVehRatio * 100))
 	end
 
 	-- Hide HUD cleanly while Home Menu is active
@@ -597,8 +672,13 @@ task.spawn(function()
 	connectRemote("StyleCallout", function(msg: any)
 		if typeof(msg) == "string" then
 			showStyleCallout(msg)
-		elseif typeof(msg) == "table" and typeof(msg.Callout) == "string" then
-			showStyleCallout(msg.Callout)
+		elseif typeof(msg) == "table" then
+			if msg.IsJackpotSpin == true then
+				triggerThreeReelSpinAnimation(tostring(msg.PrizeTitle or msg.Callout or "JACKPOT!"), tostring(msg.PrizeId or ""))
+			end
+			if typeof(msg.Callout) == "string" then
+				showStyleCallout(msg.Callout)
+			end
 		end
 	end)
 	connectRemote("ComboUpdated", function(mult: any, count: any, ratio: any, callout: any)

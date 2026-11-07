@@ -5,7 +5,7 @@ Comprehensive Automated QA & Cross-Agent Integration Verifier for
 World of Destruction (Roblox Version 1.0).
 
 Checks:
-1. Presence of all 27 required Version 1.0 Luau scripts across ReplicatedStorage,
+1. Presence of all 29 required Version 1.0 Luau scripts across ReplicatedStorage,
    ServerScriptService, StarterPlayerScripts, and StarterGui, plus v1.0 documentation.
 2. Lexical & Structural Syntax Verification across all .luau files:
    - Balanced block keywords (`function`, `if`, `do`, `repeat` vs `end`/`until`)
@@ -49,6 +49,7 @@ EXPECTED_LUAU_FILES = [
     "src/ServerScriptService/AvatarCustomizationService.script.luau",
     "src/ServerScriptService/GraphicsAndAtmosphereService.script.luau",
     "src/ServerScriptService/AutomatedSelfTest.script.luau",
+    "src/StarterPlayer/StarterPlayerScripts/CrossPlatformController.client.luau",
     "src/StarterPlayer/StarterPlayerScripts/VehicleClientController.client.luau",
     "src/StarterPlayer/StarterPlayerScripts/DestructionSmashClient.client.luau",
     "src/StarterPlayer/StarterPlayerScripts/OnFootController.client.luau",

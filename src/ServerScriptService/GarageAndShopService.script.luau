@@ -892,37 +892,8 @@ local function bindSpeedShopPad(pad: BasePart, shopName: string)
 	end)
 end
 
-local function createBillboardLabel(parent: BasePart, titleText: string, subtitleText: string, accentColor: Color3)
-	local bb = Instance.new("BillboardGui")
-	bb.Name = "StationSign"
-	bb.Size = UDim2.fromOffset(220, 64)
-	bb.StudsOffset = Vector3.new(0, 9, 0)
-	bb.AlwaysOnTop = false
-	bb.MaxDistance = 180
-	bb.Parent = parent
-
-	local title = Instance.new("TextLabel")
-	title.Name = "Title"
-	title.Size = UDim2.fromScale(1, 0.58)
-	title.BackgroundTransparency = 1
-	title.Font = Enum.Font.GothamBlack
-	title.Text = titleText
-	title.TextColor3 = accentColor
-	title.TextStrokeTransparency = 0.2
-	title.TextScaled = true
-	title.Parent = bb
-
-	local sub = Instance.new("TextLabel")
-	sub.Name = "Subtitle"
-	sub.Position = UDim2.fromScale(0, 0.58)
-	sub.Size = UDim2.fromScale(1, 0.42)
-	sub.BackgroundTransparency = 1
-	sub.Font = Enum.Font.GothamBold
-	sub.Text = subtitleText
-	sub.TextColor3 = Color3.fromRGB(240, 245, 255)
-	sub.TextStrokeTransparency = 0.3
-	sub.TextScaled = true
-	sub.Parent = bb
+local function createBillboardLabel(_parent: BasePart, _titleText: string, _subtitleText: string, _accentColor: Color3)
+	-- Disabled floating BillboardGui station signs so 3D SurfaceGui building signs stay clean and never overlap on screen!
 end
 
 local function ensureDefaultGaragePadsInWorkspace()

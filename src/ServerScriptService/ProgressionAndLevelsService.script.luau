@@ -259,7 +259,76 @@ local function getXPMultiplier(player: Player): number
 	if player:GetAttribute("OverdriveBoostActive") == true then
 		mult = mult * 1.5
 	end
-	return math.clamp(mult, 1.0, 10.0)
+	if player:GetAttribute("Golden3xFrenzyActive") == true then
+		mult = mult * 3.0
+	end
+	return math.clamp(mult, 1.0, 15.0)
+end
+
+--------------------------------------------------------------------------------
+-- Next Vehicle Unlock Progression Ladder
+-- (Sedan -> Muscle -> SUV -> Pickup -> Sports -> MonsterTruck -> Bulldozer)
+--------------------------------------------------------------------------------
+type VehicleUnlockGoal = {
+	Id: string,
+	DisplayName: string,
+	UnlockCost: number,
+	UnlockLevel: number,
+}
+
+local VEHICLE_UNLOCK_LADDER: { VehicleUnlockGoal } = {
+	{ Id = "Sedan", DisplayName = "CRUISER V8 Sedan", UnlockCost = 250, UnlockLevel = 2 },
+	{ Id = "Muscle", DisplayName = "V8 Hellfire Muscle", UnlockCost = 650, UnlockLevel = 4 },
+	{ Id = "SUV", DisplayName = "TITAN 4x4 SUV", UnlockCost = 900, UnlockLevel = 6 },
+	{ Id = "Pickup", DisplayName = "RANCH RAMMER Pickup", UnlockCost = 1200, UnlockLevel = 9 },
+	{ Id = "Sports", DisplayName = "APEX GT Supercar", UnlockCost = 2000, UnlockLevel = 12 },
+	{ Id = "MonsterTruck", DisplayName = "CRUSHER XL Monster Truck", UnlockCost = 3500, UnlockLevel = 16 },
+	{ Id = "Bulldozer", DisplayName = "GOLIATH DOZER Bulldozer", UnlockCost = 5500, UnlockLevel = 22 },
+}
+
+local function syncNextVehicleUnlockProgress(player: Player, currentLevel: number)
+	local cash = math.max(0, tonumber(player:GetAttribute("Cash")) or 0)
+	local eq = string.lower(tostring(player:GetAttribute("EquippedVehicle") or player:GetAttribute("SelectedVehicle") or ""))
+	local ownedCsv = string.lower(tostring(player:GetAttribute("OwnedVehicles") or player:GetAttribute("UnlockedVehicles") or ""))
+
+	local targetVehicle: VehicleUnlockGoal? = nil
+	for _, item in ipairs(VEHICLE_UNLOCK_LADDER) do
+		local idLower = string.lower(item.Id)
+		local isOwned = (player:GetAttribute("Unlocked_" .. item.Id) == true)
+			or (player:GetAttribute("Owned_" .. item.Id) == true)
+			or (eq == idLower)
+			or (ownedCsv ~= "" and string.find(ownedCsv, idLower, 1, true) ~= nil)
+
+		if not isOwned then
+			if cash < item.UnlockCost or targetVehicle == nil then
+				targetVehicle = item
+				if cash < item.UnlockCost then
+					break
+				end
+			end
+		end
+	end
+
+	if not targetVehicle then
+		local top = VEHICLE_UNLOCK_LADDER[#VEHICLE_UNLOCK_LADDER]
+		player:SetAttribute("NextUnlockVehicleId", top.Id)
+		player:SetAttribute("NextUnlockVehicleName", top.DisplayName .. " (READY!)")
+		player:SetAttribute("NextUnlockVehicleCost", top.UnlockCost)
+		player:SetAttribute("NextUnlockProgressRatio", 1.0)
+		return
+	end
+
+	local cashRatio = math.clamp(cash / math.max(1, targetVehicle.UnlockCost), 0, 1)
+	local lvlRatio = math.clamp(currentLevel / math.max(1, targetVehicle.UnlockLevel), 0, 1)
+	local progressRatio = math.clamp(cashRatio * 0.8 + lvlRatio * 0.2, 0.02, 1.0)
+	if cash >= targetVehicle.UnlockCost then
+		progressRatio = 1.0
+	end
+
+	player:SetAttribute("NextUnlockVehicleId", targetVehicle.Id)
+	player:SetAttribute("NextUnlockVehicleName", targetVehicle.DisplayName)
+	player:SetAttribute("NextUnlockVehicleCost", targetVehicle.UnlockCost)
+	player:SetAttribute("NextUnlockProgressRatio", tonumber(string.format("%.3f", progressRatio)))
 end
 
 local function ensureLevelLeaderstat(player: Player, initialLevel: number): IntValue
@@ -299,6 +368,8 @@ local function syncProgressionAttributes(player: Player, state: PlayerProgressio
 	player:SetAttribute("RankTitle", state.RankTitle)
 	player:SetAttribute("NextRankTitle", if nextTier then nextTier.Title else "MAX RANK")
 	player:SetAttribute("NextRankLevel", if nextTier then nextTier.MinLevel else MAX_LEVEL)
+
+	syncNextVehicleUnlockProgress(player, state.Level)
 
 	local lvlStat = ensureLevelLeaderstat(player, state.Level)
 	lvlStat.Value = state.Level
@@ -595,6 +666,13 @@ local function setupPlayerProgression(player: Player)
 	syncProgressionAttributes(player, state)
 
 	local conns: { RBXScriptConnection } = {}
+
+	-- 0. Watch Cash & Vehicle ownership attributes to keep NextUnlockVehicleName & NextUnlockProgressRatio live
+	for _, attrName in ipairs({ "Cash", "EquippedVehicle", "OwnedVehicles", "UnlockedVehicles" }) do
+		table.insert(conns, player:GetAttributeChangedSignal(attrName):Connect(function()
+			syncNextVehicleUnlockProgress(player, state.Level)
+		end))
+	end
 
 	-- 1. Watch MissionsCompleted attribute for Mission Complete XP rewards (+250 XP)
 	table.insert(conns, player:GetAttributeChangedSignal("MissionsCompleted"):Connect(function()

@@ -444,41 +444,64 @@ renderCategoryGrid = function()
 			card.Parent = gridScroll
 			Instance.new("UICorner", card).CornerRadius = UDim.new(0, 10)
 
+			-- 3D ViewportFrame preview of the preset character
+			local itemVp = Instance.new("ViewportFrame")
+			itemVp.Name = "Preset3DPreview"
+			itemVp.Size = UDim2.new(1, -16, 0, 74)
+			itemVp.Position = UDim2.fromOffset(8, 6)
+			itemVp.BackgroundColor3 = Color3.fromRGB(13, 19, 33)
+			itemVp.Ambient = Color3.fromRGB(195, 208, 230)
+			itemVp.LightColor = Color3.fromRGB(255, 250, 235)
+			itemVp.LightDirection = Vector3.new(-1, -1, 1)
+			itemVp.Parent = card
+			Instance.new("UICorner", itemVp).CornerRadius = UDim.new(0, 8)
+
+			local itemCam = Instance.new("Camera")
+			itemCam.FieldOfView = 40
+			itemCam.CFrame = CFrame.lookAt(Vector3.new(1.6, 0.8, -4.6), Vector3.new(0, 0.25, 0))
+			itemCam.Parent = itemVp
+			itemVp.CurrentCamera = itemCam
+
+			local itemModel = AvatarCatalog.BuildItemPreviewModel(preset.Id)
+			itemModel.Parent = itemVp
+
 			local badge = Instance.new("TextLabel")
-			badge.Size = UDim2.new(1, -16, 0, 22)
-			badge.Position = UDim2.fromOffset(8, 8)
+			badge.Size = UDim2.new(1, -16, 0, 16)
+			badge.Position = UDim2.fromOffset(8, 82)
 			badge.BackgroundTransparency = 1
 			badge.Font = Enum.Font.GothamBlack
-			badge.TextSize = 11
+			badge.TextSize = 10
 			badge.TextColor3 = Color3.fromRGB(250, 204, 21)
 			badge.Text = preset.Badge
 			badge.Parent = card
 
 			local nameLbl = Instance.new("TextLabel")
-			nameLbl.Size = UDim2.new(1, -16, 0, 38)
-			nameLbl.Position = UDim2.fromOffset(8, 36)
+			nameLbl.Size = UDim2.new(1, -16, 0, 24)
+			nameLbl.Position = UDim2.fromOffset(8, 98)
 			nameLbl.BackgroundTransparency = 1
 			nameLbl.Font = Enum.Font.GothamBlack
-			nameLbl.TextSize = 16
+			nameLbl.TextSize = 14
 			nameLbl.TextWrapped = true
 			nameLbl.TextColor3 = Color3.fromRGB(255, 255, 255)
 			nameLbl.Text = preset.Name
 			nameLbl.Parent = card
 
 			local applyBtn = Instance.new("TextButton")
-			applyBtn.Size = UDim2.new(1, -20, 0, 38)
-			applyBtn.Position = UDim2.fromOffset(10, 126)
+			applyBtn.Size = UDim2.new(1, -16, 0, 36)
+			applyBtn.Position = UDim2.fromOffset(8, 132)
 			applyBtn.BackgroundColor3 = Color3.fromRGB(56, 189, 248)
 			applyBtn.TextColor3 = Color3.fromRGB(15, 23, 42)
 			applyBtn.Font = Enum.Font.GothamBlack
-			applyBtn.TextSize = 13
-			applyBtn.Text = "APPLY PRESET"
+			applyBtn.TextSize = 12
+			applyBtn.Text = "APPLY 3D PRESET"
 			applyBtn.Parent = card
 			Instance.new("UICorner", applyBtn).CornerRadius = UDim.new(0, 8)
 
 			applyBtn.MouseButton1Click:Connect(function()
+				currentLoadout = table.clone(preset.Loadout)
+				rebuildPreviewModel()
 				applyCharacterPresetRE:FireServer(preset.Id)
-				statusBanner.Text = "Applied Preset: " .. preset.Name .. " (Unlocked pieces equipped!)"
+				statusBanner.Text = "Applied 3D Preset: " .. preset.Name .. "!"
 			end)
 		end
 		return
@@ -494,37 +517,48 @@ renderCategoryGrid = function()
 		card.Parent = gridScroll
 		Instance.new("UICorner", card).CornerRadius = UDim.new(0, 10)
 
-		local swatch = Instance.new("Frame")
-		swatch.Size = UDim2.new(1, -20, 0, 36)
-		swatch.Position = UDim2.fromOffset(10, 10)
-		swatch.BackgroundColor3 = item.PrimaryColor
-		swatch.Parent = card
-		Instance.new("UICorner", swatch).CornerRadius = UDim.new(0, 6)
+		-- 3D ViewportFrame preview of this exact item (instead of flat color squares!)
+		local itemVp = Instance.new("ViewportFrame")
+		itemVp.Name = "Item3DPreview"
+		itemVp.Size = UDim2.new(1, -16, 0, 68)
+		itemVp.Position = UDim2.fromOffset(8, 6)
+		itemVp.BackgroundColor3 = Color3.fromRGB(13, 19, 33)
+		itemVp.Ambient = Color3.fromRGB(195, 208, 230)
+		itemVp.LightColor = Color3.fromRGB(255, 250, 235)
+		itemVp.LightDirection = Vector3.new(-1, -1, 1)
+		itemVp.Parent = card
+		Instance.new("UICorner", itemVp).CornerRadius = UDim.new(0, 8)
 
-		local accentDot = Instance.new("Frame")
-		accentDot.Size = UDim2.fromOffset(28, 22)
-		accentDot.Position = UDim2.new(1, -34, 0.5, -11)
-		accentDot.BackgroundColor3 = item.AccentColor
-		accentDot.Parent = swatch
-		Instance.new("UICorner", accentDot).CornerRadius = UDim.new(0, 4)
+		local itemCam = Instance.new("Camera")
+		itemCam.FieldOfView = 38
+		local camOffset = if item.Category == "Headgear"
+			then Vector3.new(1.1, 0.65, -2.8)
+			elseif item.Category == "HeldGear" then Vector3.new(1.4, 0.5, -2.9)
+			else Vector3.new(1.5, 0.6, -4.1)
+		itemCam.CFrame = CFrame.lookAt(camOffset, Vector3.new(0, 0.1, 0))
+		itemCam.Parent = itemVp
+		itemVp.CurrentCamera = itemCam
+
+		local itemModel = AvatarCatalog.BuildItemPreviewModel(item.Id)
+		itemModel.Parent = itemVp
 
 		local title = Instance.new("TextLabel")
-		title.Size = UDim2.new(1, -16, 0, 34)
-		title.Position = UDim2.fromOffset(8, 50)
+		title.Size = UDim2.new(1, -16, 0, 22)
+		title.Position = UDim2.fromOffset(8, 76)
 		title.BackgroundTransparency = 1
 		title.Font = Enum.Font.GothamBlack
-		title.TextSize = 13
-		title.TextWrapped = true
+		title.TextSize = 12
+		title.TextTruncate = Enum.TextTruncate.AtEnd
 		title.TextColor3 = Color3.fromRGB(255, 255, 255)
 		title.Text = item.Name
 		title.Parent = card
 
 		local desc = Instance.new("TextLabel")
-		desc.Size = UDim2.new(1, -16, 0, 36)
-		desc.Position = UDim2.fromOffset(8, 84)
+		desc.Size = UDim2.new(1, -16, 0, 28)
+		desc.Position = UDim2.fromOffset(8, 98)
 		desc.BackgroundTransparency = 1
 		desc.Font = Enum.Font.GothamMedium
-		desc.TextSize = 11
+		desc.TextSize = 10
 		desc.TextWrapped = true
 		desc.TextColor3 = item.PerkLabel and Color3.fromRGB(250, 204, 21) or Color3.fromRGB(148, 163, 184)
 		desc.Text = item.PerkLabel or item.Description
@@ -545,7 +579,7 @@ renderCategoryGrid = function()
 		elseif isOwned then
 			actionBtn.BackgroundColor3 = Color3.fromRGB(56, 189, 248)
 			actionBtn.TextColor3 = Color3.fromRGB(15, 23, 42)
-			actionBtn.Text = (item.Currency == "Free") and "FREE • EQUIP" or "OWNED • EQUIP"
+			actionBtn.Text = (item.Currency == "Free") and "FREE - EQUIP" or "OWNED - EQUIP"
 		elseif item.Currency == "Cash" then
 			actionBtn.BackgroundColor3 = Color3.fromRGB(16, 185, 129)
 			actionBtn.TextColor3 = Color3.fromRGB(15, 23, 42)
@@ -557,10 +591,14 @@ renderCategoryGrid = function()
 		end
 
 		actionBtn.MouseButton1Click:Connect(function()
+			-- Optimistically preview the item on the main 3D mannequin immediately!
+			(currentLoadout :: any)[item.Category] = item.Id
+			rebuildPreviewModel()
 			local res = isOwned and equipAvatarItemRF:InvokeServer(item.Id) or purchaseAvatarItemRF:InvokeServer(item.Id)
 			if res and res.Message then
 				statusBanner.Text = res.Message
 			end
+			renderCategoryGrid()
 		end)
 	end
 end

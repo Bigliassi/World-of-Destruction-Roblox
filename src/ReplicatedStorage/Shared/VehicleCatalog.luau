@@ -620,6 +620,169 @@ function VehicleCatalog.AttachRamPlow(model: Model, plowLevel: number, accentCol
 	end
 end
 
+-- Attaches or updates all 5 3D visual upgrade tracks (Engine, Armor, Nitro, Plow, Magnet) on a vehicle Model
+function VehicleCatalog.AttachVisualUpgrades(
+	model: Model,
+	upgrades: {
+		Engine: number?,
+		Armor: number?,
+		Nitro: number?,
+		Plow: number?,
+		Magnet: number?,
+		AccentColor: Color3?,
+	}?
+)
+	local chassis = model.PrimaryPart or model:FindFirstChild("Chassis") :: BasePart?
+	if not chassis then
+		return
+	end
+
+	local upg = upgrades or {}
+	local engineLvl = math.clamp(tonumber(upg.Engine or model:GetAttribute("EngineLevel")) or 0, 0, 5)
+	local armorLvl = math.clamp(tonumber(upg.Armor or model:GetAttribute("ArmorLevel")) or 0, 0, 5)
+	local nitroLvl = math.clamp(tonumber(upg.Nitro or model:GetAttribute("NitroLevel")) or 0, 0, 5)
+	local plowLvl = math.clamp(tonumber(upg.Plow or model:GetAttribute("PlowLevel")) or 0, 0, 5)
+	local magnetLvl = math.clamp(tonumber(upg.Magnet or model:GetAttribute("MagnetLevel")) or 0, 0, 5)
+
+	local oldContainer = model:FindFirstChild("VisualUpgradesContainer")
+	if oldContainer then
+		oldContainer:Destroy()
+	end
+
+	local container = Instance.new("Model")
+	container.Name = "VisualUpgradesContainer"
+	container.Parent = model
+
+	local size = chassis.Size
+	local w = size.X
+	local h = size.Y
+	local len = size.Z
+	local accentColor = upg.AccentColor or Color3.fromRGB(255, 195, 45)
+
+	-- 1. ENGINE TRACK (Twin-Turbo Supercharger Scoop & Chrome Intake Manifold on Hood)
+	if engineLvl >= 1 then
+		local boostScale = 0.85 + engineLvl * 0.08
+		local blowerBase = makePart(
+			"EngineSuperchargerBlock",
+			Vector3.new(w * 0.34 * boostScale, h * 0.28 * boostScale, len * 0.16),
+			Color3.fromRGB(195, 204, 218),
+			Enum.Material.Metal,
+			container,
+			false,
+			true
+		)
+		placeAndWeld(chassis, blowerBase, CFrame.new(0, h * 0.58, -len * 0.24))
+
+		local intakeScoop = makePart(
+			"EngineIntakeScoop",
+			Vector3.new(w * 0.38 * boostScale, h * 0.16 * boostScale, len * 0.14),
+			Color3.fromRGB(255, 115, 35),
+			Enum.Material.Neon,
+			container,
+			false,
+			true
+		)
+		placeAndWeld(chassis, intakeScoop, CFrame.new(0, h * 0.74, -len * 0.26))
+	end
+
+	-- 2. ARMOR TRACK (Heavy Steel Exo-Rollcage & Side Impact Bull-Bars)
+	if armorLvl >= 1 then
+		local armorColor = if armorLvl >= 4 then Color3.fromRGB(235, 190, 50) else Color3.fromRGB(95, 108, 128)
+		for _, sx in ipairs({ -1, 1 }) do
+			local sidePlate = makePart(
+				"ArmorSideBar_" .. tostring(sx),
+				Vector3.new(0.38, h * 0.45, len * 0.58),
+				armorColor,
+				Enum.Material.DiamondPlate,
+				container,
+				false,
+				true
+			)
+			placeAndWeld(chassis, sidePlate, CFrame.new(sx * (w * 0.52), 0.1, 0))
+
+			local roofRail = makePart(
+				"ArmorRoofCage_" .. tostring(sx),
+				Vector3.new(0.26, 0.26, len * 0.38),
+				armorColor,
+				Enum.Material.Metal,
+				container,
+				false,
+				true
+			)
+			placeAndWeld(chassis, roofRail, CFrame.new(sx * (w * 0.36), h * 1.42, 0.2))
+		end
+	end
+
+	-- 3. NITRO TRACK (Dual Glowing Liquid-Nitrous Bottles Mounted on Rear Deck)
+	if nitroLvl >= 1 then
+		for _, sx in ipairs({ -1, 1 }) do
+			local bottle = makePart(
+				"NitroBottle_" .. tostring(sx),
+				Vector3.new(2.2, 0.85, 0.85),
+				Color3.fromRGB(35, 165, 255),
+				Enum.Material.Metal,
+				container,
+				false,
+				true,
+				0,
+				Enum.PartType.Cylinder
+			)
+			placeAndWeld(
+				chassis,
+				bottle,
+				CFrame.new(sx * (w * 0.24), h * 0.72, len * 0.30) * CFrame.Angles(0, math.rad(90), math.rad(12))
+			)
+
+			local glowBand = makePart(
+				"NitroGlowBand_" .. tostring(sx),
+				Vector3.new(0.55, 0.92, 0.92),
+				Color3.fromRGB(95, 230, 255),
+				Enum.Material.Neon,
+				container,
+				false,
+				true,
+				0,
+				Enum.PartType.Cylinder
+			)
+			placeAndWeld(
+				chassis,
+				glowBand,
+				CFrame.new(sx * (w * 0.24), h * 0.72, len * 0.30) * CFrame.Angles(0, math.rad(90), math.rad(12))
+			)
+		end
+	end
+
+	-- 4. PLOW TRACK (Heavy Demolition Wedge Ram Plow on Front Bumper)
+	VehicleCatalog.AttachRamPlow(model, plowLvl, accentColor)
+
+	-- 5. MAGNET TRACK (Golden Electromagnetic Cash-Attractor Coil & Halo on Roof)
+	if magnetLvl >= 1 then
+		local magPedestal = makePart(
+			"MagnetPedestal",
+			Vector3.new(0.9, 0.45, 0.9),
+			Color3.fromRGB(45, 52, 65),
+			Enum.Material.Metal,
+			container,
+			false,
+			true
+		)
+		placeAndWeld(chassis, magPedestal, CFrame.new(0, h * 1.48, 0.4))
+
+		local magHalo = makePart(
+			"MagnetGoldCoil",
+			Vector3.new(0.28, 1.95, 1.95),
+			Color3.fromRGB(255, 215, 40),
+			Enum.Material.Neon,
+			container,
+			false,
+			true,
+			0,
+			Enum.PartType.Cylinder
+		)
+		placeAndWeld(chassis, magHalo, CFrame.new(0, h * 1.72, 0.4) * CFrame.Angles(0, 0, math.rad(90)))
+	end
+end
+
 -- Creates particle emitters used for Nitro, Drift Tire Smoke, and Low-Health Engine Damage
 local function attachVehicleVFX(model: Model, chassis: BasePart, cfg: VehicleArchetypeConfig)
 	local halfL = cfg.Size.Z * 0.5
@@ -1637,10 +1800,16 @@ function VehicleCatalog.BuildVehicle(vehicleType: string?, options: BuildOptions
 	-- 13. Attach VFX Emitters (Nitro, Drift Smoke, Skid Trails, Damage Smoke/Fire)
 	attachVehicleVFX(model, chassis, cfg)
 
-	-- 14. Attach Front Ram Plow if upgraded or Bulldozer
-	if plowLevel > 0 then
-		VehicleCatalog.AttachRamPlow(model, plowLevel, accentColor)
-	end
+	-- 14. Attach 3D Visual Upgrades (Engine, Armor, Nitro, Plow, Magnet)
+	local magnetLevel = math.max(0, tonumber((opts :: any).MagnetLevel) or 0)
+	VehicleCatalog.AttachVisualUpgrades(model, {
+		Engine = engineLevel,
+		Armor = armorLevel,
+		Nitro = nitroLevel,
+		Plow = plowLevel,
+		Magnet = magnetLevel,
+		AccentColor = accentColor,
+	})
 
 	-- 15. Set Vehicle Attributes on Model & DriveSeat
 	model:SetAttribute("VehicleType", cfg.Id)

@@ -196,13 +196,71 @@ local function readCombinedDrivingInput(seat: VehicleSeat): (number, number)
 		end
 	end
 
-	local touchThrottle = tonumber(localPlayer:GetAttribute("TouchThrottle")) or 0
+	-- Read Console Gamepad Analog Triggers (R2/L2 Position.Z 0..1) & Left Thumbstick (Thumbstick1 Position.X)
+	local gamepadThrottle = 0
+	local gamepadSteer = 0
+	local r2Analog = 0
+	local l2Analog = 0
+
+	local okGamepad, gamepadState = pcall(function()
+		return UserInputService:GetGamepadState(Enum.UserInputType.Gamepad1)
+	end)
+	if okGamepad and gamepadState then
+		for _, stateObj in ipairs(gamepadState) do
+			if stateObj.KeyCode == Enum.KeyCode.ButtonR2 then
+				r2Analog = math.clamp(stateObj.Position.Z, 0, 1)
+			elseif stateObj.KeyCode == Enum.KeyCode.ButtonL2 then
+				l2Analog = math.clamp(stateObj.Position.Z, 0, 1)
+			elseif stateObj.KeyCode == Enum.KeyCode.Thumbstick1 then
+				local stickX = stateObj.Position.X
+				if math.abs(stickX) > 0.14 then
+					gamepadSteer = math.sign(stickX) * (math.abs(stickX) ^ 1.35)
+				end
+			end
+		end
+	end
+
+	-- Digital trigger fallback for controllers that report button-down without analog Z axis
+	if r2Analog < 0.05 and UserInputService:IsGamepadButtonDown(Enum.UserInputType.Gamepad1, Enum.KeyCode.ButtonR2) then
+		r2Analog = 1
+	end
+	if l2Analog < 0.05 and UserInputService:IsGamepadButtonDown(Enum.UserInputType.Gamepad1, Enum.KeyCode.ButtonL2) then
+		l2Analog = 1
+	end
+	gamepadThrottle = math.clamp(r2Analog - l2Analog, -1, 1)
+
+	-- Read iPad / Mobile Touch Pedals (TouchThrottle / TouchBrake booleans or numbers) & Analog Virtual Thumbstick (TouchSteer)
+	local touchThrottle = 0
+	local rawTouchThrottle = localPlayer:GetAttribute("TouchThrottle")
+	local rawTouchBrake = localPlayer:GetAttribute("TouchBrake")
+	if rawTouchThrottle == true then
+		touchThrottle += 1
+	elseif type(rawTouchThrottle) == "number" then
+		touchThrottle += rawTouchThrottle
+	end
+	if rawTouchBrake == true then
+		touchThrottle -= 1
+	elseif type(rawTouchBrake) == "number" and math.abs(rawTouchBrake) > 0 then
+		touchThrottle -= math.abs(rawTouchBrake)
+	end
+
 	local touchSteer = tonumber(localPlayer:GetAttribute("TouchSteer")) or 0
+	if math.abs(touchSteer) < 0.01 then
+		if localPlayer:GetAttribute("TouchSteerLeft") == true then
+			touchSteer -= 1
+		end
+		if localPlayer:GetAttribute("TouchSteerRight") == true then
+			touchSteer += 1
+		end
+	end
 
 	local seatThrottle = seat.ThrottleFloat
 	local seatSteer = seat.SteerFloat
 
 	local finalThrottle = kbThrottle
+	if math.abs(gamepadThrottle) > math.abs(finalThrottle) then
+		finalThrottle = gamepadThrottle
+	end
 	if math.abs(touchThrottle) > math.abs(finalThrottle) then
 		finalThrottle = touchThrottle
 	end
@@ -211,6 +269,9 @@ local function readCombinedDrivingInput(seat: VehicleSeat): (number, number)
 	end
 
 	local finalSteer = kbSteer
+	if math.abs(gamepadSteer) > math.abs(finalSteer) then
+		finalSteer = gamepadSteer
+	end
 	if math.abs(touchSteer) > math.abs(finalSteer) then
 		finalSteer = touchSteer
 	end
@@ -299,19 +360,16 @@ end
 -- Input Actions (Handbrake Drift, Nitro Boost, Headlights)
 --------------------------------------------------------------------------------
 local function bindDrivingActions()
+	-- Touch flag is false so Roblox's default grey ContextActionGui buttons never overlap our custom iPad pedals
 	ContextActionService:BindAction("VehicleDriftAction", function(_, state: Enum.UserInputState)
 		handbrakeHeld = (state == Enum.UserInputState.Begin)
 		return Enum.ContextActionResult.Pass
-	end, true, Enum.KeyCode.Space, Enum.KeyCode.ButtonR1)
-	ContextActionService:SetTitle("VehicleDriftAction", "DRIFT")
-	ContextActionService:SetPosition("VehicleDriftAction", UDim2.new(1, -165, 1, -125))
+	end, false, Enum.KeyCode.Space, Enum.KeyCode.ButtonR1, Enum.KeyCode.ButtonA)
 
 	ContextActionService:BindAction("VehicleNitroAction", function(_, state: Enum.UserInputState)
 		boostHeld = (state == Enum.UserInputState.Begin)
 		return Enum.ContextActionResult.Pass
-	end, true, Enum.KeyCode.LeftShift, Enum.KeyCode.RightShift, Enum.KeyCode.ButtonL1)
-	ContextActionService:SetTitle("VehicleNitroAction", "NITRO")
-	ContextActionService:SetPosition("VehicleNitroAction", UDim2.new(1, -95, 1, -185))
+	end, false, Enum.KeyCode.LeftShift, Enum.KeyCode.RightShift, Enum.KeyCode.ButtonL1, Enum.KeyCode.ButtonX)
 
 	ContextActionService:BindAction("VehicleHeadlightsAction", function(_, state: Enum.UserInputState)
 		if state == Enum.UserInputState.Begin and activeModel then
@@ -319,7 +377,7 @@ local function bindDrivingActions()
 			applyHeadlightState(activeModel, not headlightsOn)
 		end
 		return Enum.ContextActionResult.Pass
-	end, false, Enum.KeyCode.L)
+	end, false, Enum.KeyCode.L, Enum.KeyCode.ButtonR3)
 end
 
 local function unbindDrivingActions()
@@ -738,13 +796,30 @@ RunService.Heartbeat:Connect(function(dt: number)
 		smoothedThrottle = moveToward(smoothedThrottle, 0, dt * 4.8)
 	end
 
-	-- Also check if LeftShift/Space are held directly via keyboard for instant response
+	-- Check Keyboard + Console Gamepad (ButtonX/ButtonL1 Nitro, ButtonA/ButtonR1 Drift) + iPad Touch pedals
 	if not UserInputService:GetFocusedTextBox() then
 		local shiftDown = UserInputService:IsKeyDown(Enum.KeyCode.LeftShift)
 			or UserInputService:IsKeyDown(Enum.KeyCode.RightShift)
 		local spaceDown = UserInputService:IsKeyDown(Enum.KeyCode.Space)
-		boostHeld = shiftDown or (localPlayer:GetAttribute("TouchBoost") == true)
-		handbrakeHeld = spaceDown or (localPlayer:GetAttribute("TouchDrift") == true)
+
+		local modalOpen = localPlayer:GetAttribute("UIModalOpen") == true
+		local gamepadNitro = not modalOpen
+			and (
+				UserInputService:IsGamepadButtonDown(Enum.UserInputType.Gamepad1, Enum.KeyCode.ButtonX)
+				or UserInputService:IsGamepadButtonDown(Enum.UserInputType.Gamepad1, Enum.KeyCode.ButtonL1)
+			)
+		local gamepadDrift = not modalOpen
+			and (
+				UserInputService:IsGamepadButtonDown(Enum.UserInputType.Gamepad1, Enum.KeyCode.ButtonA)
+				or UserInputService:IsGamepadButtonDown(Enum.UserInputType.Gamepad1, Enum.KeyCode.ButtonR1)
+			)
+
+		local touchNitro = (localPlayer:GetAttribute("TouchNitro") == true)
+			or (localPlayer:GetAttribute("TouchBoost") == true)
+		local touchDrift = (localPlayer:GetAttribute("TouchDrift") == true)
+
+		boostHeld = shiftDown or gamepadNitro or touchNitro
+		handbrakeHeld = spaceDown or gamepadDrift or touchDrift
 	end
 
 	-- Smooth steering input

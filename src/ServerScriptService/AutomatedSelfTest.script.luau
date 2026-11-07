@@ -176,9 +176,9 @@ local function runDiagnostics()
 	local hasCC = Lighting:FindFirstChildOfClass("ColorCorrectionEffect") ~= nil
 	recordCheck(
 		"GRAPHICS",
-		"Sunlit Lighting & Post-Processing",
-		hasAtmo and hasBloom and hasCC and Lighting.Brightness >= 3.0,
-		string.format("ClockTime=%.1f, Brightness=%.1f, Atmosphere + Bloom + ColorCorrection active", Lighting.ClockTime, Lighting.Brightness)
+		"NYC Winter Dusk Lighting & Post-Processing",
+		hasAtmo and hasBloom and hasCC and Lighting.Brightness >= 1.5,
+		string.format("ClockTime=%.1f, Brightness=%.2f, Atmosphere + Bloom + ColorCorrection active", Lighting.ClockTime, Lighting.Brightness)
 	)
 
 	-- 7. Verify Connected Players & 5-Act Campaign (if running in Play Solo)

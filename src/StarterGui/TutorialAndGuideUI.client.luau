@@ -217,18 +217,19 @@ local function ensure3DWaypoint()
 	waypointBillboardDist = distLbl
 end
 
-local function setWaypointVisible(visible: boolean)
+local function setWaypointVisible(_visible: boolean)
+	-- 3D Gold Coin Breadcrumb Trail in CameraAndFXController now guides players; keep legacy beam/billboard hidden so nothing overlaps!
 	if not waypointFolder then
 		return
 	end
 	if waypointBeam then
-		waypointBeam.Enabled = visible
+		waypointBeam.Enabled = false
 	end
 	if waypointEndPart then
-		waypointEndPart.Transparency = if visible then 0.55 else 1
+		waypointEndPart.Transparency = 1
 		local bb = waypointEndPart:FindFirstChild("TargetFloatingBadge") :: BillboardGui?
 		if bb then
-			bb.Enabled = visible
+			bb.Enabled = false
 		end
 	end
 end

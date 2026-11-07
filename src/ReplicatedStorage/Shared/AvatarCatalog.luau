@@ -448,6 +448,10 @@ function AvatarCatalog.ApplyLoadoutToCharacter(character: Model, loadout: Avatar
 	local torso = (character:FindFirstChild("UpperTorso") or character:FindFirstChild("Torso") or character:FindFirstChild("HumanoidRootPart")) :: BasePart?
 	local head = character:FindFirstChild("Head") :: BasePart?
 	local rightHand = (character:FindFirstChild("RightHand") or character:FindFirstChild("RightLowerArm") or character:FindFirstChild("Right Arm")) :: BasePart?
+	local leftArm = (character:FindFirstChild("LeftUpperArm") or character:FindFirstChild("Left Arm")) :: BasePart?
+	local rightArm = (character:FindFirstChild("RightUpperArm") or character:FindFirstChild("Right Arm")) :: BasePart?
+	local leftLeg = (character:FindFirstChild("LeftLowerLeg") or character:FindFirstChild("Left Leg")) :: BasePart?
+	local rightLeg = (character:FindFirstChild("RightLowerLeg") or character:FindFirstChild("Right Leg")) :: BasePart?
 
 	local skinItem = AvatarCatalog.Items[loadout.SkinTone or "SkinWarmTan"] or AvatarCatalog.Items.SkinWarmTan
 	local outfitItem = AvatarCatalog.Items[loadout.Outfit or "LeoCreatorJacket"] or AvatarCatalog.Items.LeoCreatorJacket
@@ -466,51 +470,109 @@ function AvatarCatalog.ApplyLoadoutToCharacter(character: Model, loadout: Avatar
 		end
 	end
 
-	-- 1. Sleek Slim Chest Vest, Collar Trim & Tailored Shoulder Epaulets
+	-- 1. Dramatic 3D Chest Cuirass Armor, Glowing Reactor Core, Shoulder Pauldrons & Limb Armor
 	if torso then
 		local tw = math.clamp(torso.Size.X, 1.6, 2.1)
 		local th = math.clamp(torso.Size.Y, 1.4, 2.0)
 		local td = math.clamp(torso.Size.Z, 0.85, 1.15)
+		local armorMat = if outfitItem.Id == "GoldenSovereignArmor" or outfitItem.Id == "TacticalSWATSet" or outfitItem.Id == "NeonCyberSuit"
+			then Enum.Material.Metal
+			else Enum.Material.SmoothPlastic
 
-		-- Slim contoured front & back vest panels
+		-- Contoured 3D Front & Back Armor Chestplate
 		weldPart(
 			folder,
 			torso,
-			"ChestVestFront",
-			Vector3.new(tw * 0.86, th * 0.72, 0.08),
+			"ChestArmorFront",
+			Vector3.new(tw * 0.94, th * 0.82, 0.16),
 			outfitItem.PrimaryColor,
-			Enum.Material.SmoothPlastic,
-			CFrame.new(0, 0.04, -(td * 0.5 + 0.03))
+			armorMat,
+			CFrame.new(0, 0.06, -(td * 0.5 + 0.06))
+		)
+		weldPart(
+			folder,
+			torso,
+			"ChestArmorCore",
+			Vector3.new(0.46, 0.46, 0.22),
+			outfitItem.AccentColor,
+			Enum.Material.Neon,
+			CFrame.new(0, th * 0.14, -(td * 0.5 + 0.09)) * CFrame.Angles(0, 0, math.rad(45))
 		)
 		weldPart(
 			folder,
 			torso,
 			"ChestStripe",
-			Vector3.new(tw * 0.78, 0.14, 0.10),
+			Vector3.new(tw * 0.88, 0.16, 0.18),
 			outfitItem.AccentColor,
 			Enum.Material.Neon,
-			CFrame.new(0, th * 0.16, -(td * 0.5 + 0.04))
+			CFrame.new(0, th * 0.14, -(td * 0.5 + 0.07))
 		)
-		-- Sleek raised jacket collar trim around neck
+		weldPart(
+			folder,
+			torso,
+			"UtilityBelt",
+			Vector3.new(tw * 1.04, 0.24, td * 1.06),
+			outfitItem.AccentColor,
+			Enum.Material.Metal,
+			CFrame.new(0, -th * 0.42, 0)
+		)
+
+		-- Dramatic 3D Shoulder Pauldrons & Raised Collar Trim
 		for _, sx in ipairs({ -1, 1 }) do
 			weldPart(
 				folder,
 				torso,
 				if sx < 0 then "CollarTrimL" else "CollarTrimR",
-				Vector3.new(0.14, 0.22, td * 0.72),
+				Vector3.new(0.18, 0.28, td * 0.82),
 				outfitItem.AccentColor,
-				Enum.Material.SmoothPlastic,
-				CFrame.new(sx * (tw * 0.28), th * 0.50, 0) * CFrame.Angles(0, 0, math.rad(-sx * 12))
+				Enum.Material.Neon,
+				CFrame.new(sx * (tw * 0.30), th * 0.52, 0) * CFrame.Angles(0, 0, math.rad(-sx * 14))
 			)
-			-- Low-profile shoulder epaulets
 			weldPart(
 				folder,
 				torso,
-				if sx < 0 then "LeftEpaulet" else "RightEpaulet",
-				Vector3.new(0.38, 0.12, td * 0.78),
+				if sx < 0 then "LeftPauldron" else "RightPauldron",
+				Vector3.new(0.68, 0.36, td * 1.08),
+				outfitItem.PrimaryColor,
+				Enum.Material.Metal,
+				CFrame.new(sx * (tw * 0.58), th * 0.46, 0) * CFrame.Angles(0, 0, math.rad(-sx * 15))
+			)
+			weldPart(
+				folder,
+				torso,
+				if sx < 0 then "LeftPauldronTrim" else "RightPauldronTrim",
+				Vector3.new(0.72, 0.14, td * 1.12),
+				outfitItem.AccentColor,
+				Enum.Material.Neon,
+				CFrame.new(sx * (tw * 0.60), th * 0.56, 0) * CFrame.Angles(0, 0, math.rad(-sx * 15))
+			)
+		end
+	end
+
+	-- 3D Arm Gauntlets & Shin Greaves so equipping any outfit visibly transforms the entire body!
+	for _, armPart in ipairs({ leftArm, rightArm }) do
+		if armPart then
+			weldPart(
+				folder,
+				armPart,
+				"ArmGauntlet",
+				Vector3.new(armPart.Size.X + 0.14, 0.42, armPart.Size.Z + 0.14),
 				outfitItem.AccentColor,
 				Enum.Material.Metal,
-				CFrame.new(sx * (tw * 0.44), th * 0.48, 0) * CFrame.Angles(0, 0, math.rad(-sx * 8))
+				CFrame.new(0, -0.15, 0)
+			)
+		end
+	end
+	for _, legPart in ipairs({ leftLeg, rightLeg }) do
+		if legPart then
+			weldPart(
+				folder,
+				legPart,
+				"ShinGreave",
+				Vector3.new(legPart.Size.X + 0.12, 0.55, legPart.Size.Z + 0.14),
+				outfitItem.AccentColor,
+				Enum.Material.Metal,
+				CFrame.new(0, 0, -0.04)
 			)
 		end
 	end
@@ -819,9 +881,47 @@ function AvatarCatalog.ApplyLoadoutToCharacter(character: Model, loadout: Avatar
 		end
 	end
 
-	-- 5. Subtle Aura Trail
+	-- 5. 3D Orbiting Aura Rings, Floating Shards & Particle Trail
 	local auraItem = AvatarCatalog.Items[loadout.AuraTrail or "NoneAura"]
 	if torso and auraItem and auraItem.Id ~= "NoneAura" and auraItem.Id ~= "None" then
+		-- 3D Neon Halo Rings & Floating Energy Shards around the character (renders cleanly inside ViewportFrames too!)
+		local ringLower = weldPart(
+			folder,
+			torso,
+			"WODAura3D_LowerRing",
+			Vector3.new(0.16, 3.6, 3.6),
+			auraItem.PrimaryColor,
+			Enum.Material.Neon,
+			CFrame.new(0, -1.6, 0) * CFrame.Angles(0, 0, math.rad(90)),
+			Enum.PartType.Cylinder
+		)
+		ringLower.Transparency = 0.45
+
+		local ringMid = weldPart(
+			folder,
+			torso,
+			"WODAura3D_OrbitRing",
+			Vector3.new(0.12, 3.1, 3.1),
+			auraItem.AccentColor,
+			Enum.Material.Neon,
+			CFrame.new(0, 0.1, 0) * CFrame.Angles(math.rad(22), 0, math.rad(72)),
+			Enum.PartType.Cylinder
+		)
+		ringMid.Transparency = 0.35
+
+		for idx = 1, 4 do
+			local ang = math.rad(idx * 90)
+			weldPart(
+				folder,
+				torso,
+				"WODAura3D_Shard_" .. tostring(idx),
+				Vector3.new(0.24, 0.58, 0.24),
+				if idx % 2 == 0 then auraItem.PrimaryColor else auraItem.AccentColor,
+				Enum.Material.Neon,
+				CFrame.Angles(0, ang, 0) * CFrame.new(0, 0.3 + (idx % 2) * 0.4, -1.65) * CFrame.Angles(math.rad(18), 0, math.rad(25))
+			)
+		end
+
 		local emitter = Instance.new("ParticleEmitter")
 		emitter.Name = "WODAuraEmitter"
 		emitter.Color = ColorSequence.new(auraItem.PrimaryColor, auraItem.AccentColor)
@@ -836,6 +936,94 @@ function AvatarCatalog.ApplyLoadoutToCharacter(character: Model, loadout: Avatar
 		})
 		emitter.Parent = torso
 	end
+end
+
+-- Builds a standalone 3D Model preview for any AvatarItem or Preset to display inside an item card's ViewportFrame!
+function AvatarCatalog.BuildItemPreviewModel(itemIdOrPresetId: string): Model
+	local m = Instance.new("Model")
+	m.Name = "Preview_" .. tostring(itemIdOrPresetId)
+
+	local function makeAnchoredPart(name: string, size: Vector3, cf: CFrame, col: Color3, mat: Enum.Material, shape: Enum.PartType?): Part
+		local p = Instance.new("Part")
+		p.Name = name
+		p.Size = size
+		p.CFrame = cf
+		p.Color = col
+		p.Material = mat
+		p.Anchored = true
+		p.CanCollide = false
+		p.TopSurface = Enum.SurfaceType.Smooth
+		p.BottomSurface = Enum.SurfaceType.Smooth
+		if shape then
+			p.Shape = shape
+		end
+		p.Parent = m
+		return p
+	end
+
+	-- Check if it's a Preset first
+	for _, preset in ipairs(AvatarCatalog.Presets) do
+		if preset.Id == itemIdOrPresetId then
+			local torso = makeAnchoredPart("UpperTorso", Vector3.new(1.6, 1.4, 0.85), CFrame.new(0, 0, 0), Color3.fromRGB(45, 55, 72), Enum.Material.SmoothPlastic, nil)
+			makeAnchoredPart("Head", Vector3.new(1.1, 1.1, 1.1), CFrame.new(0, 1.35, 0), Color3.fromRGB(217, 160, 115), Enum.Material.SmoothPlastic, Enum.PartType.Ball)
+			makeAnchoredPart("LeftUpperArm", Vector3.new(0.55, 1.2, 0.55), CFrame.new(-1.15, 0.05, 0), Color3.fromRGB(45, 55, 72), Enum.Material.SmoothPlastic, nil)
+			makeAnchoredPart("RightUpperArm", Vector3.new(0.55, 1.2, 0.55), CFrame.new(1.15, 0.05, 0), Color3.fromRGB(45, 55, 72), Enum.Material.SmoothPlastic, nil)
+			makeAnchoredPart("RightHand", Vector3.new(0.45, 0.45, 0.45), CFrame.new(1.15, -0.65, -0.2), Color3.fromRGB(217, 160, 115), Enum.Material.SmoothPlastic, nil)
+			m.PrimaryPart = torso
+			AvatarCatalog.ApplyLoadoutToCharacter(m, preset.Loadout)
+			for _, d in ipairs(m:GetDescendants()) do
+				if d:IsA("BasePart") then
+					d.Anchored = true
+				end
+			end
+			return m
+		end
+	end
+
+	local item = AvatarCatalog.Items[itemIdOrPresetId]
+	if not item then
+		local fallback = makeAnchoredPart("Core", Vector3.new(1.4, 1.4, 1.4), CFrame.new(0, 0, 0), Color3.fromRGB(56, 189, 248), Enum.Material.Neon, Enum.PartType.Ball)
+		m.PrimaryPart = fallback
+		return m
+	end
+
+	local loadout = AvatarCatalog.GetDefaultLoadout()
+	loadout.Headgear = "NoneHeadgear"
+	loadout.BackAccessory = "NoneBack"
+	loadout.HeldGear = "NoneHeld"
+	loadout.AuraTrail = "NoneAura"
+	(loadout :: any)[item.Category] = item.Id
+
+	if item.Category == "Headgear" then
+		local head = makeAnchoredPart("Head", Vector3.new(1.15, 1.15, 1.15), CFrame.new(0, -0.2, 0), Color3.fromRGB(70, 80, 98), Enum.Material.SmoothPlastic, Enum.PartType.Ball)
+		m.PrimaryPart = head
+		AvatarCatalog.ApplyLoadoutToCharacter(m, loadout)
+	elseif item.Category == "BackAccessory" then
+		local torso = makeAnchoredPart("UpperTorso", Vector3.new(1.4, 1.3, 0.75), CFrame.new(0, 0, 0) * CFrame.Angles(0, math.rad(180), 0), Color3.fromRGB(38, 46, 62), Enum.Material.SmoothPlastic, nil)
+		torso.Transparency = 0.55
+		m.PrimaryPart = torso
+		AvatarCatalog.ApplyLoadoutToCharacter(m, loadout)
+	elseif item.Category == "HeldGear" then
+		local hand = makeAnchoredPart("RightHand", Vector3.new(0.4, 0.4, 0.4), CFrame.new(0, 0.1, 0.65) * CFrame.Angles(math.rad(-35), math.rad(35), 0), Color3.fromRGB(60, 70, 88), Enum.Material.SmoothPlastic, Enum.PartType.Ball)
+		hand.Transparency = 0.65
+		m.PrimaryPart = hand
+		AvatarCatalog.ApplyLoadoutToCharacter(m, loadout)
+	else
+		-- Outfit, AuraTrail, or SkinTone: build 3D upper mannequin bust
+		local torso = makeAnchoredPart("UpperTorso", Vector3.new(1.65, 1.45, 0.85), CFrame.new(0, 0, 0), item.PrimaryColor, Enum.Material.SmoothPlastic, nil)
+		makeAnchoredPart("Head", Vector3.new(1.05, 1.05, 1.05), CFrame.new(0, 1.32, 0), Color3.fromRGB(217, 160, 115), Enum.Material.SmoothPlastic, Enum.PartType.Ball)
+		makeAnchoredPart("LeftUpperArm", Vector3.new(0.56, 1.2, 0.56), CFrame.new(-1.18, 0.05, 0), item.PrimaryColor, Enum.Material.SmoothPlastic, nil)
+		makeAnchoredPart("RightUpperArm", Vector3.new(0.56, 1.2, 0.56), CFrame.new(1.18, 0.05, 0), item.PrimaryColor, Enum.Material.SmoothPlastic, nil)
+		m.PrimaryPart = torso
+		AvatarCatalog.ApplyLoadoutToCharacter(m, loadout)
+	end
+
+	for _, d in ipairs(m:GetDescendants()) do
+		if d:IsA("BasePart") then
+			d.Anchored = true
+		end
+	end
+	return m
 end
 
 return AvatarCatalog

@@ -358,9 +358,22 @@ function ApplyUpgradesToVehicle(player: Player, model: Model)
 		seat.TurnSpeed = cfg.TurnSpeed
 	end
 
-	-- Attach or upgrade visual Ramming Plow if Plow level >= 2 (or Bulldozer)
+	-- Attach or upgrade all 5 visual 3D upgrade tracks (Engine, Armor, Nitro, Plow, Magnet)
+	local magnetLvl = getPlayerUpgradeLevel(player, "Magnet")
+	local magnetSteps = math.max(0, magnetLvl - 1)
 	local visualPlowLevel = if cfg.HasBulldozerBlade then math.max(2, plowSteps) else plowSteps
-	VehicleCatalog.AttachRamPlow(model, visualPlowLevel, cfg.AccentColor)
+	if VehicleCatalog.AttachVisualUpgrades then
+		VehicleCatalog.AttachVisualUpgrades(model, {
+			Engine = engineSteps,
+			Armor = armorSteps,
+			Nitro = nitroSteps,
+			Plow = visualPlowLevel,
+			Magnet = magnetSteps,
+			AccentColor = cfg.AccentColor,
+		})
+	else
+		VehicleCatalog.AttachRamPlow(model, visualPlowLevel, cfg.AccentColor)
+	end
 
 	local driver = getDriverFromVehicle(model)
 	if driver == player then

@@ -78,7 +78,34 @@ end
 local function isPlayerSeated(): boolean
 	local char = localPlayer.Character
 	local hum = char and char:FindFirstChildOfClass("Humanoid")
-	return (hum ~= nil and hum.SeatPart ~= nil)
+	return (hum ~= nil and (hum.SeatPart ~= nil or hum.Sit == true))
+end
+
+local function isUiModalBlockingAction(): boolean
+	if localPlayer:GetAttribute("UIModalOpen") == true or localPlayer:GetAttribute("HomeMenuActive") == true then
+		return true
+	end
+	local lastClosed = tonumber(localPlayer:GetAttribute("LastModalClosedAt")) or 0
+	if (os.clock() - lastClosed) < 0.22 then
+		return true
+	end
+	local pGui = localPlayer:FindFirstChild("PlayerGui")
+	if pGui then
+		for _, modalName in ipairs({
+			"HomeMenuOverlay",
+			"SettingsModal",
+			"GrandFinaleVictoryModal",
+			"SpeedShopModal",
+			"CreatorModal",
+			"ModalBackdrop",
+		}) do
+			local found = pGui:FindFirstChild(modalName, true)
+			if found and found:IsA("GuiObject") and found.Visible then
+				return true
+			end
+		end
+	end
+	return false
 end
 
 --------------------------------------------------------------------------------
@@ -157,9 +184,16 @@ local function findNearestVehicle(origin: Vector3): Model?
 end
 
 local function tryEnterOrHijackNearestVehicle()
-	if isPlayerSeated() then
+	if isPlayerSeated() or isUiModalBlockingAction() then
 		return
 	end
+	local now = os.clock()
+	local sharedLast = tonumber(localPlayer:GetAttribute("LastVehicleEnterExitAt")) or 0
+	if (now - sharedLast) < 0.35 then
+		return
+	end
+	localPlayer:SetAttribute("LastVehicleEnterExitAt", now)
+
 	local char = localPlayer.Character
 	local hrp = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
 	if not hrp then
@@ -176,11 +210,16 @@ local function tryEnterOrHijackNearestVehicle()
 end
 
 local function trySummonPersonalVehicle()
+	if isUiModalBlockingAction() then
+		return
+	end
 	local now = os.clock()
-	if now - lastSummonAt < SUMMON_COOLDOWN then
+	local sharedLast = tonumber(localPlayer:GetAttribute("LastVehicleSummonAt")) or 0
+	if (now - lastSummonAt) < SUMMON_COOLDOWN or (now - sharedLast) < 1.0 then
 		return
 	end
 	lastSummonAt = now
+	localPlayer:SetAttribute("LastVehicleSummonAt", now)
 
 	local summonRemote = getRemoteEvent("SummonVehicle") or getRemoteEvent("SpawnVehicle")
 	if summonRemote then
@@ -189,10 +228,10 @@ local function trySummonPersonalVehicle()
 end
 
 --------------------------------------------------------------------------------
--- Input Bindings
+-- Input Bindings (Touch flag false so default grey buttons never clutter iPad)
 --------------------------------------------------------------------------------
 local function bindOnFootActions()
-	-- Sprint (LeftShift / ButtonL3)
+	-- Sprint (LeftShift / ButtonL3 / ButtonL2)
 	ContextActionService:BindAction("OnFootSprint", function(_, state: Enum.UserInputState)
 		if isPlayerSeated() then
 			isSprinting = false
@@ -201,42 +240,50 @@ local function bindOnFootActions()
 		isSprinting = (state == Enum.UserInputState.Begin)
 		localPlayer:SetAttribute("IsSprinting", isSprinting)
 		return Enum.ContextActionResult.Pass
-	end, false, Enum.KeyCode.LeftShift, Enum.KeyCode.ButtonL3)
+	end, false, Enum.KeyCode.LeftShift, Enum.KeyCode.ButtonL3, Enum.KeyCode.ButtonL2)
 
-	-- Tactical Dodge / Roll (Q / ButtonB)
+	-- Tactical Dodge / Roll (Q / ButtonB when no UI modal is open)
 	ContextActionService:BindAction("OnFootDodge", function(_, state: Enum.UserInputState)
-		if isPlayerSeated() then
+		if isPlayerSeated() or isUiModalBlockingAction() then
 			return Enum.ContextActionResult.Pass
 		end
 		if state == Enum.UserInputState.Begin then
 			performDodgeRoll()
 		end
 		return Enum.ContextActionResult.Pass
-	end, true, Enum.KeyCode.Q, Enum.KeyCode.ButtonB)
-	ContextActionService:SetTitle("OnFootDodge", "DODGE")
-	ContextActionService:SetPosition("OnFootDodge", UDim2.new(1, -165, 1, -65))
+	end, false, Enum.KeyCode.Q, Enum.KeyCode.ButtonB)
 
-	-- Quick Enter / Hijack Vehicle (E / ButtonX)
+	-- Quick Enter / Hijack Vehicle (E / ButtonY / ButtonX)
 	ContextActionService:BindAction("OnFootEnterVehicle", function(_, state: Enum.UserInputState)
-		if isPlayerSeated() then
+		if isPlayerSeated() or isUiModalBlockingAction() then
 			return Enum.ContextActionResult.Pass
 		end
 		if state == Enum.UserInputState.Begin then
 			tryEnterOrHijackNearestVehicle()
 		end
 		return Enum.ContextActionResult.Pass
-	end, false, Enum.KeyCode.E, Enum.KeyCode.ButtonX)
+	end, false, Enum.KeyCode.E, Enum.KeyCode.ButtonY, Enum.KeyCode.ButtonX)
 
 	-- Quick-Summon Personal Vehicle (V / DPadUp)
 	ContextActionService:BindAction("OnFootSummonVehicle", function(_, state: Enum.UserInputState)
-		if state == Enum.UserInputState.Begin then
+		if state == Enum.UserInputState.Begin and not isUiModalBlockingAction() then
 			trySummonPersonalVehicle()
 		end
 		return Enum.ContextActionResult.Pass
-	end, true, Enum.KeyCode.V, Enum.KeyCode.DPadUp)
-	ContextActionService:SetTitle("OnFootSummonVehicle", "CAR [V]")
-	ContextActionService:SetPosition("OnFootSummonVehicle", UDim2.new(1, -95, 1, -65))
+	end, false, Enum.KeyCode.V, Enum.KeyCode.DPadUp)
 end
+
+localPlayer:GetAttributeChangedSignal("TriggerTacticalDodge"):Connect(function()
+	if not isPlayerSeated() and not isUiModalBlockingAction() then
+		performDodgeRoll()
+	end
+end)
+
+localPlayer:GetAttributeChangedSignal("TouchDodge"):Connect(function()
+	if localPlayer:GetAttribute("TouchDodge") == true and not isPlayerSeated() and not isUiModalBlockingAction() then
+		performDodgeRoll()
+	end
+end)
 
 -- Super Jump (Double-Jump in mid-air when pressing Jump again)
 UserInputService.JumpRequest:Connect(function()
@@ -320,7 +367,30 @@ RunService.RenderStepped:Connect(function(dt: number)
 		return
 	end
 
-	-- Smooth acceleration/deceleration between Walk and Sprint (matching OnFootController.swift)
+	-- Smooth acceleration/deceleration between Walk and Sprint (Keyboard LeftShift, Gamepad L2/L3, or iPad Touch)
+	local kbSprint = not UserInputService:GetFocusedTextBox()
+		and (UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) or UserInputService:IsKeyDown(Enum.KeyCode.RightShift))
+	local gamepadSprint = UserInputService:IsGamepadButtonDown(Enum.UserInputType.Gamepad1, Enum.KeyCode.ButtonL3)
+		or UserInputService:IsGamepadButtonDown(Enum.UserInputType.Gamepad1, Enum.KeyCode.ButtonL2)
+	if not gamepadSprint then
+		local okPad, padState = pcall(function()
+			return UserInputService:GetGamepadState(Enum.UserInputType.Gamepad1)
+		end)
+		if okPad and padState then
+			for _, stateObj in ipairs(padState) do
+				if stateObj.KeyCode == Enum.KeyCode.ButtonL2 and stateObj.Position.Z > 0.25 then
+					gamepadSprint = true
+					break
+				end
+			end
+		end
+	end
+	local touchSprint = (localPlayer:GetAttribute("TouchSprint") == true)
+		or (localPlayer:GetAttribute("TouchNitro") == true)
+
+	isSprinting = kbSprint or gamepadSprint or touchSprint
+	localPlayer:SetAttribute("IsSprinting", isSprinting)
+
 	local moving = hum.MoveDirection.Magnitude > 0.05
 	currentTargetSpeed = if (isSprinting and moving) then SPRINT_SPEED else WALK_SPEED
 

@@ -274,6 +274,8 @@ local SpendCashFunction = ensureBindableFunction(ServerStorage, "SpendCashFuncti
 local AddHeatBindable = ensureBindableEvent(ServerStorage, "AddHeatEvent")
 local PlayerBustedBindable = ensureBindableEvent(ServerStorage, "PlayerBustedEvent")
 local UpdatePlayerDataBindable = ensureBindableEvent(ServerStorage, "UpdatePlayerDataEvent")
+local AwardXPBindable = ensureBindableEvent(ServerStorage, "AwardXPEvent")
+local RepairPlayerVehicleBindable = ensureBindableEvent(ServerStorage, "RepairPlayerVehicleEvent")
 
 -- Mirror in ServerStorage.Events for scripts expecting subfolder hierarchy
 local FolderDestructionBindable = ensureBindableEvent(serverEventsFolder, "DestructionEvent")
@@ -310,6 +312,9 @@ type PlayerChaosState = {
 	ComboTimer: number,
 	UnbankedComboCash: number,
 	CurrentStreakName: string,
+	JackpotCharge: number,
+	JackpotSpinsCount: number,
+	GoldenFrenzyRemaining: number,
 	CampaignAct: number,
 	CampaignProgress: number,
 	CampaignCompleted: boolean,
@@ -323,6 +328,80 @@ type PlayerChaosState = {
 }
 
 local playerStates: { [number]: PlayerChaosState } = {}
+
+--------------------------------------------------------------------------------
+-- Next Vehicle Unlock Progression Ladder
+-- (Sedan -> Muscle -> SUV -> Pickup -> Sports -> MonsterTruck -> Bulldozer)
+--------------------------------------------------------------------------------
+export type VehicleUnlockMilestone = {
+	Id: string,
+	DisplayName: string,
+	UnlockCost: number,
+	UnlockLevel: number,
+}
+
+local VEHICLE_UNLOCK_LADDER: { VehicleUnlockMilestone } = {
+	{ Id = "Sedan", DisplayName = "CRUISER V8 Sedan", UnlockCost = 250, UnlockLevel = 2 },
+	{ Id = "Muscle", DisplayName = "V8 Hellfire Muscle", UnlockCost = 650, UnlockLevel = 4 },
+	{ Id = "SUV", DisplayName = "TITAN 4x4 SUV", UnlockCost = 900, UnlockLevel = 6 },
+	{ Id = "Pickup", DisplayName = "RANCH RAMMER Pickup", UnlockCost = 1200, UnlockLevel = 9 },
+	{ Id = "Sports", DisplayName = "APEX GT Supercar", UnlockCost = 2000, UnlockLevel = 12 },
+	{ Id = "MonsterTruck", DisplayName = "CRUSHER XL Monster Truck", UnlockCost = 3500, UnlockLevel = 16 },
+	{ Id = "Bulldozer", DisplayName = "GOLIATH DOZER Bulldozer", UnlockCost = 5500, UnlockLevel = 22 },
+}
+
+local function isVehicleOwnedByPlayer(player: Player, vehicleId: string): boolean
+	if player:GetAttribute("Unlocked_" .. vehicleId) == true or player:GetAttribute("Owned_" .. vehicleId) == true then
+		return true
+	end
+	local eq = tostring(player:GetAttribute("EquippedVehicle") or player:GetAttribute("SelectedVehicle") or "")
+	if string.lower(eq) == string.lower(vehicleId) then
+		return true
+	end
+	local ownedCsv = tostring(player:GetAttribute("OwnedVehicles") or player:GetAttribute("UnlockedVehicles") or "")
+	if ownedCsv ~= "" and string.find(string.lower(ownedCsv), string.lower(vehicleId), 1, true) ~= nil then
+		return true
+	end
+	return false
+end
+
+local function updateNextVehicleUnlockAttributes(player: Player)
+	local cash = math.max(0, tonumber(player:GetAttribute("Cash")) or 0)
+	local level = math.max(1, tonumber(player:GetAttribute("Level")) or 1)
+
+	local targetVehicle: VehicleUnlockMilestone? = nil
+	for _, milestone in ipairs(VEHICLE_UNLOCK_LADDER) do
+		if not isVehicleOwnedByPlayer(player, milestone.Id) then
+			if cash < milestone.UnlockCost or targetVehicle == nil then
+				targetVehicle = milestone
+				if cash < milestone.UnlockCost then
+					break
+				end
+			end
+		end
+	end
+
+	if not targetVehicle then
+		local lastMilestone = VEHICLE_UNLOCK_LADDER[#VEHICLE_UNLOCK_LADDER]
+		player:SetAttribute("NextUnlockVehicleId", lastMilestone.Id)
+		player:SetAttribute("NextUnlockVehicleName", lastMilestone.DisplayName .. " (READY!)")
+		player:SetAttribute("NextUnlockVehicleCost", lastMilestone.UnlockCost)
+		player:SetAttribute("NextUnlockProgressRatio", 1.0)
+		return
+	end
+
+	local cashRatio = math.clamp(cash / math.max(1, targetVehicle.UnlockCost), 0, 1)
+	local levelRatio = math.clamp(level / math.max(1, targetVehicle.UnlockLevel), 0, 1)
+	local combinedRatio = math.clamp(cashRatio * 0.8 + levelRatio * 0.2, 0.02, 1.0)
+	if cash >= targetVehicle.UnlockCost then
+		combinedRatio = 1.0
+	end
+
+	player:SetAttribute("NextUnlockVehicleId", targetVehicle.Id)
+	player:SetAttribute("NextUnlockVehicleName", targetVehicle.DisplayName)
+	player:SetAttribute("NextUnlockVehicleCost", targetVehicle.UnlockCost)
+	player:SetAttribute("NextUnlockProgressRatio", tonumber(string.format("%.3f", combinedRatio)))
+end
 
 local function getMagnetMultiplier(player: Player): number
 	local attrMult = player:GetAttribute("CashMagnetMultiplier")
@@ -405,6 +484,15 @@ local function ensurePlayerSetup(player: Player): Folder
 	end
 	player:SetAttribute("CurrentStreakName", "")
 	player:SetAttribute("UnbankedComboCash", 0)
+	if player:GetAttribute("JackpotCharge") == nil then
+		player:SetAttribute("JackpotCharge", 0)
+	end
+	if player:GetAttribute("JackpotSpinsCount") == nil then
+		player:SetAttribute("JackpotSpinsCount", 0)
+	end
+	player:SetAttribute("Golden3xFrenzyActive", false)
+	player:SetAttribute("Golden3xFrenzyRemaining", 0)
+	updateNextVehicleUnlockAttributes(player)
 
 	return ls
 end
@@ -412,7 +500,7 @@ end
 --------------------------------------------------------------------------------
 -- Economy Helpers (Cash & ChaosScore)
 --------------------------------------------------------------------------------
-local function addCash(player: Player, amount: number, reason: string?): number
+local function addCash(player: Player, amount: number, _reason: string?): number
 	local delta = math.floor(amount)
 	if delta <= 0 then
 		return tonumber(player:GetAttribute("Cash")) or 0
@@ -430,6 +518,7 @@ local function addCash(player: Player, amount: number, reason: string?): number
 		end
 	end
 
+	updateNextVehicleUnlockAttributes(player)
 	return newCash
 end
 
@@ -454,6 +543,7 @@ local function debitCash(player: Player, amount: number, _reason: string?): bool
 		end
 	end
 
+	updateNextVehicleUnlockAttributes(player)
 	return true
 end
 
@@ -974,6 +1064,118 @@ local function syncComboAttributes(player: Player, state: PlayerChaosState)
 	end
 end
 
+--------------------------------------------------------------------------------
+-- Casino Jackpot Fever & Lucky Spin Progression System
+--------------------------------------------------------------------------------
+local JACKPOT_PRIZES = {
+	{ Id = "MegaCash", Weight = 32, BaseTitle = "MEGA CASH JACKPOT! +$3,500" },
+	{ Id = "GoldenFrenzy", Weight = 25, BaseTitle = "30s GOLDEN 3X FRENZY!" },
+	{ Id = "SuperNitroRepair", Weight = 20, BaseTitle = "SUPER NITRO & FULL REPAIR JACKPOT!" },
+	{ Id = "InstantLevelUp", Weight = 13, BaseTitle = "INSTANT LEVEL-UP JACKPOT!" },
+	{ Id = "GrandRoyal", Weight = 10, BaseTitle = "GRAND ROYAL JACKPOT! +$10,000" },
+}
+
+local function triggerCasinoJackpotSpin(player: Player, state: PlayerChaosState, worldPosition: Vector3?)
+	state.JackpotCharge = 0
+	state.JackpotSpinsCount += 1
+	player:SetAttribute("JackpotCharge", 0)
+	player:SetAttribute("JackpotSpinsCount", state.JackpotSpinsCount)
+
+	-- Weighted roll among the 5 exciting Casino Jackpot Prizes
+	local totalWeight = 0
+	for _, prize in ipairs(JACKPOT_PRIZES) do
+		totalWeight += prize.Weight
+	end
+	local roll = math.random(1, totalWeight)
+	local picked = JACKPOT_PRIZES[1]
+	for _, prize in ipairs(JACKPOT_PRIZES) do
+		if roll <= prize.Weight then
+			picked = prize
+			break
+		end
+		roll -= prize.Weight
+	end
+
+	local level = math.max(1, tonumber(player:GetAttribute("Level")) or 1)
+	local levelScale = 1 + math.min((level - 1) * 0.08, 1.5)
+	local prizeTitle = picked.BaseTitle
+	local cashAwarded = 0
+	local bonusMult = math.max(state.ComboMultiplier, 3)
+
+	if picked.Id == "MegaCash" then
+		cashAwarded = math.floor(3500 * levelScale)
+		prizeTitle = "MEGA CASH JACKPOT! +$3,500"
+		addCash(player, cashAwarded, "Jackpot_MegaCash")
+		addChaosScore(player, cashAwarded * 2)
+	elseif picked.Id == "GoldenFrenzy" then
+		prizeTitle = "30s GOLDEN 3X FRENZY!"
+		cashAwarded = 1500
+		bonusMult = 3
+		state.GoldenFrenzyRemaining = 30.0
+		player:SetAttribute("Golden3xFrenzyActive", true)
+		player:SetAttribute("Golden3xFrenzyRemaining", 30)
+		addCash(player, cashAwarded, "Jackpot_GoldenFrenzy")
+		addChaosScore(player, 4500)
+	elseif picked.Id == "SuperNitroRepair" then
+		prizeTitle = "SUPER NITRO & FULL REPAIR JACKPOT!"
+		cashAwarded = 2000
+		addCash(player, cashAwarded, "Jackpot_SuperNitroRepair")
+		addChaosScore(player, 4000)
+		player:SetAttribute("UnlimitedNitroRemaining", 15)
+		player:SetAttribute("TouchNitro", true)
+		RepairPlayerVehicleBindable:Fire(player)
+		task.delay(6.0, function()
+			if player and player.Parent then
+				player:SetAttribute("TouchNitro", false)
+			end
+		end)
+	elseif picked.Id == "InstantLevelUp" then
+		prizeTitle = "INSTANT LEVEL-UP JACKPOT!"
+		local xpReq = math.max(250, tonumber(player:GetAttribute("XPRequired")) or 500)
+		cashAwarded = math.max(2500, level * 350)
+		addCash(player, cashAwarded, "Jackpot_InstantLevelUp")
+		addChaosScore(player, 5000)
+		AwardXPBindable:Fire(player, xpReq, "CasinoJackpotInstantLevelUp")
+	elseif picked.Id == "GrandRoyal" then
+		cashAwarded = 10000
+		prizeTitle = "GRAND ROYAL JACKPOT! +$10,000"
+		bonusMult = 10
+		addCash(player, cashAwarded, "Jackpot_GrandRoyal")
+		addChaosScore(player, 20000)
+	end
+
+	updateNextVehicleUnlockAttributes(player)
+
+	local spinPayload = {
+		IsJackpotSpin = true,
+		PrizeId = picked.Id,
+		PrizeTitle = prizeTitle,
+		Callout = "🎰 " .. prizeTitle,
+		CashAwarded = cashAwarded,
+		ChaosAwarded = cashAwarded * 2,
+		Multiplier = bonusMult,
+		ComboCount = state.ComboCount,
+		JackpotSpinsCount = state.JackpotSpinsCount,
+		Position = worldPosition,
+	}
+	StyleCalloutRemote:FireClient(player, spinPayload)
+	RootStyleCalloutRemote:FireClient(player, spinPayload)
+	NotificationRemote:FireClient(player, "🎰 CASINO JACKPOT: " .. prizeTitle, "Jackpot")
+end
+
+local function addJackpotCharge(player: Player, amount: number, worldPosition: Vector3?)
+	local state = playerStates[player.UserId]
+	if not state then
+		return
+	end
+	state.JackpotCharge = math.clamp(state.JackpotCharge + math.floor(amount), 0, 100)
+	player:SetAttribute("JackpotCharge", state.JackpotCharge)
+
+	if state.JackpotCharge >= 100 then
+		triggerCasinoJackpotSpin(player, state, worldPosition)
+	end
+end
+
 local function registerComboAction(
 	player: Player,
 	baseCash: number,
@@ -1001,10 +1203,11 @@ local function registerComboAction(
 	end
 	state.CurrentStreakName = finalCallout
 
-	-- Scale reward by ComboMultiplier * CashMagnetMultiplier * WantedHeatMultiplier
+	-- Scale reward by ComboMultiplier * CashMagnetMultiplier * WantedHeatMultiplier * Golden3xFrenzy
 	local magnetMult = getMagnetMultiplier(player)
 	local wantedMult = getWantedMultiplier(player)
-	local totalScalar = mult * magnetMult * wantedMult
+	local frenzyMult = if state.GoldenFrenzyRemaining > 0 or player:GetAttribute("Golden3xFrenzyActive") == true then 3.0 else 1.0
+	local totalScalar = mult * magnetMult * wantedMult * frenzyMult
 
 	local awardedCash = math.max(1, math.floor(baseCash * totalScalar))
 	local awardedChaos = math.max(5, math.floor(baseChaos * totalScalar))
@@ -1135,6 +1338,11 @@ local function handleDestructionEvent(
 	end
 
 	local upperType = string.upper(objectType)
+	local isJackpotCrate = (upperType == "JACKPOTCRATE") or (string.find(upperType, "JACKPOT") ~= nil)
+	if type(objectTypeOrInfo) == "table" and (objectTypeOrInfo.isJackpotCrate == true or objectTypeOrInfo.IsJackpotCrate == true) then
+		isJackpotCrate = true
+	end
+
 	if string.find(upperType, "LIGHT") or string.find(upperType, "HYDRANT") or string.find(upperType, "BUS") or string.find(upperType, "BILLBOARD") or string.find(upperType, "TOWER") then
 		heatGenerated = 5.0
 	end
@@ -1146,7 +1354,9 @@ local function handleDestructionEvent(
 	local nextMult = if state then select(1, computeMultiplierTier(state.ComboCount + 1)) else 1
 	local callout = resolveDestructionCallout(objectType, isChainExplosion, nextMult)
 
-	if callout == "CHAIN EXPLOSION!" then
+	if isJackpotCrate then
+		callout = "JACKPOT CRATE 3X!"
+	elseif callout == "CHAIN EXPLOSION!" then
 		baseCash = math.floor(baseCash * 1.6)
 		baseChaos = math.floor(baseChaos * 1.8)
 		heatGenerated = 14.0
@@ -1178,6 +1388,13 @@ local function handleDestructionEvent(
 	end
 
 	registerComboAction(player, baseCash, baseChaos, callout, heatGenerated, pos)
+
+	-- Advance Casino Jackpot Fever Charge (+35 for JackpotCrate, +9 to +18 for every regular prop smashed!)
+	local chargeGain = if isJackpotCrate then 35 else math.random(9, 18)
+	if type(objectTypeOrInfo) == "table" and tonumber(objectTypeOrInfo.jackpotChargeGain) then
+		chargeGain = tonumber(objectTypeOrInfo.jackpotChargeGain) :: number
+	end
+	addJackpotCharge(player, chargeGain, pos)
 end
 
 local function handleStuntEvent(player: Player, stuntType: string, rawValue: number?, worldPos: Vector3?)
@@ -1366,6 +1583,9 @@ local function onPlayerAdded(player: Player)
 		ComboTimer = 0,
 		UnbankedComboCash = 0,
 		CurrentStreakName = "",
+		JackpotCharge = tonumber(player:GetAttribute("JackpotCharge")) or 0,
+		JackpotSpinsCount = tonumber(player:GetAttribute("JackpotSpinsCount")) or 0,
+		GoldenFrenzyRemaining = 0,
 		CampaignAct = 1,
 		CampaignProgress = 0,
 		CampaignCompleted = false,
@@ -1379,6 +1599,13 @@ local function onPlayerAdded(player: Player)
 	}
 	playerStates[player.UserId] = state
 	syncCampaignAttributesToPlayer(player, state)
+	updateNextVehicleUnlockAttributes(player)
+
+	for _, attrName in ipairs({ "Cash", "Level", "EquippedVehicle", "OwnedVehicles", "UnlockedVehicles" }) do
+		player:GetAttributeChangedSignal(attrName):Connect(function()
+			updateNextVehicleUnlockAttributes(player)
+		end)
+	end
 
 	-- Mirror HeatStars attribute to leaderstats.HeatLevel automatically
 	player:GetAttributeChangedSignal("HeatStars"):Connect(function()
@@ -1460,6 +1687,17 @@ RunService.Heartbeat:Connect(function(dt: number)
 
 			if state.ComboTimer <= 0 then
 				finishAndBankCombo(player, state)
+			end
+		end
+
+		-- 1B. Tick 30s Golden 3X Frenzy Jackpot buff
+		if state.GoldenFrenzyRemaining > 0 then
+			state.GoldenFrenzyRemaining = math.max(0, state.GoldenFrenzyRemaining - dt)
+			if state.GoldenFrenzyRemaining <= 0 then
+				player:SetAttribute("Golden3xFrenzyActive", false)
+				player:SetAttribute("Golden3xFrenzyRemaining", 0)
+			elseif shouldBroadcastMission then
+				player:SetAttribute("Golden3xFrenzyRemaining", math.ceil(state.GoldenFrenzyRemaining))
 			end
 		end
 
