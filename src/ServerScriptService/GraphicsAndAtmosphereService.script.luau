@@ -2,7 +2,7 @@
 --[[
 	GraphicsAndAtmosphereService.script.luau
 	World of Destruction (Roblox)
-	Configures crisp, high-contrast New York Winter Overcast lighting & post-processing.
+	Configures crisp, high-contrast Snowy Christmas Manhattan late-afternoon / twilight lighting & post-processing.
 ]]
 
 local Lighting = game:GetService("Lighting")
@@ -22,58 +22,61 @@ end
 
 local function configureCrispLighting()
 	Lighting.GlobalShadows = true
-	Lighting.ShadowSoftness = 0.22
-	Lighting.EnvironmentDiffuseScale = 0.90
+	Lighting.ShadowSoftness = 0.20
+	Lighting.EnvironmentDiffuseScale = 0.92
 	Lighting.EnvironmentSpecularScale = 0.95
-	Lighting.ClockTime = 14.8
-	Lighting.Brightness = 2.65
-	Lighting.Ambient = Color3.fromRGB(115, 125, 142)
-	Lighting.OutdoorAmbient = Color3.fromRGB(145, 158, 178)
-	Lighting.FogColor = Color3.fromRGB(125, 138, 158)
-	Lighting.ColorShift_Top = Color3.fromRGB(185, 202, 228)
+	Lighting.ClockTime = 15.6
+	Lighting.Brightness = 2.55
+	Lighting.Ambient = Color3.fromRGB(128, 138, 156)
+	Lighting.OutdoorAmbient = Color3.fromRGB(158, 170, 190)
+	Lighting.FogColor = Color3.fromRGB(168, 182, 204)
+	Lighting.ColorShift_Top = Color3.fromRGB(215, 226, 245)
 
 	local atmosphere: Atmosphere = ensurePostEffect("Atmosphere", "WoDAtmosphere")
-	atmosphere.Density = 0.19
-	atmosphere.Offset = 0.12
-	atmosphere.Color = Color3.fromRGB(138, 152, 175)
-	atmosphere.Decay = Color3.fromRGB(88, 100, 120)
-	atmosphere.Glare = 0.06
-	atmosphere.Haze = 0.85
+	atmosphere.Density = 0.15
+	atmosphere.Offset = 0.10
+	atmosphere.Color = Color3.fromRGB(185, 200, 222)
+	atmosphere.Decay = Color3.fromRGB(125, 140, 165)
+	atmosphere.Glare = 0.04
+	atmosphere.Haze = 0.45
 
 	local sky: Sky = ensurePostEffect("Sky", "WoDSky")
 	sky.CelestialBodiesShown = true
 	sky.SunAngularSize = 12
 	sky.MoonAngularSize = 11
-	sky.StarCount = 1200
+	sky.StarCount = 1500
 
 	local bloom: BloomEffect = ensurePostEffect("BloomEffect", "WoDBloom")
 	bloom.Enabled = true
-	bloom.Intensity = 0.22
-	bloom.Size = 16
-	bloom.Threshold = 1.90
+	bloom.Intensity = 0.14
+	bloom.Size = 14
+	bloom.Threshold = 2.2
 
 	local cc: ColorCorrectionEffect = ensurePostEffect("ColorCorrectionEffect", "WoDColorCorrection")
 	cc.Enabled = true
 	cc.Brightness = 0.02
-	cc.Contrast = 0.14
-	cc.Saturation = 0.08
-	cc.TintColor = Color3.fromRGB(242, 246, 255)
+	cc.Contrast = 0.12
+	cc.Saturation = 0.06
+	cc.TintColor = Color3.fromRGB(246, 249, 255)
 
 	local sunRays: SunRaysEffect = ensurePostEffect("SunRaysEffect", "WoDSunRays")
 	sunRays.Enabled = true
-	sunRays.Intensity = 0.05
-	sunRays.Spread = 0.55
+	sunRays.Intensity = 0.04
+	sunRays.Spread = 0.50
 
 	local dof: DepthOfFieldEffect = ensurePostEffect("DepthOfFieldEffect", "WoDDepthOfField")
 	dof.Enabled = false
 
-	-- Clean up any legacy CityNavigationBeacons so there is zero Z-fighting with pads
+	-- Clean up any legacy CityNavigationBeacons or LeoCityViralZones so there is zero visual clutter
 	local leoCity = Workspace:FindFirstChild("LeoCity")
 	if leoCity and leoCity:FindFirstChild("CityNavigationBeacons") then
 		leoCity.CityNavigationBeacons:Destroy()
 	end
 	if Workspace:FindFirstChild("CityNavigationBeacons") then
 		Workspace.CityNavigationBeacons:Destroy()
+	end
+	if Workspace:FindFirstChild("LeoCityViralZones") then
+		Workspace.LeoCityViralZones:Destroy()
 	end
 
 	Lighting:SetAttribute("GraphicsConfiguredV1", true)

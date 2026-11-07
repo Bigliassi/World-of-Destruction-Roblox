@@ -28,6 +28,8 @@ MAT_CORRODED_METAL = 1040
 MAT_METAL = 1088
 MAT_GRASS = 1280
 MAT_SAND = 1296
+MAT_SNOW = 1328
+MAT_ICE = 1536
 MAT_ASPHALT = 1376
 MAT_GLASS = 1568
 
@@ -542,15 +544,16 @@ def build_skyscraper_preview(
     indent: int = 4,
 ) -> str:
     """
-    High-detail Gotham / NYC Art Deco stepped setback tower with cornice ledges,
-    vertical stone piers, and warm golden / cool ice-blue night windows.
+    High-detail Manhattan Art Deco stepped setback tower with snow-dusted cornice ledges,
+    vertical stone piers, and subtle recessed warm golden apartment/office window mullions.
     """
     cx, cy, cz = center
-    lower_h = height * 0.68
-    mid_h = height * 0.22
-    upper_h = height * 0.10
-    pier_col = (max(18, tint[0] - 16), max(20, tint[1] - 16), max(24, tint[2] - 14))
-    trim_col = (188, 156, 88) if is_leo_tower else (96, 104, 118)
+    lower_h = height * 0.72
+    mid_h = height * 0.28
+    pier_col = (max(18, tint[0] - 14), max(20, tint[1] - 14), max(24, tint[2] - 12))
+    trim_col = (148, 128, 84) if is_leo_tower else (96, 104, 118)
+    snow_col = (236, 242, 250)
+    warm_mullion = (235, 202, 145)
 
     parts: List[str] = [
         # Base Podium & Art Deco Main Shaft
@@ -569,21 +572,11 @@ def build_skyscraper_preview(
             "MidTierSetback",
             (width * 0.80, mid_h, depth * 0.80),
             (cx, cy + lower_h + mid_h * 0.5, cz),
-            tint,
-            MAT_CONCRETE,
-            indent=indent + 1,
-        ),
-        # Upper Art Deco Penthouse Tier
-        make_part_xml(
-            ref,
-            "UpperTierSetback",
-            (width * 0.62, upper_h, depth * 0.62),
-            (cx, cy + lower_h + mid_h + upper_h * 0.5, cz),
             pier_col,
             MAT_CONCRETE,
             indent=indent + 1,
         ),
-        # Cornice Ledge
+        # Cornice Ledge + Snow Cap
         make_part_xml(
             ref,
             "ArtDecoCornice",
@@ -591,6 +584,16 @@ def build_skyscraper_preview(
             (cx, cy + lower_h, cz),
             trim_col,
             MAT_METAL,
+            indent=indent + 1,
+        ),
+        make_part_xml(
+            ref,
+            "SnowDustedLedge",
+            (width + 1.8, 0.4, depth + 1.8),
+            (cx, cy + lower_h + 0.9, cz),
+            snow_col,
+            MAT_SNOW,
+            can_collide=False,
             indent=indent + 1,
         ),
         # Recessed Dark Brass & Glass Lobby
@@ -606,18 +609,18 @@ def build_skyscraper_preview(
         ),
     ]
 
-    floors = max(3, min(10, int(lower_h // 14)))
+    floors = max(4, min(12, int((height - 16.0) // 16)))
     for f in range(1, floors + 1):
-        y = cy + 15.0 + (f - 0.5) * ((lower_h - 18.0) / floors)
-        win_col = (255, 204, 118) if (f % 2 == 0) else (135, 190, 245)
+        y = cy + 16.0 + (f - 0.5) * ((height - 20.0) / floors)
+        tier_scale = 0.80 if (y - cy) > lower_h else 1.0
         parts.append(
             make_part_xml(
                 ref,
                 "WindowBandZ",
-                (width * 0.86, 2.6, depth + 0.48),
+                ((width - 4.4) * tier_scale, 2.2, (depth - 0.2) * tier_scale),
                 (cx, y, cz),
-                win_col,
-                MAT_NEON,
+                warm_mullion,
+                MAT_SMOOTH_PLASTIC,
                 indent=indent + 1,
             )
         )
@@ -625,30 +628,42 @@ def build_skyscraper_preview(
             make_part_xml(
                 ref,
                 "WindowBandX",
-                (width + 0.48, 2.6, depth * 0.86),
+                ((width - 0.2) * tier_scale, 2.2, (depth - 4.4) * tier_scale),
                 (cx, y, cz),
-                win_col,
-                MAT_NEON,
+                warm_mullion,
+                MAT_SMOOTH_PLASTIC,
                 indent=indent + 1,
             )
         )
 
-    crown_h = height * 0.14
+    crown_h = max(10.0, height * 0.14)
     crown_children: List[str] = []
     if is_leo_tower:
         crown_children = [
-            make_surface_sign_xml(ref, "LEO TOWER", (255, 215, 60), FACE_FRONT, indent + 2),
-            make_surface_sign_xml(ref, "LEO TOWER", (255, 215, 60), FACE_BACK, indent + 2),
+            make_surface_sign_xml(ref, "LEO TOWER", (255, 215, 65), FACE_FRONT, indent + 2),
+            make_surface_sign_xml(ref, "LEO TOWER", (255, 215, 65), FACE_BACK, indent + 2),
         ]
     parts.append(
         make_part_xml(
             ref,
             "Crown",
-            (width * 0.48, crown_h, depth * 0.48),
+            (width * 0.64, crown_h, depth * 0.64),
             (cx, cy + height + crown_h * 0.5, cz),
             trim_col,
             MAT_METAL,
             children_xml=crown_children,
+            indent=indent + 1,
+        )
+    )
+    parts.append(
+        make_part_xml(
+            ref,
+            "RoofSnowCap",
+            (width * 0.84 + 2.2, 0.45, depth * 0.84 + 2.2),
+            (cx, cy + height + 1.8, cz),
+            snow_col,
+            MAT_SNOW,
+            can_collide=False,
             indent=indent + 1,
         )
     )
@@ -658,15 +673,97 @@ def build_skyscraper_preview(
             make_part_xml(
                 ref,
                 "LeoSpire",
-                (3.8, 32.0, 3.8),
-                (cx, cy + height + crown_h + 16.0, cz),
-                (255, 215, 75),
+                (3.2, 34.0, 3.2),
+                (cx, cy + height + crown_h + 17.0, cz),
+                (255, 215, 65),
                 MAT_NEON,
                 can_collide=False,
                 indent=indent + 1,
             )
         )
 
+    return make_model_xml(ref, name, parts, indent=indent)
+
+
+def build_christmas_tree_preview(
+    ref: RefGen,
+    pos: Tuple[float, float, float],
+    height: float = 16.0,
+    name: str = "SnowyChristmasTree",
+    indent: int = 4,
+) -> str:
+    px, py, pz = pos
+    pine_col = (26, 76, 46)
+    snow_col = (238, 244, 252)
+    scale = height / 16.0
+    parts: List[str] = [
+        make_part_xml(
+            ref,
+            "Trunk",
+            (1.8 * scale, 5.2 * scale, 1.8 * scale),
+            (px, py + 2.6 * scale, pz),
+            (104, 68, 42),
+            MAT_WOOD,
+            indent=indent + 1,
+        ),
+        make_part_xml(
+            ref,
+            "PineTier1",
+            (8.2 * scale, 4.6 * scale, 8.2 * scale),
+            (px, py + 6.2 * scale, pz),
+            pine_col,
+            MAT_GRASS,
+            indent=indent + 1,
+        ),
+        make_part_xml(
+            ref,
+            "SnowCap1",
+            (8.5 * scale, 0.65 * scale, 8.5 * scale),
+            (px, py + 8.3 * scale, pz),
+            snow_col,
+            MAT_SNOW,
+            can_collide=False,
+            indent=indent + 1,
+        ),
+        make_part_xml(
+            ref,
+            "PineTier2",
+            (6.0 * scale, 4.2 * scale, 6.0 * scale),
+            (px, py + 10.2 * scale, pz),
+            pine_col,
+            MAT_GRASS,
+            indent=indent + 1,
+        ),
+        make_part_xml(
+            ref,
+            "SnowCap2",
+            (6.3 * scale, 0.65 * scale, 6.3 * scale),
+            (px, py + 12.1 * scale, pz),
+            snow_col,
+            MAT_SNOW,
+            can_collide=False,
+            indent=indent + 1,
+        ),
+        make_part_xml(
+            ref,
+            "PineTier3",
+            (3.8 * scale, 3.8 * scale, 3.8 * scale),
+            (px, py + 13.8 * scale, pz),
+            pine_col,
+            MAT_GRASS,
+            indent=indent + 1,
+        ),
+        make_part_xml(
+            ref,
+            "GoldenStarTopper",
+            (1.5 * scale, 1.5 * scale, 0.6 * scale),
+            (px, py + 16.2 * scale, pz),
+            (255, 220, 85),
+            MAT_NEON,
+            can_collide=False,
+            indent=indent + 1,
+        ),
+    ]
     return make_model_xml(ref, name, parts, indent=indent)
 
 
@@ -841,14 +938,23 @@ def build_leo_city_edit_preview_xml(ref: RefGen) -> str:
                 )
 
             if bx == 0 and bz == 0:
-                # Ornamental Marble Fountain in West Courtyard (-36, 0, 10) so Grand Central Ave stays wide open
+                # 52-stud Rockefeller / Plaza Christmas Tree at (-46, 0.3, 18) & Marble Fountain at (-46, 0.3, 42)
+                landmarks_items.append(
+                    build_christmas_tree_preview(
+                        ref,
+                        (ox - 46.0, 0.3, oz + 18.0),
+                        height=52.0,
+                        name="RockefellerPlazaChristmasTree",
+                        indent=4,
+                    )
+                )
                 landmarks_items.append(
                     make_part_xml(
                         ref,
                         "LeoPlazaFountain",
-                        (18.0, 3.2, 18.0),
-                        (ox - 36.0, 1.8, oz + 10.0),
-                        (112, 120, 134),
+                        (16.0, 3.2, 16.0),
+                        (ox - 46.0, 1.8, oz + 42.0),
+                        (235, 238, 245),
                         MAT_MARBLE,
                         indent=4,
                     )
@@ -857,91 +963,216 @@ def build_leo_city_edit_preview_xml(ref: RefGen) -> str:
                     make_part_xml(
                         ref,
                         "FountainWaterTier",
-                        (14.0, 1.4, 14.0),
-                        (ox - 36.0, 3.6, oz + 10.0),
-                        (145, 205, 245),
-                        MAT_GLASS,
-                        transparency=0.25,
+                        (12.0, 1.4, 12.0),
+                        (ox - 46.0, 3.6, oz + 42.0),
+                        (165, 215, 248),
+                        MAT_ICE,
+                        transparency=0.15,
                         indent=4,
                     )
                 )
-                landmarks_items.append(
-                    make_part_xml(
-                        ref,
-                        "FountainWaterSpire",
-                        (2.8, 7.5, 2.8),
-                        (ox - 36.0, 7.2, oz + 10.0),
-                        (210, 235, 255),
-                        MAT_MARBLE,
-                        can_collide=False,
-                        indent=4,
-                    )
-                )
-                # Crate stacks, Gold ATMs, Armored Cash Truck & Golden Bank Vault on Leo Plaza flanks
-                for cx_off, cz_off in ((-24.0, -8.0), (24.0, -8.0)):
+                # Festive Holiday Gift Stacks along the curb/plaza edges (never blocking 5th Avenue center driving lane!)
+                for gx_off, gz_off in ((-22.0, 8.0), (22.0, 8.0), (-22.0, -18.0), (22.0, -18.0)):
                     landmarks_items.append(
                         make_part_xml(
                             ref,
-                            "PlazaCrateStack",
-                            (6.4, 6.4, 3.2),
-                            (ox + cx_off, 3.5, oz + cz_off),
-                            (128, 86, 48),
-                            MAT_WOOD_PLANKS,
+                            "HolidayGiftStack",
+                            (3.6, 2.8, 3.6),
+                            (ox + gx_off, 1.7, oz + gz_off),
+                            (186, 32, 38),
+                            MAT_SMOOTH_PLASTIC,
                             indent=4,
                         )
                     )
+                landmarks_items.append(
+                    make_part_xml(
+                        ref,
+                        "ArmoredCashTruck",
+                        (6.8, 4.4, 15.6),
+                        (ox + 26.0, 2.5, oz + 44.0),
+                        (34, 40, 52),
+                        MAT_METAL,
+                        indent=4,
+                    )
+                )
                 landmarks_items.append(
                     make_part_xml(
                         ref,
                         "MegaCorpBankVault",
                         (10.5, 8.2, 7.6),
-                        (ox + 36.0, 4.4, oz - 34.0),
+                        (ox + 48.0, 4.4, oz + 44.0),
                         (235, 185, 32),
                         MAT_METAL,
                         indent=4,
                     )
                 )
-                for hx in (-usable * 0.5 + 3.5, usable * 0.5 - 3.5):
-                    landmarks_items.append(
-                        make_part_xml(
+                # Stunt Ramp on side plaza at (-30, 0.3, -52) so 5th Avenue center canyon view is 100% open!
+                zones_items.append(
+                    build_stunt_ramp_preview(ref, (ox - 30.0, 0.3, oz - 52.0), 0.0, 24.0, 5.8, 34.0, "LeoPlazaRamp", indent=4)
+                )
+                zones_items.append(
+                    build_speed_shop_preview(ref, (ox + 52.0, 0.0, oz - 22.0), -90.0, "PlazaSpeedShop", indent=4)
+                )
+                zones_items.append(
+                    build_mechanic_bay_preview(ref, (ox - 52.0, 0.0, oz - 22.0), 90.0, "PlazaMechanicRepairBay", indent=4)
+                )
+            elif bx == 1 and bz == 0:
+                zones_items.append(build_speed_shop_preview(ref, (ox, 0.0, oz - 24.0), -90.0, "SpeedShop", indent=4))
+                buildings_items.append(
+                    build_skyscraper_preview(
+                        ref,
+                        (ox - 36.0, 0.3, oz + 34.0),
+                        34.0,
+                        34.0,
+                        195.0,
+                        (68, 76, 90),
+                        "FifthAveEastTowerA",
+                        indent=4,
+                    )
+                )
+                buildings_items.append(
+                    build_skyscraper_preview(
+                        ref,
+                        (ox + 36.0, 0.3, oz + 34.0),
+                        34.0,
+                        34.0,
+                        235.0,
+                        (84, 76, 68),
+                        "FifthAveEastTowerB",
+                        indent=4,
+                    )
+                )
+            elif (bx == -1 and bz == 0) or (bx <= -1 and bz >= 1):
+                # Snowy Christmas Central Park: white snow lawn, Wollman Ice Skating Rink, and 48-stud Christmas Tree!
+                ground_items.append(
+                    make_part_xml(
+                        ref,
+                        "SnowyParkLawn",
+                        (usable - 12.0, 0.24, usable - 12.0),
+                        (ox, 0.24, oz),
+                        (238, 244, 252),
+                        MAT_SNOW,
+                        indent=4,
+                    )
+                )
+                ground_items.append(
+                    make_part_xml(
+                        ref,
+                        "WollmanIceSkatingRink",
+                        (54.0, 0.24, 40.0),
+                        (ox - 14.0, 0.34, oz + 16.0),
+                        (168, 214, 248),
+                        MAT_ICE,
+                        indent=4,
+                    )
+                )
+                landmarks_items.append(
+                    build_christmas_tree_preview(
+                        ref,
+                        (ox + 28.0, 0.36, oz - 18.0),
+                        height=48.0,
+                        name="CentralParkChristmasTree",
+                        indent=4,
+                    )
+                )
+                if bx == -1 and bz == 0:
+                    zones_items.append(
+                        build_mechanic_bay_preview(ref, (ox + 38.0, 0.0, oz - 36.0), 90.0, "MechanicRepairBay", indent=4)
+                    )
+                else:
+                    zones_items.append(
+                        build_stunt_ramp_preview(
+                            ref, (ox - 14.0, 0.36, oz - 24.0), 180.0, 26.0, 6.2, 38.0, "ParkLakeMegaJump", indent=4
+                        )
+                    )
+            elif bx == 0 and bz != 0:
+                # 5TH AVENUE SKYSCRAPER CANYON: 4 tall Manhattan skyscrapers (160 to 310 studs tall) flanking both sides of 5th Avenue
+                is_leo_block = bz == -1
+                seed = abs(bz * 19)
+                h_nw = 310.0 if is_leo_block else float(185 + (seed % 95))
+                h_ne = 265.0 if is_leo_block else float(170 + ((seed + 37) % 105))
+                h_sw = 240.0 if is_leo_block else float(160 + ((seed + 61) % 110))
+                h_se = 280.0 if is_leo_block else float(195 + ((seed + 83) % 95))
+                buildings_items.append(
+                    build_skyscraper_preview(
+                        ref,
+                        (ox - 44.0, 0.3, oz - 32.0),
+                        36.0,
+                        36.0,
+                        h_nw,
+                        (58, 68, 86),
+                        "LeoTower" if is_leo_block else "FifthAveTowerNW",
+                        is_leo_tower=is_leo_block,
+                        indent=4,
+                    )
+                )
+                buildings_items.append(
+                    build_skyscraper_preview(
+                        ref,
+                        (ox + 44.0, 0.3, oz - 32.0),
+                        36.0,
+                        36.0,
+                        h_ne,
+                        (76, 82, 96),
+                        "FifthAveTowerNE",
+                        indent=4,
+                    )
+                )
+                buildings_items.append(
+                    build_skyscraper_preview(
+                        ref,
+                        (ox - 44.0, 0.3, oz + 32.0),
+                        36.0,
+                        36.0,
+                        h_sw,
+                        (88, 78, 70),
+                        "FifthAveTowerSW",
+                        indent=4,
+                    )
+                )
+                buildings_items.append(
+                    build_skyscraper_preview(
+                        ref,
+                        (ox + 44.0, 0.3, oz + 32.0),
+                        36.0,
+                        36.0,
+                        h_se,
+                        (64, 72, 86),
+                        "FifthAveTowerSE",
+                        indent=4,
+                    )
+                )
+                if is_leo_block:
+                    zones_items.append(
+                        build_stunt_ramp_preview(
                             ref,
-                            "FireHydrant",
-                            (1.6, 3.2, 1.6),
-                            (ox + hx, 1.9, oz),
-                            (205, 32, 32),
-                            MAT_METAL,
+                            (ox - 44.0, 0.3 + h_nw, oz - 32.0 - 36.0 * 0.3),
+                            0.0,
+                            26.0,
+                            6.5,
+                            38.0,
+                            "RooftopMegaJump",
                             indent=4,
                         )
                     )
-                # Leo Plaza Seamless Steel Stunt Ramp, Plaza Speed Shop & Plaza Mechanic Repair Bay
-                zones_items.append(
-                    build_stunt_ramp_preview(ref, (ox, 0.3, oz - 52.0), 0.0, 26.0, 6.2, 38.0, "LeoPlazaRamp", indent=4)
-                )
-                zones_items.append(
-                    build_speed_shop_preview(ref, (ox + 44.0, 0.0, oz - 20.0), -90.0, "PlazaSpeedShop", indent=4)
-                )
-                zones_items.append(
-                    build_mechanic_bay_preview(ref, (ox - 44.0, 0.0, oz - 20.0), 90.0, "PlazaMechanicRepairBay", indent=4)
-                )
-            elif bx == 1 and bz == 0:
-                zones_items.append(build_speed_shop_preview(ref, (ox, 0.0, oz), -90.0, "SpeedShop", indent=4))
-            elif bx == -1 and bz == 0:
-                zones_items.append(build_mechanic_bay_preview(ref, (ox, 0.0, oz), 90.0, "MechanicRepairBay", indent=4))
-            elif bx == 0 and bz == -2:
-                zones_items.append(build_mechanic_bay_preview(ref, (ox - 34.0, 0.0, oz), 90.0, "NorthMechanicRepairBay", indent=4))
+                elif bz == -2:
+                    zones_items.append(
+                        build_mechanic_bay_preview(ref, (ox - 44.0, 0.0, oz), 90.0, "NorthMechanicRepairBay", indent=4)
+                    )
+            elif bx == 2 and bz == 2:
+                zones_items.append(build_speed_shop_preview(ref, (ox, 0.0, oz), 180.0, "EastSpeedShop", indent=4))
+            elif bx == -2 and bz == 2:
                 buildings_items.append(
                     make_part_xml(
                         ref,
                         "BoomGasStationCanopy",
                         (44.0, 2.2, 28.0),
-                        (ox + 34.0, 18.6, oz),
+                        (ox, 18.6, oz),
                         (185, 38, 38),
                         MAT_METAL,
                         indent=4,
                     )
                 )
-            elif bx == 2 and bz == 2:
-                zones_items.append(build_speed_shop_preview(ref, (ox, 0.0, oz), 180.0, "EastSpeedShop", indent=4))
             elif bx == grid_radius:
                 ground_items.append(
                     make_part_xml(
@@ -968,7 +1199,8 @@ def build_leo_city_edit_preview_xml(ref: RefGen) -> str:
                 zones_items.append(
                     build_stunt_ramp_preview(ref, (ox + 8.0, 0.36, oz), 0.0, 26.0, 6.5, 38.0, "BoardwalkStuntJump", indent=4)
                 )
-            elif bx <= -2 and bz <= -1:
+            elif bx == -3 and bz == -3:
+                # Compact Hudson Container Dock at far NW corner (without stick cranes cluttering the skyline!)
                 buildings_items.append(
                     make_part_xml(
                         ref,
@@ -1002,133 +1234,29 @@ def build_leo_city_edit_preview_xml(ref: RefGen) -> str:
                         indent=4,
                     )
                 )
-                landmarks_items.append(
-                    make_part_xml(
-                        ref,
-                        "ConstructionCraneMast",
-                        (5.0, 85.0, 5.0),
-                        (ox - 24.0, 45.1, oz - 24.0),
-                        (215, 155, 28),
-                        MAT_METAL,
-                        indent=4,
-                    )
-                )
-                landmarks_items.append(
-                    make_part_xml(
-                        ref,
-                        "ConstructionCraneJib",
-                        (68.0, 4.0, 4.0),
-                        (ox - 2.0, 86.6, oz - 24.0),
-                        (215, 155, 28),
-                        MAT_METAL,
-                        indent=4,
-                    )
-                )
-            elif bx <= -2 and bz >= 1:
-                ground_items.append(
-                    make_part_xml(
-                        ref,
-                        "SnowyParkLawn",
-                        (usable - 12.0, 0.24, usable - 12.0),
-                        (ox, 0.24, oz),
-                        (214, 224, 238),
-                        MAT_SAND,
-                        indent=4,
-                    )
-                )
-                ground_items.append(
-                    make_part_xml(
-                        ref,
-                        "FrozenParkPond",
-                        (36.0, 0.24, 26.0),
-                        (ox - 16.0, 0.32, oz + 14.0),
-                        (142, 188, 225),
-                        MAT_GLASS,
-                        indent=4,
-                    )
-                )
-                zones_items.append(
-                    build_stunt_ramp_preview(
-                        ref, (ox - 16.0, 0.36, oz - 14.0), 180.0, 26.0, 6.8, 38.0, "ParkLakeMegaJump", indent=4
-                    )
-                )
-            elif abs(bx) <= 1 and abs(bz) <= 1:
-                is_leo = (bx == 0 and bz == -1) or (bx == 1 and bz == -1)
-                if bx == 0 and bz == -1:
-                    h = 195.0
-                elif bx == 1 and bz == -1:
-                    h = 175.0
-                else:
-                    h = 110.0 + ((abs(bx * 3 + bz * 5) % 4) * 18.0)
-                col = (52, 58, 72) if is_leo else (64, 70, 84)
-                t_name = "LeoTower" if (bx == 0 and bz == -1) else "DowntownTower"
-                x_off = 34.0 if bx == 0 else 22.0
-                buildings_items.append(
-                    build_skyscraper_preview(
-                        ref,
-                        (ox - x_off, 0.3, oz - 20.0),
-                        34.0,
-                        34.0,
-                        h,
-                        col,
-                        t_name,
-                        is_leo_tower=is_leo,
-                        indent=4,
-                    )
-                )
-                if is_leo:
-                    zones_items.append(
-                        build_stunt_ramp_preview(
+            else:
+                # Dense 4-Tower Manhattan Skyscraper Block (135 to 280 studs tall)
+                seed = abs(bx * 5 + bz * 11)
+                quads = [
+                    (-34.0, -34.0, 36.0, 36.0, 145.0 + float((seed * 13) % 75), (74, 80, 92)),
+                    (34.0, -34.0, 34.0, 34.0, 175.0 + float((seed * 17) % 85), (88, 76, 68)),
+                    (-34.0, 34.0, 34.0, 34.0, 195.0 + float((seed * 23) % 75), (62, 70, 84)),
+                    (34.0, 34.0, 36.0, 36.0, 215.0 + float((seed * 29) % 70), (94, 86, 76)),
+                ]
+                for q_idx, (qx, qz, qw, qd, qh, qtint) in enumerate(quads, start=1):
+                    buildings_items.append(
+                        build_skyscraper_preview(
                             ref,
-                            (ox - x_off, 0.3 + h, oz - 20.0 - 34.0 * 0.3),
-                            0.0,
-                            26.0,
-                            6.5,
-                            38.0,
-                            "RooftopMegaJump",
+                            (ox + qx, 0.3, oz + qz),
+                            qw,
+                            qd,
+                            qh,
+                            qtint,
+                            f"ManhattanTower_{q_idx}",
+                            is_leo_tower=False,
                             indent=4,
                         )
                     )
-                buildings_items.append(
-                    build_skyscraper_preview(
-                        ref,
-                        (ox + x_off, 0.3, oz + 20.0),
-                        32.0,
-                        32.0,
-                        92.0,
-                        (76, 72, 68),
-                        "GlassOfficeTower",
-                        is_leo_tower=False,
-                        indent=4,
-                    )
-                )
-            else:
-                buildings_items.append(
-                    build_skyscraper_preview(
-                        ref,
-                        (ox - 20.0, 0.3, oz - 18.0),
-                        30.0,
-                        30.0,
-                        54.0,
-                        (96, 68, 58),
-                        "NYCBrickBrownstone",
-                        is_leo_tower=False,
-                        indent=4,
-                    )
-                )
-                buildings_items.append(
-                    build_skyscraper_preview(
-                        ref,
-                        (ox + 20.0, 0.3, oz + 18.0),
-                        28.0,
-                        28.0,
-                        44.0,
-                        (58, 66, 78),
-                        "GothamMidtownBlock",
-                        is_leo_tower=False,
-                        indent=4,
-                    )
-                )
 
     subfolders = [
         make_folder_item(ref, "Ground", ground_items, indent=3),

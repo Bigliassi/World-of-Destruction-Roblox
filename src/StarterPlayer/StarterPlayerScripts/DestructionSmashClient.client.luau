@@ -633,15 +633,15 @@ local function updateBrakeLightsAndSkidTrails(
 	isBraking: boolean,
 	absSpeed: number
 )
-	local tailBar = model:FindFirstChild("TaillightBar") :: BasePart?
-	local clusterL = model:FindFirstChild("TaillightClusterL") :: BasePart?
-	local clusterR = model:FindFirstChild("TaillightClusterR") :: BasePart?
+	local tailBar = (model:FindFirstChild("TaillightBar") or model:FindFirstChild("TaillightBar", true)) :: BasePart?
+	local clusterL = (model:FindFirstChild("TaillightClusterL") or model:FindFirstChild("TaillightClusterL", true)) :: BasePart?
+	local clusterR = (model:FindFirstChild("TaillightClusterR") or model:FindFirstChild("TaillightClusterR", true)) :: BasePart?
 
-	-- Keep recessed dark-red LED strips (185, 24, 30) when cruising; crisp red brake glow when braking
+	-- Keep taillight colors subtle (Color3.fromRGB(185, 28, 34), Material.SmoothPlastic, max PointLight.Brightness = 0.8, Range = 6)
 	local activeColor = if isBraking
-		then Color3.fromRGB(220, 28, 34)
-		else Color3.fromRGB(185, 24, 30)
-	local activeMaterial = if isBraking then Enum.Material.Neon else Enum.Material.SmoothPlastic
+		then Color3.fromRGB(185, 28, 34)
+		else Color3.fromRGB(145, 22, 28)
+	local activeMaterial = Enum.Material.SmoothPlastic
 
 	for _, part in ipairs({ tailBar, clusterL, clusterR }) do
 		if part then
@@ -655,12 +655,14 @@ local function updateBrakeLightsAndSkidTrails(
 		if not brakeLight then
 			brakeLight = Instance.new("PointLight")
 			brakeLight.Name = "BrakeGlowLight"
-			brakeLight.Color = Color3.fromRGB(220, 28, 34)
-			brakeLight.Range = 12
+			brakeLight.Color = Color3.fromRGB(185, 28, 34)
+			brakeLight.Range = 6
 			brakeLight.Parent = tailBar
 		end
+		brakeLight.Color = Color3.fromRGB(185, 28, 34)
+		brakeLight.Range = 6
 		brakeLight.Enabled = isBraking
-		brakeLight.Brightness = if isBraking then 2.4 else 0
+		brakeLight.Brightness = if isBraking then 0.8 else 0
 	end
 
 	-- Enable rear tire skid trails and smoke during hard braking

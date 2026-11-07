@@ -42,31 +42,31 @@ end
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "WorldOfDestructionViralRewardsGui"
 screenGui.ResetOnSpawn = false
-screenGui.IgnoreGuiInset = false
+screenGui.IgnoreGuiInset = true
 screenGui.DisplayOrder = 12
 screenGui.Parent = playerGui
 
 local uiScale = Instance.new("UIScale")
 uiScale.Parent = screenGui
 local function updateScale()
-	local vp = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or Vector2.new(1280, 720)
-	uiScale.Scale = math.clamp(math.min(vp.X / 1280, vp.Y / 720), 0.78, 1.15)
+	local vp = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or Vector2.new(1366, 768)
+	uiScale.Scale = math.clamp(math.min(vp.X / 1366, vp.Y / 768), 0.62, 1.0)
 end
 if workspace.CurrentCamera then
 	workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(updateScale)
 end
 updateScale()
 
--- Compact 180x32 Pill below TopLeftPanel at (14, 124)
+-- Compact 180x28 Pill below TopLeftPanel at UDim2.fromOffset(14, 126)
 local pillButton = Instance.new("TextButton")
 pillButton.Name = "PlaytimeGiftPill"
-pillButton.Size = UDim2.fromOffset(180, 32)
-pillButton.Position = UDim2.fromOffset(14, 124)
+pillButton.Size = UDim2.fromOffset(180, 28)
+pillButton.Position = UDim2.fromOffset(14, 126)
 pillButton.BackgroundColor3 = Color3.fromRGB(18, 23, 34)
 pillButton.BackgroundTransparency = 0.12
 pillButton.BorderSizePixel = 0
 pillButton.Font = Enum.Font.GothamBlack
-pillButton.TextSize = 12
+pillButton.TextSize = 11
 pillButton.TextColor3 = Color3.fromRGB(240, 246, 255)
 pillButton.Text = "GIFT IN 00:45 [G]"
 pillButton.AutoButtonColor = true
@@ -232,6 +232,10 @@ local function refreshUI()
 	local claimed = parseClaimedSet(claimedCSV)
 	local readyCount = tonumber(player:GetAttribute("ReadyGiftCount")) or 0
 	local nextLeft = tonumber(player:GetAttribute("NextGiftSecondsLeft")) or 0
+	local totalDest = tonumber(player:GetAttribute("TotalDestructions")) or 0
+
+	-- Hide the [G] Playtime Gift pill until after the initial 5-smash tutorial (or when a gift is ready)
+	pillButton.Visible = (totalDest >= 5) or (readyCount > 0) or (playSec >= 45)
 
 	if readyCount > 0 then
 		pillButton.Text = "FREE GIFT READY! [G]"
@@ -317,7 +321,7 @@ UserInputService.InputBegan:Connect(function(input: InputObject, processed: bool
 	end
 end)
 
-for _, attr in ipairs({ "PlaytimeSeconds", "ClaimedGiftsCSV", "ReadyGiftCount", "NextGiftSecondsLeft", "RebirthCount", "RebirthMultiplier" }) do
+for _, attr in ipairs({ "PlaytimeSeconds", "ClaimedGiftsCSV", "ReadyGiftCount", "NextGiftSecondsLeft", "RebirthCount", "RebirthMultiplier", "TotalDestructions", "HomeMenuActive" }) do
 	player:GetAttributeChangedSignal(attr):Connect(refreshUI)
 end
 player:GetAttributeChangedSignal("LastViralBonusText"):Connect(function()

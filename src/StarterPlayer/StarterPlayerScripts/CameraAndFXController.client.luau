@@ -693,9 +693,136 @@ task.spawn(function()
 end)
 
 -- ==========================================
--- 6. RENDERSTEPPED CHASE CAMERA, FOV, LOW-ARC 3D COIN MAGNETISM & VIGNETTE
+-- 6. RENDERSTEPPED CHASE CAMERA, ANTI-OCCLUSION, FOV, LOW-ARC 3D COIN MAGNETISM & VIGNETTE
 -- ==========================================
 local sirenPhase = 0.0
+local smoothCamPos = Vector3.new(0, 12, 24)
+local smoothLookTarget = Vector3.new(0, 3, 0)
+local lastFinalChaseCFrame: CFrame? = nil
+local hasSmoothCam = false
+local occludedCameraParts: { [BasePart]: boolean } = {}
+local cameraOverlapParams = OverlapParams.new()
+cameraOverlapParams.FilterType = Enum.RaycastFilterType.Exclude
+
+local function isGroundOrRoadPart(part: BasePart): boolean
+	local name = part.Name
+	if
+		name == "Baseplate"
+		or name == "Road"
+		or name == "Sidewalk"
+		or name == "Crosswalk"
+		or name == "Ground"
+		or name == "PlazaFloor"
+		or name == "Ocean"
+		or name == "Grass"
+		or name == "Terrain"
+	then
+		return true
+	end
+	if part.Size.Y <= 2.6 and part.Position.Y <= 2.2 and (part.Size.X >= 24 or part.Size.Z >= 24) then
+		return true
+	end
+	return false
+end
+
+local function resolveSeatedVehicleRoot(char: Model?, humanoid: Humanoid?, fallbackRoot: BasePart?): (BasePart?, Model?)
+	if humanoid and humanoid.SeatPart then
+		local vehModel = humanoid.SeatPart:FindFirstAncestorOfClass("Model")
+		if vehModel then
+			local chassis = vehModel.PrimaryPart or (vehModel:FindFirstChild("Chassis") :: BasePart?)
+			if chassis then
+				return chassis, vehModel
+			end
+		end
+		return humanoid.SeatPart, vehModel
+	end
+	if char then
+		local parentModel = char.Parent
+		if parentModel and parentModel:IsA("Model") and parentModel ~= Workspace then
+			local chassis = parentModel.PrimaryPart or (parentModel:FindFirstChild("Chassis") :: BasePart?)
+			if chassis then
+				return chassis, parentModel
+			end
+		end
+	end
+	return fallbackRoot, nil
+end
+
+local function runCameraAntiOcclusionPass(camPos: Vector3, vehicleRoot: BasePart?, vehicleModel: Model?, char: Model?)
+	local newOccluded: { [BasePart]: boolean } = {}
+
+	local function markPartOccluded(part: BasePart)
+		if isGroundOrRoadPart(part) then
+			return
+		end
+		newOccluded[part] = true
+		part.LocalTransparencyModifier = 0.88
+	end
+
+	-- 1. Spatial query for all queryable BaseParts within 9 studs of cam.CFrame.Position
+	local nearbyParts = Workspace:GetPartBoundsInRadius(camPos, 9.0, cameraOverlapParams)
+	for _, part in ipairs(nearbyParts) do
+		markPartOccluded(part)
+	end
+
+	-- 2. Line-of-sight box query between camera and vehicleRoot so no wall, barricade, or police cruiser blocks the car view
+	if vehicleRoot then
+		local toCar = vehicleRoot.Position - camPos
+		local dist = toCar.Magnitude
+		if dist > 2.5 then
+			local midPos = camPos + toCar * 0.45
+			local boxCF = CFrame.lookAt(midPos, vehicleRoot.Position)
+			local losParts = Workspace:GetPartBoundsInBox(boxCF, Vector3.new(5.5, 4.5, math.max(2.0, dist - 4.0)), cameraOverlapParams)
+			for _, part in ipairs(losParts) do
+				if not (vehicleModel and part:IsDescendantOf(vehicleModel)) and not (char and part:IsDescendantOf(char)) then
+					markPartOccluded(part)
+				end
+			end
+		end
+	end
+
+	-- 3. Explicit distance check (< 9 studs) on vehicle, character, police, and nearby non-queryable parts (e.g. TaillightBar, SirenRed)
+	local function checkContainerPartsWithin9Studs(container: Instance?)
+		if not container then
+			return
+		end
+		for _, desc in ipairs(container:GetDescendants()) do
+			if desc:IsA("BasePart") then
+				if (desc.Position - camPos).Magnitude <= 9.0 then
+					markPartOccluded(desc)
+				end
+			end
+		end
+	end
+
+	checkContainerPartsWithin9Studs(vehicleModel)
+	checkContainerPartsWithin9Studs(char)
+	checkContainerPartsWithin9Studs(Workspace:FindFirstChild("PoliceUnits"))
+	checkContainerPartsWithin9Studs(Workspace:FindFirstChild("ActivePolice"))
+
+	for _, child in ipairs(Workspace:GetChildren()) do
+		if child:IsA("BasePart") then
+			if (child.Position - camPos).Magnitude <= 9.0 then
+				markPartOccluded(child)
+			end
+		elseif child:IsA("Model") and child ~= char and child ~= vehicleModel and child.Name ~= "LeoCity" then
+			local primary = child.PrimaryPart or child:FindFirstChildWhichIsA("BasePart")
+			if primary and (primary.Position - camPos).Magnitude <= 32.0 then
+				checkContainerPartsWithin9Studs(child)
+			end
+		end
+	end
+
+	-- Restore LocalTransparencyModifier = 0 for any part now farther than 9 studs from camera
+	for prevPart in pairs(occludedCameraParts) do
+		if not newOccluded[prevPart] then
+			if prevPart.Parent then
+				prevPart.LocalTransparencyModifier = 0
+			end
+		end
+	end
+	occludedCameraParts = newOccluded
+end
 
 RunService.RenderStepped:Connect(function(dt: number)
 	local cam = Workspace.CurrentCamera
@@ -721,7 +848,7 @@ RunService.RenderStepped:Connect(function(dt: number)
 	lastSpeed = speedMph
 
 	-- Dynamic Speed-Based FOV Scaling (70 base -> up to 92 at high speed / nitro)
-	local isSeatedInVehicle = (humanoid ~= nil and humanoid.Sit) or (player:GetAttribute("IsDriving") == true) or (player:GetAttribute("InVehicle") == true)
+	local isSeatedInVehicle = (humanoid ~= nil and (humanoid.Sit or humanoid.SeatPart ~= nil)) or (player:GetAttribute("IsDriving") == true) or (player:GetAttribute("InVehicle") == true)
 	local isDriving = isSeatedInVehicle or (speedMph > 8)
 	local nitroBoost = (player:GetAttribute("TouchNitro") == true) and 5 or 0
 	local targetFov = isDriving and math.clamp(70 + (speedMph / 140) * 18 + nitroBoost, 70, 92) or 70
@@ -768,6 +895,50 @@ RunService.RenderStepped:Connect(function(dt: number)
 	end
 
 	local inHomeMenu = (player:GetAttribute("HomeMenuActive") == true) or (player:GetAttribute("HomeMenuCameraActive") == true)
+	local vehicleRoot, vehicleModel = resolveSeatedVehicleRoot(char, humanoid, root)
+
+	-- Dedicated, Un-Blockable Elevated Third-Person Chase Camera when seated in a vehicle
+	if inHomeMenu then
+		hasSmoothCam = false
+		local orbitAngle = os.clock() * 0.22
+		local orbitPos = Vector3.new(math.cos(orbitAngle) * 115, 62, math.sin(orbitAngle) * 115 + 25)
+		cam.CFrame = CFrame.lookAt(orbitPos, Vector3.new(0, 18, -30))
+	elseif isSeatedInVehicle and vehicleRoot then
+		local rawLook = vehicleRoot.CFrame.LookVector
+		local flatCarLook = Vector3.new(rawLook.X, 0, rawLook.Z)
+		if flatCarLook.Magnitude > 0.01 then
+			flatCarLook = flatCarLook.Unit
+		else
+			flatCarLook = Vector3.new(0, 0, -1)
+		end
+
+		local desiredCamPos = vehicleRoot.Position - flatCarLook * 20 + Vector3.new(0, 7.8, 0)
+		local lookTarget = vehicleRoot.Position + flatCarLook * 10 + Vector3.new(0, 2.2, 0)
+
+		if not hasSmoothCam or (smoothCamPos - desiredCamPos).Magnitude > 60 then
+			smoothCamPos = desiredCamPos
+			smoothLookTarget = lookTarget
+			hasSmoothCam = true
+		else
+			local lerpAlpha = math.clamp(dt * 12, 0, 1)
+			smoothCamPos = smoothCamPos:Lerp(desiredCamPos, lerpAlpha)
+			smoothLookTarget = smoothLookTarget:Lerp(lookTarget, lerpAlpha)
+		end
+
+		-- Clamp camera distance >= 19 studs behind and >= 7.5 studs above vehicleRoot so it never enters the car
+		local relOffset = smoothCamPos - vehicleRoot.Position
+		local horizVec = Vector3.new(relOffset.X, 0, relOffset.Z)
+		if horizVec.Magnitude < 19.0 then
+			local pushDir = if horizVec.Magnitude > 0.1 then horizVec.Unit else -flatCarLook
+			horizVec = pushDir * 19.0
+		end
+		local minCamY = math.max(smoothCamPos.Y, vehicleRoot.Position.Y + 7.5)
+		smoothCamPos = Vector3.new(vehicleRoot.Position.X + horizVec.X, minCamY, vehicleRoot.Position.Z + horizVec.Z)
+
+		cam.CFrame = CFrame.lookAt(smoothCamPos, lookTarget)
+	else
+		hasSmoothCam = false
+	end
 
 	-- Trauma-Based 3D Rotational & Positional Camera Shake (scaled by Settings CameraShakeScale)
 	local shakeScale = tonumber(player:GetAttribute("CameraShakeScale")) or 1.0
@@ -782,12 +953,10 @@ RunService.RenderStepped:Connect(function(dt: number)
 		trauma = 0
 	end
 
-	-- Home Menu Aerial Orbit Camera over sunlit Leo Plaza & Leo Tower when HomeMenuActive == true
-	if inHomeMenu then
-		local orbitAngle = os.clock() * 0.22
-		local orbitPos = Vector3.new(math.cos(orbitAngle) * 115, 62, math.sin(orbitAngle) * 115 + 25)
-		cam.CFrame = CFrame.lookAt(orbitPos, Vector3.new(0, 18, -30))
-	end
+	lastFinalChaseCFrame = cam.CFrame
+
+	-- Camera Anti-Occlusion Pass: fade any BasePart within 9 studs of cam.CFrame.Position to LocalTransparencyModifier = 0.88
+	runCameraAntiOcclusionPass(cam.CFrame.Position, vehicleRoot, vehicleModel, char)
 
 	-- Police Siren Screen Vignette at High Heat
 	local stars = tonumber(player:GetAttribute("HeatStars") or player:GetAttribute("WantedLevel")) or 0
@@ -798,5 +967,27 @@ RunService.RenderStepped:Connect(function(dt: number)
 		vignetteStroke.Transparency = math.clamp(pulseAlpha, 0.42, 0.92)
 	else
 		vignetteStroke.Transparency = 1
+	end
+end)
+
+-- Post-Camera RenderStep lock (Priority Camera + 1) so Roblox's default PopperCam can never override the chase camera
+RunService:BindToRenderStep("WODChaseCameraPostLock", Enum.RenderPriority.Camera.Value + 1, function()
+	local cam = Workspace.CurrentCamera
+	if not cam then
+		return
+	end
+	local inHomeMenu = (player:GetAttribute("HomeMenuActive") == true) or (player:GetAttribute("HomeMenuCameraActive") == true)
+	if inHomeMenu and lastFinalChaseCFrame then
+		cam.CFrame = lastFinalChaseCFrame
+		return
+	end
+	local char = player.Character
+	local root = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
+	local humanoid = char and char:FindFirstChildOfClass("Humanoid")
+	local isSeatedInVehicle = (humanoid ~= nil and (humanoid.Sit or humanoid.SeatPart ~= nil)) or (player:GetAttribute("IsDriving") == true) or (player:GetAttribute("InVehicle") == true)
+	if isSeatedInVehicle and hasSmoothCam and lastFinalChaseCFrame then
+		local vehicleRoot, vehicleModel = resolveSeatedVehicleRoot(char, humanoid, root)
+		cam.CFrame = lastFinalChaseCFrame
+		runCameraAntiOcclusionPass(cam.CFrame.Position, vehicleRoot, vehicleModel, char)
 	end
 end)

@@ -235,7 +235,7 @@ local function makeTactile3DButton(params: {
 end
 
 --------------------------------------------------------------------------------
--- 1. CENTERED HOME CARD (Title: WORLD OF DESTRUCTION + 4 Clean Buttons)
+-- 1. CENTERED HOME CARD (Title: WORLD OF DESTRUCTION + Goal Banner + 5-Tier Strip + 4 Clean Buttons)
 --------------------------------------------------------------------------------
 local homeRoot = Instance.new("Frame")
 homeRoot.Name = "HomeMenuOverlay"
@@ -248,7 +248,7 @@ homeRoot.Parent = screenGui
 
 local homeCard = Instance.new("Frame")
 homeCard.Name = "HomeCard"
-homeCard.Size = UDim2.fromOffset(440, 360)
+homeCard.Size = UDim2.fromOffset(486, 442)
 homeCard.Position = UDim2.fromScale(0.5, 0.5)
 homeCard.AnchorPoint = Vector2.new(0.5, 0.5)
 homeCard.BackgroundColor3 = Color3.fromRGB(13, 18, 30)
@@ -260,8 +260,8 @@ addStroke(homeCard, Color3.fromRGB(255, 190, 50), 2.5, 0.12)
 
 local headerBox = Instance.new("Frame")
 headerBox.Name = "HeaderBanner"
-headerBox.Size = UDim2.new(1, -36, 0, 62)
-headerBox.Position = UDim2.fromOffset(18, 16)
+headerBox.Size = UDim2.new(1, -36, 0, 54)
+headerBox.Position = UDim2.fromOffset(18, 14)
 headerBox.BackgroundColor3 = Color3.fromRGB(20, 27, 44)
 headerBox.BorderSizePixel = 0
 headerBox.Parent = homeCard
@@ -289,10 +289,153 @@ heroGrad.Color = ColorSequence.new({
 })
 heroGrad.Parent = heroTitle
 
+-- Crystal-Clear 1-Line Visual Goal Banner right under title
+local goalBannerFrame = Instance.new("Frame")
+goalBannerFrame.Name = "GoalBanner"
+goalBannerFrame.Size = UDim2.new(1, -36, 0, 28)
+goalBannerFrame.Position = UDim2.fromOffset(18, 74)
+goalBannerFrame.BackgroundColor3 = Color3.fromRGB(22, 34, 28)
+goalBannerFrame.BorderSizePixel = 0
+goalBannerFrame.Parent = homeCard
+addCorner(goalBannerFrame, 8)
+addStroke(goalBannerFrame, Color3.fromRGB(95, 245, 145), 1.4, 0.2)
+
+local goalBannerLabel = Instance.new("TextLabel")
+goalBannerLabel.Name = "GoalBannerText"
+goalBannerLabel.Size = UDim2.new(1, -16, 1, 0)
+goalBannerLabel.Position = UDim2.fromOffset(8, 0)
+goalBannerLabel.BackgroundTransparency = 1
+goalBannerLabel.Font = Enum.Font.GothamBlack
+goalBannerLabel.Text = "GOAL: SMASH MANHATTAN FOR CASH -> UNLOCK ALL 8 CARS (TIER 1 TO TIER 5)!"
+goalBannerLabel.TextColor3 = Color3.fromRGB(120, 255, 165)
+goalBannerLabel.TextSize = 11
+goalBannerLabel.TextScaled = true
+goalBannerLabel.TextXAlignment = Enum.TextXAlignment.Center
+goalBannerLabel.Parent = goalBannerFrame
+
+-- Visual 5-Tier Car Progression Strip: [T1 COMPACT] -> [T2 SEDAN] -> [T3 SUV] -> [T4 MONSTER] -> [T5 DOZER]
+local tierStripContainer = Instance.new("Frame")
+tierStripContainer.Name = "FiveTierProgressionStrip"
+tierStripContainer.Size = UDim2.new(1, -36, 0, 44)
+tierStripContainer.Position = UDim2.fromOffset(18, 108)
+tierStripContainer.BackgroundColor3 = Color3.fromRGB(16, 22, 36)
+tierStripContainer.BorderSizePixel = 0
+tierStripContainer.Parent = homeCard
+addCorner(tierStripContainer, 10)
+addStroke(tierStripContainer, Color3.fromRGB(255, 200, 55), 1.4, 0.25)
+
+local tierStripSummaryLabel = Instance.new("TextLabel")
+tierStripSummaryLabel.Name = "TierStripSummaryText"
+tierStripSummaryLabel.Size = UDim2.new(1, -12, 0, 14)
+tierStripSummaryLabel.Position = UDim2.fromOffset(6, 2)
+tierStripSummaryLabel.BackgroundTransparency = 1
+tierStripSummaryLabel.Font = Enum.Font.GothamBold
+tierStripSummaryLabel.Text = "[T1 COMPACT] -> [T2 SEDAN] -> [T3 SUV] -> [T4 MONSTER] -> [T5 DOZER]"
+tierStripSummaryLabel.TextColor3 = Color3.fromRGB(255, 220, 85)
+tierStripSummaryLabel.TextSize = 9
+tierStripSummaryLabel.TextScaled = true
+tierStripSummaryLabel.TextXAlignment = Enum.TextXAlignment.Center
+tierStripSummaryLabel.Parent = tierStripContainer
+
+local tierPillsRow = Instance.new("Frame")
+tierPillsRow.Name = "TierPillsRow"
+tierPillsRow.Size = UDim2.new(1, -12, 0, 22)
+tierPillsRow.Position = UDim2.fromOffset(6, 18)
+tierPillsRow.BackgroundTransparency = 1
+tierPillsRow.Parent = tierStripContainer
+
+local tierRowLayout = Instance.new("UIListLayout")
+tierRowLayout.FillDirection = Enum.FillDirection.Horizontal
+tierRowLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+tierRowLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+tierRowLayout.Padding = UDim.new(0, 6)
+tierRowLayout.SortOrder = Enum.SortOrder.LayoutOrder
+tierRowLayout.Parent = tierPillsRow
+
+local HOME_TIER_DEFS = {
+	{ tier = 1, label = "T1 COMPACT", matchIds = { "Compact" } },
+	{ tier = 2, label = "T2 SEDAN", matchIds = { "Sedan", "Muscle" } },
+	{ tier = 3, label = "T3 SUV", matchIds = { "SUV", "Pickup", "Sports" } },
+	{ tier = 4, label = "T4 MONSTER", matchIds = { "MonsterTruck" } },
+	{ tier = 5, label = "T5 DOZER", matchIds = { "Bulldozer" } },
+}
+
+local homeTierPills: { { frame: Frame, stroke: UIStroke, label: TextLabel } } = {}
+for idx, tDef in ipairs(HOME_TIER_DEFS) do
+	local pill = Instance.new("Frame")
+	pill.Name = "HomeTierPill_" .. tostring(tDef.tier)
+	pill.LayoutOrder = idx
+	pill.Size = UDim2.fromOffset(82, 20)
+	pill.BackgroundColor3 = Color3.fromRGB(24, 30, 48)
+	pill.BorderSizePixel = 0
+	pill.Parent = tierPillsRow
+	addCorner(pill, 6)
+	local pStroke = addStroke(pill, Color3.fromRGB(75, 95, 135), 1.2, 0.25)
+
+	local pLbl = Instance.new("TextLabel")
+	pLbl.Name = "TierLabel"
+	pLbl.Size = UDim2.new(1, -6, 1, 0)
+	pLbl.Position = UDim2.fromOffset(3, 0)
+	pLbl.BackgroundTransparency = 1
+	pLbl.Font = Enum.Font.GothamBlack
+	pLbl.Text = tDef.label
+	pLbl.TextSize = 9
+	pLbl.TextScaled = true
+	pLbl.TextColor3 = Color3.fromRGB(165, 180, 210)
+	pLbl.Parent = pill
+
+	table.insert(homeTierPills, {
+		frame = pill,
+		stroke = pStroke,
+		label = pLbl,
+	})
+end
+
+local function refreshHomeTierStrip()
+	local unlockedStr = tostring(localPlayer:GetAttribute("UnlockedVehicles") or "Compact")
+	local equippedStr = tostring(localPlayer:GetAttribute("EquippedVehicle") or localPlayer:GetAttribute("SelectedVehicle") or "Compact")
+	local activeTier = tonumber(localPlayer:GetAttribute("SmashPowerTier")) or 1
+
+	for idx, tDef in ipairs(HOME_TIER_DEFS) do
+		local isUnlocked = (tDef.tier == 1) or (activeTier >= tDef.tier)
+		if not isUnlocked then
+			for _, id in ipairs(tDef.matchIds) do
+				if string.find(unlockedStr, id, 1, true) ~= nil or equippedStr == id then
+					isUnlocked = true
+					break
+				end
+			end
+		end
+		local ui = homeTierPills[idx]
+		if ui then
+			if tDef.tier == activeTier then
+				ui.frame.BackgroundColor3 = Color3.fromRGB(230, 170, 25)
+				ui.stroke.Color = Color3.fromRGB(255, 240, 110)
+				ui.stroke.Transparency = 0
+				ui.label.TextColor3 = Color3.fromRGB(20, 24, 34)
+				ui.label.Text = "[" .. tDef.label .. "]"
+			elseif isUnlocked then
+				ui.frame.BackgroundColor3 = Color3.fromRGB(28, 138, 74)
+				ui.stroke.Color = Color3.fromRGB(95, 245, 145)
+				ui.stroke.Transparency = 0.1
+				ui.label.TextColor3 = Color3.fromRGB(240, 255, 245)
+				ui.label.Text = "[" .. tDef.label .. "]"
+			else
+				ui.frame.BackgroundColor3 = Color3.fromRGB(22, 28, 44)
+				ui.stroke.Color = Color3.fromRGB(70, 88, 125)
+				ui.stroke.Transparency = 0.35
+				ui.label.TextColor3 = Color3.fromRGB(145, 162, 195)
+				ui.label.Text = "[" .. tDef.label .. "]"
+			end
+		end
+	end
+end
+refreshHomeTierStrip()
+
 local buttonsStack = Instance.new("Frame")
 buttonsStack.Name = "MainButtonsStack"
-buttonsStack.Size = UDim2.new(1, -36, 0, 252)
-buttonsStack.Position = UDim2.fromOffset(18, 92)
+buttonsStack.Size = UDim2.new(1, -36, 0, 256)
+buttonsStack.Position = UDim2.fromOffset(18, 164)
 buttonsStack.BackgroundTransparency = 1
 buttonsStack.Parent = homeCard
 
@@ -554,6 +697,8 @@ localPlayer.AttributeChanged:Connect(function(attr: string)
 		settingsModal.Visible = not settingsModal.Visible
 	elseif attr == "ToggleHomeMenuUI" then
 		setHomeMenuOpen(not homeRoot.Visible)
+	elseif attr == "UnlockedVehicles" or attr == "EquippedVehicle" or attr == "SelectedVehicle" or attr == "SmashPowerTier" then
+		refreshHomeTierStrip()
 	end
 end)
 
