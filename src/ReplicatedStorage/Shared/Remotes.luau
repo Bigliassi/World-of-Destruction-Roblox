@@ -92,6 +92,10 @@ local REMOTE_SPECS: { RemoteSpec } = {
 	{ Name = "ApplyCharacterPreset", ClassName = "RemoteEvent" },
 	{ Name = "AvatarUpdated", ClassName = "RemoteEvent" },
 	{ Name = "OpenAvatarEditor", ClassName = "RemoteEvent" },
+
+	-- Viral Retention, Playtime Gifts & Rebirth Remotes
+	{ Name = "ClaimPlaytimeGift", ClassName = "RemoteFunction" },
+	{ Name = "RequestRebirth", ClassName = "RemoteFunction" },
 }
 
 local SPEC_BY_NAME: { [string]: RemoteSpec } = {}

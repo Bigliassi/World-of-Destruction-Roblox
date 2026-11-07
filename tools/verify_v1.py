@@ -48,6 +48,7 @@ EXPECTED_LUAU_FILES = [
     "src/ServerScriptService/MonetizationService.script.luau",
     "src/ServerScriptService/AvatarCustomizationService.script.luau",
     "src/ServerScriptService/GraphicsAndAtmosphereService.script.luau",
+    "src/ServerScriptService/ViralRetentionAndZonesService.script.luau",
     "src/ServerScriptService/AutomatedSelfTest.script.luau",
     "src/StarterPlayer/StarterPlayerScripts/CrossPlatformController.client.luau",
     "src/StarterPlayer/StarterPlayerScripts/VehicleClientController.client.luau",
@@ -59,6 +60,7 @@ EXPECTED_LUAU_FILES = [
     "src/StarterGui/SpeedShopUI.client.luau",
     "src/StarterGui/CharacterCreatorAndWardrobeUI.client.luau",
     "src/StarterGui/TutorialAndGuideUI.client.luau",
+    "src/StarterGui/ViralRewardsAndRebirthUI.client.luau",
 ]
 
 EXPECTED_DOC_FILES = [
