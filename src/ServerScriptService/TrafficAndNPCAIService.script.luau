@@ -17,7 +17,7 @@ local Workspace = game:GetService("Workspace")
 --------------------------------------------------------------------------------
 local BLOCK_SIZE = (Workspace:GetAttribute("LeoCityBlockSize") :: number?) or 180
 local ROAD_WIDTH = (Workspace:GetAttribute("LeoCityRoadWidth") :: number?) or 38
-local GRID_RADIUS = (Workspace:GetAttribute("LeoCityGridRadius") :: number?) or 3
+local GRID_RADIUS = (Workspace:GetAttribute("LeoCityGridRadius") :: number?) or 4
 local LANE_OFFSET = 9.0
 local SIDEWALK_OFFSET = ROAD_WIDTH * 0.5 + 6.0
 
@@ -34,9 +34,17 @@ local TrafficFolder = Instance.new("Folder")
 TrafficFolder.Name = "AITraffic"
 TrafficFolder.Parent = AIFolder
 
+local HarborBoatsFolder = Instance.new("Folder")
+HarborBoatsFolder.Name = "AIHarborBoats"
+HarborBoatsFolder.Parent = AIFolder
+
 local PedestriansFolder = Instance.new("Folder")
 PedestriansFolder.Name = "AIPedestrians"
 PedestriansFolder.Parent = AIFolder
+
+local PartyCrowdsFolder = Instance.new("Folder")
+PartyCrowdsFolder.Name = "AIPartyCrowds"
+PartyCrowdsFolder.Parent = AIFolder
 
 local roadCoords: { number } = { 0 }
 for i = -GRID_RADIUS - 1, GRID_RADIUS do
@@ -141,9 +149,12 @@ local aiCars: { AICar } = {}
 local VEHICLE_TYPES = {
 	"YellowTaxi",
 	"YellowTaxi",
+	"SchoolBus",
+	"Ambulance",
+	"HolidayTruck",
+	"CityTransitBus",
 	"SportsCar",
 	"DeliveryVan",
-	"CityTransitBus",
 	"FuelTanker",
 }
 
@@ -220,6 +231,27 @@ local function buildTrafficVehicleByType(vehicleType: string, idx: number, initi
 		color = Color3.fromRGB(248, 196, 34)
 		cashVal = 120
 		reqTier = 1
+	elseif vehicleType == "SchoolBus" then
+		color = Color3.fromRGB(252, 185, 22)
+		chassisLen = 18.8
+		chassisWidth = 6.8
+		cashVal = 420
+		chaosPts = 240
+		reqTier = 3
+	elseif vehicleType == "Ambulance" then
+		color = Color3.fromRGB(246, 248, 252)
+		chassisLen = 14.8
+		chassisWidth = 6.4
+		cashVal = 300
+		chaosPts = 180
+		reqTier = 2
+	elseif vehicleType == "HolidayTruck" then
+		color = Color3.fromRGB(198, 28, 38)
+		chassisLen = 16.5
+		chassisWidth = 6.5
+		cashVal = 360
+		chaosPts = 210
+		reqTier = 2
 	elseif vehicleType == "CityTransitBus" then
 		color = Color3.fromRGB(42, 118, 215)
 		chassisLen = 18.5
@@ -266,7 +298,31 @@ local function buildTrafficVehicleByType(vehicleType: string, idx: number, initi
 	local glassColor = Color3.fromRGB(28, 36, 48)
 	local halfZ = chassisLen * 0.5
 
-	if vehicleType == "CityTransitBus" then
+	if vehicleType == "SchoolBus" then
+		local busBody = addWeldedCarPart(m, chassis, "Part", "SchoolBusCoach", Vector3.new(chassisWidth, 5.0, chassisLen - 2.6), CFrame.new(0, 2.9, 1.1), color, Enum.Material.SmoothPlastic)
+		addWeldedCarPart(m, chassis, "WedgePart", "SchoolBusHood", Vector3.new(chassisWidth - 0.6, 2.4, 2.6), CFrame.new(0, 1.6, -halfZ + 1.3), color, Enum.Material.SmoothPlastic)
+		addWeldedCarPart(m, chassis, "Part", "BlackSafetyStripe", Vector3.new(chassisWidth + 0.14, 0.55, chassisLen - 2.8), CFrame.new(0, 2.3, 1.1), Color3.fromRGB(20, 22, 26), Enum.Material.SmoothPlastic)
+		addWeldedCarPart(m, chassis, "Part", "SchoolBusWindows", Vector3.new(chassisWidth + 0.16, 1.75, chassisLen - 4.4), CFrame.new(0, 3.6, 1.2), glassColor, Enum.Material.Glass, 0.2)
+		addWeldedCarPart(m, chassis, "Part", "StopFlasherRed", Vector3.new(chassisWidth - 1.2, 0.45, 0.4), CFrame.new(0, 5.2, -halfZ + 2.8), Color3.fromRGB(255, 45, 45), Enum.Material.Neon)
+		addSurfaceLabel(busBody, "NYC SCHOOL BUS", Color3.fromRGB(18, 20, 24), Enum.NormalId.Left)
+		addSurfaceLabel(busBody, "NYC SCHOOL BUS", Color3.fromRGB(18, 20, 24), Enum.NormalId.Right)
+	elseif vehicleType == "Ambulance" then
+		addWeldedCarPart(m, chassis, "Part", "AmbCab", Vector3.new(chassisWidth - 0.2, 2.8, 4.2), CFrame.new(0, 1.8, -halfZ + 2.3), color, Enum.Material.SmoothPlastic)
+		addWeldedCarPart(m, chassis, "WedgePart", "AmbWindshield", Vector3.new(chassisWidth - 0.6, 1.8, 1.5), CFrame.new(0, 2.1, -halfZ + 1.0), glassColor, Enum.Material.Glass, 0.2)
+		local medBox = addWeldedCarPart(m, chassis, "Part", "MedBox", Vector3.new(chassisWidth + 0.3, 4.5, chassisLen - 4.6), CFrame.new(0, 2.75, 2.0), color, Enum.Material.SmoothPlastic)
+		addWeldedCarPart(m, chassis, "Part", "EmergencyStripeRed", Vector3.new(chassisWidth + 0.38, 0.75, chassisLen - 4.8), CFrame.new(0, 2.35, 2.0), Color3.fromRGB(235, 38, 45), Enum.Material.SmoothPlastic)
+		addWeldedCarPart(m, chassis, "Part", "SirenLightBarRed", Vector3.new(2.2, 0.5, 0.9), CFrame.new(-1.3, 5.25, -1.5), Color3.fromRGB(255, 35, 45), Enum.Material.Neon)
+		addWeldedCarPart(m, chassis, "Part", "SirenLightBarWhite", Vector3.new(2.2, 0.5, 0.9), CFrame.new(1.3, 5.25, -1.5), Color3.fromRGB(255, 250, 245), Enum.Material.Neon)
+		addSurfaceLabel(medBox, "+ NYC EMS AMBULANCE +", Color3.fromRGB(225, 32, 38), Enum.NormalId.Left)
+		addSurfaceLabel(medBox, "+ NYC EMS AMBULANCE +", Color3.fromRGB(225, 32, 38), Enum.NormalId.Right)
+	elseif vehicleType == "HolidayTruck" then
+		addWeldedCarPart(m, chassis, "Part", "HolidayCab", Vector3.new(chassisWidth - 0.2, 3.2, 4.6), CFrame.new(0, 2.0, -halfZ + 2.4), color, Enum.Material.SmoothPlastic)
+		local giftBox = addWeldedCarPart(m, chassis, "Part", "FestiveCargoBox", Vector3.new(chassisWidth + 0.3, 4.8, chassisLen - 5.0), CFrame.new(0, 2.9, 2.2), Color3.fromRGB(185, 24, 34), Enum.Material.SmoothPlastic)
+		addWeldedCarPart(m, chassis, "Part", "GoldRibbonH", Vector3.new(chassisWidth + 0.42, 0.75, chassisLen - 5.2), CFrame.new(0, 2.8, 2.2), Color3.fromRGB(255, 210, 45), Enum.Material.Neon)
+		addWeldedCarPart(m, chassis, "Part", "GreenGarlandRoof", Vector3.new(chassisWidth + 0.45, 0.45, chassisLen - 5.2), CFrame.new(0, 5.15, 2.2), Color3.fromRGB(45, 225, 95), Enum.Material.Neon)
+		addSurfaceLabel(giftBox, "NYC HOLIDAY EXPRESS", Color3.fromRGB(255, 235, 95), Enum.NormalId.Left)
+		addSurfaceLabel(giftBox, "NYC HOLIDAY EXPRESS", Color3.fromRGB(255, 235, 95), Enum.NormalId.Right)
+	elseif vehicleType == "CityTransitBus" then
 		local busBody = addWeldedCarPart(m, chassis, "Part", "BusCoachBody", Vector3.new(chassisWidth, 5.2, chassisLen - 0.4), CFrame.new(0, 3.0, 0), color, Enum.Material.SmoothPlastic)
 		addWeldedCarPart(m, chassis, "Part", "BusRoofStripe", Vector3.new(chassisWidth + 0.1, 0.8, chassisLen - 0.6), CFrame.new(0, 5.2, 0), Color3.fromRGB(242, 246, 252), Enum.Material.SmoothPlastic)
 		addWeldedCarPart(m, chassis, "Part", "BusWindows", Vector3.new(chassisWidth + 0.16, 2.0, chassisLen - 3.2), CFrame.new(0, 3.5, 0.2), glassColor, Enum.Material.Glass, 0.2)
@@ -487,10 +543,83 @@ local function shouldStopForRedLight(car: AICar): boolean
 end
 
 --------------------------------------------------------------------------------
--- 3. 48 ARTICULATED NYC PEDESTRIANS (RIGID WELDS + ANIMATED WALK SWING)
+-- 2B. 8 MOVING HARBOR BOATS ON THE EAST & WEST RIVERS
+--------------------------------------------------------------------------------
+type AIHarborBoat = {
+	model: Model,
+	primary: BasePart,
+	riverX: number,
+	dir: number,
+	posZ: number,
+	speed: number,
+	phase: number,
+}
+
+local aiHarborBoats: { AIHarborBoat } = {}
+
+local function buildHarborBoat(idx: number, riverX: number, posZ: number, dir: number): AIHarborBoat
+	local m = Instance.new("Model")
+	m.Name = "AIHarborBoat_" .. tostring(idx)
+
+	local isFerry = (idx % 2 == 0)
+	local hullColor = if isFerry then Color3.fromRGB(235, 115, 28) else Color3.fromRGB(240, 245, 252)
+	local hullLen = if isFerry then 42.0 else 36.0
+	local hullWidth = if isFerry then 13.0 else 11.0
+	local yaw = if dir > 0 then math.pi else 0
+
+	local hull = Instance.new("Part")
+	hull.Name = "BoatHull"
+	hull.Size = Vector3.new(hullWidth, 3.6, hullLen)
+	hull.CFrame = CFrame.new(riverX, 0.8, posZ) * CFrame.Angles(0, yaw, 0)
+	hull.Color = hullColor
+	hull.Material = Enum.Material.Metal
+	hull.Anchored = true
+	hull.CanCollide = true
+	hull.TopSurface = Enum.SurfaceType.Smooth
+	hull.BottomSurface = Enum.SurfaceType.Smooth
+	hull.Parent = m
+	m.PrimaryPart = hull
+
+	addWeldedCarPart(m, hull, "WedgePart", "BowProWedge", Vector3.new(hullWidth, 3.6, 8.5), CFrame.new(0, 0, -hullLen * 0.5 - 4.25), hullColor, Enum.Material.Metal)
+	local cabin = addWeldedCarPart(m, hull, "Part", "MainDeckCabin", Vector3.new(hullWidth - 2.0, 4.8, hullLen * 0.62), CFrame.new(0, 4.2, 1.5), Color3.fromRGB(244, 248, 255), Enum.Material.SmoothPlastic)
+	addWeldedCarPart(m, hull, "Part", "BridgeWindows", Vector3.new(hullWidth - 1.6, 1.8, hullLen * 0.56), CFrame.new(0, 4.6, 1.5), Color3.fromRGB(95, 215, 255), Enum.Material.Neon, 0.15)
+	addWeldedCarPart(m, hull, "Part", "Smokestack", Vector3.new(2.8, 5.2, 2.8), CFrame.new(0, 8.4, 4.0), Color3.fromRGB(215, 48, 38), Enum.Material.Metal)
+	addWeldedCarPart(m, hull, "Part", "FestiveDeckLights", Vector3.new(hullWidth - 1.4, 0.4, hullLen * 0.65), CFrame.new(0, 6.7, 1.5), Color3.fromRGB(255, 215, 65), Enum.Material.Neon)
+
+	local labelText = if isFerry then "MANHATTAN HARBOR FERRY" else "NYC HOLIDAY YACHT"
+	addSurfaceLabel(cabin, labelText, Color3.fromRGB(24, 38, 68), Enum.NormalId.Left)
+	addSurfaceLabel(cabin, labelText, Color3.fromRGB(24, 38, 68), Enum.NormalId.Right)
+
+	m.Parent = HarborBoatsFolder
+	return {
+		model = m,
+		primary = hull,
+		riverX = riverX,
+		dir = dir,
+		posZ = posZ,
+		speed = 22.0 + (idx % 3) * 4.0,
+		phase = idx * 0.85,
+	}
+end
+
+local function spawnHarborBoats(count: number)
+	local riverOffset = (GRID_RADIUS + 1.1) * BLOCK_SIZE
+	for i = 1, count do
+		local isEast = (i % 2 == 1)
+		local laneShift = if i <= 4 then -18.0 else 18.0
+		local riverX = (if isEast then riverOffset else -riverOffset) + laneShift
+		local dir = if (i % 4 < 2) then 1 else -1
+		local posZ = -CITY_LIMIT + ((i * 195) % (CITY_LIMIT * 2))
+		table.insert(aiHarborBoats, buildHarborBoat(i, riverX, posZ, dir))
+	end
+end
+
+--------------------------------------------------------------------------------
+-- 3. 90 MULTI-GENERATIONAL MANHATTAN PEDESTRIANS (KIDS, ELDERLY WITH CANES, STUDENTS, DOCTORS, SHOPPERS)
 --------------------------------------------------------------------------------
 type NPCRoleSpec = {
 	role: string,
+	scale: number,
 	torsoColor: Color3,
 	legsColor: Color3,
 	hatColor: Color3?,
@@ -509,16 +638,58 @@ local SKIN_TONES = {
 
 local NPC_ROLES: { NPCRoleSpec } = {
 	{
-		role = "HotdogChef",
-		torsoColor = Color3.fromRGB(235, 238, 245),
-		legsColor = Color3.fromRGB(44, 48, 58),
-		hatColor = Color3.fromRGB(245, 245, 250),
-		walkSpeed = 7.5,
-		chatterLines = { "Hot pretzels & dogs!", "Fresh NYC street dogs!" },
-		panicLines = { "MY PRETZEL CART!!", "WATCH THE GRILL!" },
+		role = "SchoolKid",
+		scale = 0.68,
+		torsoColor = Color3.fromRGB(45, 175, 250),
+		legsColor = Color3.fromRGB(36, 48, 78),
+		hatColor = Color3.fromRGB(255, 85, 120),
+		walkSpeed = 10.5,
+		chatterLines = { "SNOW DAY!!", "COOL CAR!!", "RACE YOU TO CENTRAL PARK!" },
+		panicLines = { "WHOA SUPER FAST CAR!!", "AWESOME JUMP!!" },
+	},
+	{
+		role = "ElderlyCitizen",
+		scale = 0.92,
+		torsoColor = Color3.fromRGB(112, 96, 82),
+		legsColor = Color3.fromRGB(58, 52, 48),
+		hatColor = Color3.fromRGB(220, 224, 232),
+		walkSpeed = 4.8,
+		chatterLines = { "Back in my day cabs cost a nickel!", "Careful on the ice, dearie!", "Slow down young whippersnapper!" },
+		panicLines = { "OH MY STARS!!", "WATCH THE CANE, SONNY!" },
+	},
+	{
+		role = "UniversityStudent",
+		scale = 1.0,
+		torsoColor = Color3.fromRGB(165, 38, 48),
+		legsColor = Color3.fromRGB(34, 42, 62),
+		hatColor = Color3.fromRGB(240, 195, 45),
+		walkSpeed = 9.0,
+		chatterLines = { "Finals week at Manhattan U!", "Heading to the campus quad!" },
+		panicLines = { "MY TEXTBOOKS!!", "CAMPUS SECURITY!!" },
+	},
+	{
+		role = "HospitalDoctor",
+		scale = 1.0,
+		torsoColor = Color3.fromRGB(242, 246, 252),
+		legsColor = Color3.fromRGB(48, 118, 165),
+		hatColor = nil,
+		walkSpeed = 8.8,
+		chatterLines = { "On shift at Manhattan General!", "Emergency triage is clear!" },
+		panicLines = { "CALL AN AMBULANCE!!", "WATCH THE MED KIT!" },
+	},
+	{
+		role = "HolidayShopper",
+		scale = 1.0,
+		torsoColor = Color3.fromRGB(38, 125, 78),
+		legsColor = Color3.fromRGB(38, 42, 54),
+		hatColor = Color3.fromRGB(215, 42, 48),
+		walkSpeed = 7.8,
+		chatterLines = { "5th Avenue Christmas sales!", "Got all the holiday gifts!" },
+		panicLines = { "MY CHRISTMAS PRESENTS!!", "WATCH THE GIFT BAGS!" },
 	},
 	{
 		role = "BusinessExecutive",
+		scale = 1.0,
 		torsoColor = Color3.fromRGB(32, 42, 64),
 		legsColor = Color3.fromRGB(24, 30, 44),
 		hatColor = Color3.fromRGB(38, 44, 56),
@@ -527,46 +698,22 @@ local NPC_ROLES: { NPCRoleSpec } = {
 		panicLines = { "HEY! I'M WALKIN' HERE!", "WATCH THE SUIT!" },
 	},
 	{
-		role = "ConstructionWorker",
-		torsoColor = Color3.fromRGB(215, 128, 28),
-		legsColor = Color3.fromRGB(48, 68, 108),
-		hatColor = Color3.fromRGB(235, 185, 32),
-		walkSpeed = 8.0,
-		chatterLines = { "We just rebuilt that hydrant!", "Cold day in Manhattan!" },
-		panicLines = { "HARD HAT ON!!", "TIMBER!!" },
-	},
-	{
-		role = "StreetSkater",
-		torsoColor = Color3.fromRGB(58, 72, 96),
-		legsColor = Color3.fromRGB(36, 40, 48),
-		hatColor = Color3.fromRGB(165, 42, 48),
-		walkSpeed = 10.5,
-		chatterLines = { "Hit the Grand Ave Ramp!", "Did you hear that V8?!" },
-		panicLines = { "SICK DRIFT BRO!", "WHOA FULL SEND!!" },
-	},
-	{
-		role = "Tourist",
-		torsoColor = Color3.fromRGB(46, 118, 98),
-		legsColor = Color3.fromRGB(82, 74, 64),
-		hatColor = Color3.fromRGB(195, 165, 110),
+		role = "HotdogChef",
+		scale = 1.0,
+		torsoColor = Color3.fromRGB(235, 238, 245),
+		legsColor = Color3.fromRGB(44, 48, 58),
+		hatColor = Color3.fromRGB(245, 245, 250),
 		walkSpeed = 7.5,
-		chatterLines = { "Look at Leo Tower!", "New York is wild!" },
-		panicLines = { "GET THAT ON CAMERA!", "ONLY IN NEW YORK!" },
-	},
-	{
-		role = "Jogger",
-		torsoColor = Color3.fromRGB(178, 48, 58),
-		legsColor = Color3.fromRGB(32, 36, 44),
-		hatColor = Color3.fromRGB(48, 56, 72),
-		walkSpeed = 10.2,
-		chatterLines = { "Morning Central Park run!", "Out of the way!" },
-		panicLines = { "CARDIO SAVED MY LIFE!", "WATCH THE CROSSWALK!" },
+		chatterLines = { "Hot pretzels & dogs!", "Fresh NYC street dogs!" },
+		panicLines = { "MY PRETZEL CART!!", "WATCH THE GRILL!" },
 	},
 }
 
 type AIPed = {
 	model: Model,
 	root: BasePart,
+	scale: number,
+	baseGroundY: number,
 	leftArmWeld: Weld,
 	rightArmWeld: Weld,
 	leftLegWeld: Weld,
@@ -617,6 +764,8 @@ end
 local function buildPedestrian(idx: number): AIPed
 	local roleSpec = NPC_ROLES[((idx - 1) % #NPC_ROLES) + 1]
 	local skinTone = SKIN_TONES[((idx - 1) % #SKIN_TONES) + 1]
+	local s = roleSpec.scale
+	local baseGroundY = 0.35 + 2.95 * s
 
 	local axis = if idx % 2 == 0 then "NS" else "EW"
 	local dir = if idx % 3 == 0 then 1 else -1
@@ -625,8 +774,8 @@ local function buildPedestrian(idx: number): AIPed
 	local posAlong = -CITY_LIMIT + ((idx * 67) % (CITY_LIMIT * 2))
 
 	local initPos = if axis == "NS"
-		then Vector3.new(roadLine + side * SIDEWALK_OFFSET, 3.5, posAlong)
-		else Vector3.new(posAlong, 3.5, roadLine + side * SIDEWALK_OFFSET)
+		then Vector3.new(roadLine + side * SIDEWALK_OFFSET, baseGroundY, posAlong)
+		else Vector3.new(posAlong, baseGroundY, roadLine + side * SIDEWALK_OFFSET)
 
 	local m = Instance.new("Model")
 	m.Name = "Citizen_" .. roleSpec.role
@@ -634,7 +783,7 @@ local function buildPedestrian(idx: number): AIPed
 
 	local root = Instance.new("Part")
 	root.Name = "Torso"
-	root.Size = Vector3.new(1.7, 2.1, 0.95)
+	root.Size = Vector3.new(1.7 * s, 2.1 * s, 0.95 * s)
 	root.CFrame = CFrame.new(initPos)
 	root.Color = roleSpec.torsoColor
 	root.Material = Enum.Material.Fabric
@@ -645,25 +794,41 @@ local function buildPedestrian(idx: number): AIPed
 	root.Parent = m
 	m.PrimaryPart = root
 
-	makeWeldedPedLimb(m, root, "WinterScarf", Vector3.new(1.45, 0.34, 1.08), CFrame.new(0, 1.0, 0), Color3.fromRGB(36, 40, 50), Enum.Material.Fabric, nil)
-	local head, _ = makeWeldedPedLimb(m, root, "Head", Vector3.new(1.2, 1.2, 1.2), CFrame.new(0, 1.72, 0), skinTone, Enum.Material.SmoothPlastic, Enum.PartType.Ball)
+	makeWeldedPedLimb(m, root, "WinterScarf", Vector3.new(1.45 * s, 0.34 * s, 1.08 * s), CFrame.new(0, 1.0 * s, 0), Color3.fromRGB(215, 55, 65), Enum.Material.Fabric, nil)
+	local head, _ = makeWeldedPedLimb(m, root, "Head", Vector3.new(1.2 * s, 1.2 * s, 1.2 * s), CFrame.new(0, 1.72 * s, 0), skinTone, Enum.Material.SmoothPlastic, Enum.PartType.Ball)
 
-	local _, leftArmWeld = makeWeldedPedLimb(m, root, "LeftArm", Vector3.new(0.58, 1.85, 0.58), CFrame.new(-1.16, 0.06, 0), roleSpec.torsoColor, Enum.Material.Fabric, nil)
-	local _, rightArmWeld = makeWeldedPedLimb(m, root, "RightArm", Vector3.new(0.58, 1.85, 0.58), CFrame.new(1.16, 0.06, 0), roleSpec.torsoColor, Enum.Material.Fabric, nil)
-	local _, leftLegWeld = makeWeldedPedLimb(m, root, "LeftLeg", Vector3.new(0.72, 1.95, 0.72), CFrame.new(-0.44, -2.0, 0), roleSpec.legsColor, Enum.Material.Fabric, nil)
-	local _, rightLegWeld = makeWeldedPedLimb(m, root, "RightLeg", Vector3.new(0.72, 1.95, 0.72), CFrame.new(0.44, -2.0, 0), roleSpec.legsColor, Enum.Material.Fabric, nil)
+	local leftArm, leftArmWeld = makeWeldedPedLimb(m, root, "LeftArm", Vector3.new(0.58 * s, 1.85 * s, 0.58 * s), CFrame.new(-1.16 * s, 0.06 * s, 0), roleSpec.torsoColor, Enum.Material.Fabric, nil)
+	local rightArm, rightArmWeld = makeWeldedPedLimb(m, root, "RightArm", Vector3.new(0.58 * s, 1.85 * s, 0.58 * s), CFrame.new(1.16 * s, 0.06 * s, 0), roleSpec.torsoColor, Enum.Material.Fabric, nil)
+	local _, leftLegWeld = makeWeldedPedLimb(m, root, "LeftLeg", Vector3.new(0.72 * s, 1.95 * s, 0.72 * s), CFrame.new(-0.44 * s, -2.0 * s, 0), roleSpec.legsColor, Enum.Material.Fabric, nil)
+	local _, rightLegWeld = makeWeldedPedLimb(m, root, "RightLeg", Vector3.new(0.72 * s, 1.95 * s, 0.72 * s), CFrame.new(0.44 * s, -2.0 * s, 0), roleSpec.legsColor, Enum.Material.Fabric, nil)
 
 	if roleSpec.hatColor then
 		makeWeldedPedLimb(
 			m,
 			root,
 			"AccessoryHat",
-			if roleSpec.role == "HotdogChef" then Vector3.new(1.22, 0.85, 1.22) else Vector3.new(1.32, 0.45, 1.38),
-			CFrame.new(0, 2.36, 0),
+			if roleSpec.role == "HotdogChef" then Vector3.new(1.22 * s, 0.85 * s, 1.22 * s) else Vector3.new(1.32 * s, 0.45 * s, 1.38 * s),
+			CFrame.new(0, 2.36 * s, 0),
 			roleSpec.hatColor,
 			Enum.Material.SmoothPlastic,
 			nil
 		)
+	end
+
+	-- Role-Specific 3D Props (Kids Backpack & Beanie Pom-Pom, Elderly Walking Cane, University Backpack, Doctor Stethoscope, Holiday Shopping Bags)
+	if roleSpec.role == "SchoolKid" then
+		makeWeldedPedLimb(m, root, "PomPomTopper", Vector3.new(0.45 * s, 0.45 * s, 0.45 * s), CFrame.new(0, 2.72 * s, 0), Color3.fromRGB(255, 245, 250), Enum.Material.Fabric, Enum.PartType.Ball)
+		makeWeldedPedLimb(m, root, "SchoolBackpack", Vector3.new(1.25 * s, 1.35 * s, 0.65 * s), CFrame.new(0, 0.15 * s, 0.72 * s), Color3.fromRGB(255, 165, 35), Enum.Material.Fabric, nil)
+	elseif roleSpec.role == "ElderlyCitizen" then
+		makeWeldedPedLimb(m, rightArm, "WoodenWalkingCane", Vector3.new(0.18, 2.45, 0.18), CFrame.new(0, -1.15, -0.45) * CFrame.Angles(math.rad(14), 0, 0), Color3.fromRGB(115, 72, 38), Enum.Material.Wood, nil)
+		makeWeldedPedLimb(m, rightArm, "CaneHandle", Vector3.new(0.22, 0.22, 0.55), CFrame.new(0, -0.05, -0.62), Color3.fromRGB(215, 175, 65), Enum.Material.Metal, nil)
+	elseif roleSpec.role == "UniversityStudent" then
+		makeWeldedPedLimb(m, root, "CampusBackpack", Vector3.new(1.3, 1.5, 0.65), CFrame.new(0, 0.1, 0.75), Color3.fromRGB(35, 45, 70), Enum.Material.Fabric, nil)
+	elseif roleSpec.role == "HospitalDoctor" then
+		makeWeldedPedLimb(m, root, "Stethoscope", Vector3.new(1.1, 0.65, 1.05), CFrame.new(0, 0.75, -0.05), Color3.fromRGB(55, 65, 80), Enum.Material.Metal, nil)
+	elseif roleSpec.role == "HolidayShopper" then
+		makeWeldedPedLimb(m, leftArm, "HolidayGiftBagRed", Vector3.new(0.45, 0.95, 0.85), CFrame.new(-0.15, -1.1, 0), Color3.fromRGB(225, 38, 48), Enum.Material.SmoothPlastic, nil)
+		makeWeldedPedLimb(m, rightArm, "HolidayGiftBagGold", Vector3.new(0.45, 0.95, 0.85), CFrame.new(0.15, -1.1, 0), Color3.fromRGB(245, 195, 45), Enum.Material.SmoothPlastic, nil)
 	end
 
 	local bb = Instance.new("BillboardGui")
@@ -692,6 +857,8 @@ local function buildPedestrian(idx: number): AIPed
 	return {
 		model = m,
 		root = root,
+		scale = s,
+		baseGroundY = baseGroundY,
 		leftArmWeld = leftArmWeld,
 		rightArmWeld = rightArmWeld,
 		leftLegWeld = leftLegWeld,
@@ -759,6 +926,73 @@ local function spawnPedestrians(count: number)
 end
 
 --------------------------------------------------------------------------------
+-- 4. 24 LIVE EVENT CROWDS (CONCERT DANCERS & CHRISTMAS PARTYGOERS WAVING NEON GLOWSTICKS)
+--------------------------------------------------------------------------------
+type AIPartyDancer = {
+	root: BasePart,
+	leftArmWeld: Weld,
+	rightArmWeld: Weld,
+	basePos: Vector3,
+	lookAtPos: Vector3,
+	phase: number,
+}
+
+local aiPartyDancers: { AIPartyDancer } = {}
+
+local function spawnEventPartyCrowds(count: number)
+	local glowColors = {
+		Color3.fromRGB(255, 65, 220),
+		Color3.fromRGB(55, 235, 255),
+		Color3.fromRGB(95, 255, 115),
+		Color3.fromRGB(255, 220, 45),
+	}
+	for i = 1, count do
+		local isConcert = (i <= math.floor(count * 0.5))
+		local center = if isConcert then Vector3.new(0, 0, -180) else Vector3.new(-46, 0, 18)
+		local angle = ((i - 1) / math.max(1, count * 0.5)) * math.pi * 2
+		local radius = if isConcert then 22.0 + (i % 3) * 4.0 else 18.0 + (i % 3) * 3.5
+		local basePos = Vector3.new(center.X + math.cos(angle) * radius, 3.3, center.Z + math.sin(angle) * radius)
+
+		local m = Instance.new("Model")
+		m.Name = if isConcert then ("ConcertDancer_" .. tostring(i)) else ("ChristmasPartygoer_" .. tostring(i))
+		local jacketCol = glowColors[((i - 1) % #glowColors) + 1]
+		local skin = SKIN_TONES[((i - 1) % #SKIN_TONES) + 1]
+
+		local root = Instance.new("Part")
+		root.Name = "Torso"
+		root.Size = Vector3.new(1.65, 2.0, 0.9)
+		root.CFrame = CFrame.lookAt(basePos, Vector3.new(center.X, 3.3, center.Z))
+		root.Color = jacketCol
+		root.Material = Enum.Material.Fabric
+		root.Anchored = true
+		root.CanCollide = false
+		root.Parent = m
+		m.PrimaryPart = root
+
+		makeWeldedPedLimb(m, root, "Head", Vector3.new(1.18, 1.18, 1.18), CFrame.new(0, 1.68, 0), skin, Enum.Material.SmoothPlastic, Enum.PartType.Ball)
+		local lArm, lArmWeld = makeWeldedPedLimb(m, root, "LeftArm", Vector3.new(0.55, 1.8, 0.55), CFrame.new(-1.12, 0.4, 0), jacketCol, Enum.Material.Fabric, nil)
+		local rArm, rArmWeld = makeWeldedPedLimb(m, root, "RightArm", Vector3.new(0.55, 1.8, 0.55), CFrame.new(1.12, 0.4, 0), jacketCol, Enum.Material.Fabric, nil)
+		makeWeldedPedLimb(m, root, "LeftLeg", Vector3.new(0.68, 1.9, 0.68), CFrame.new(-0.42, -1.95, 0), Color3.fromRGB(32, 38, 52), Enum.Material.Fabric, nil)
+		makeWeldedPedLimb(m, root, "RightLeg", Vector3.new(0.68, 1.9, 0.68), CFrame.new(0.42, -1.95, 0), Color3.fromRGB(32, 38, 52), Enum.Material.Fabric, nil)
+
+		-- Glowing Neon Concert Glowsticks in both hands
+		local stickCol = glowColors[(i % #glowColors) + 1]
+		makeWeldedPedLimb(m, lArm, "NeonGlowStickL", Vector3.new(0.22, 1.35, 0.22), CFrame.new(0, 1.1, 0), stickCol, Enum.Material.Neon, nil)
+		makeWeldedPedLimb(m, rArm, "NeonGlowStickR", Vector3.new(0.22, 1.35, 0.22), CFrame.new(0, 1.1, 0), stickCol, Enum.Material.Neon, nil)
+
+		m.Parent = PartyCrowdsFolder
+		table.insert(aiPartyDancers, {
+			root = root,
+			leftArmWeld = lArmWeld,
+			rightArmWeld = rArmWeld,
+			basePos = basePos,
+			lookAtPos = Vector3.new(center.X, 3.3, center.Z),
+			phase = i * 0.75,
+		})
+	end
+end
+
+--------------------------------------------------------------------------------
 -- CHAOS / DESTRUCTION PANIC HOOK
 --------------------------------------------------------------------------------
 local ServerEvents = ServerStorage:FindFirstChild("ServerEvents")
@@ -786,8 +1020,10 @@ end
 --------------------------------------------------------------------------------
 -- MAIN HEARTBEAT AI UPDATE LOOP
 --------------------------------------------------------------------------------
-spawnTrafficCars(36)
-spawnPedestrians(48)
+spawnTrafficCars(60)
+spawnHarborBoats(8)
+spawnPedestrians(90)
+spawnEventPartyCrowds(24)
 
 RunService.Heartbeat:Connect(function(dt: number)
 	local clampedDt = math.min(dt, 0.1)
@@ -808,7 +1044,7 @@ RunService.Heartbeat:Connect(function(dt: number)
 		end
 	end
 
-	-- Update 36 AI Traffic Vehicles
+	-- Update 60 AI Traffic Vehicles
 	for _, car in ipairs(aiCars) do
 		if car.model:GetAttribute("Destroyed") == true then
 			if not car.smashed then
@@ -866,7 +1102,22 @@ RunService.Heartbeat:Connect(function(dt: number)
 		car.primary.CFrame = computeCarCFrame(car)
 	end
 
-	-- Update 48 Sidewalk Pedestrians with Animated Arm & Leg Swing
+	-- Update 8 Moving Harbor Boats on the East & West Rivers
+	for _, boat in ipairs(aiHarborBoats) do
+		boat.phase += clampedDt * 2.2
+		boat.posZ += boat.dir * boat.speed * clampedDt
+		if boat.posZ > CITY_LIMIT then
+			boat.posZ = -CITY_LIMIT
+		elseif boat.posZ < -CITY_LIMIT then
+			boat.posZ = CITY_LIMIT
+		end
+		local bobY = 0.8 + math.sin(boat.phase) * 0.35
+		local roll = math.sin(boat.phase * 0.8) * math.rad(2.2)
+		local yaw = if boat.dir > 0 then math.pi else 0
+		boat.primary.CFrame = CFrame.new(boat.riverX, bobY, boat.posZ) * CFrame.Angles(0, yaw, roll)
+	end
+
+	-- Update 90 Multi-Generational Sidewalk Pedestrians with Animated Arm & Leg Swing
 	for _, ped in ipairs(aiPeds) do
 		ped.phase += clampedDt * 8.5
 		if ped.dodgeCooldown > 0 then
@@ -900,25 +1151,39 @@ RunService.Heartbeat:Connect(function(dt: number)
 			ped.posAlong = CITY_LIMIT
 		end
 
+		local s = ped.scale
 		local swing = math.sin(ped.phase) * math.rad(28)
-		ped.leftArmWeld.C0 = CFrame.new(-1.16, 0.06, 0) * CFrame.Angles(swing, 0, 0)
-		ped.rightArmWeld.C0 = CFrame.new(1.16, 0.06, 0) * CFrame.Angles(-swing, 0, 0)
-		ped.leftLegWeld.C0 = CFrame.new(-0.44, -2.0, 0) * CFrame.Angles(-swing, 0, 0)
-		ped.rightLegWeld.C0 = CFrame.new(0.44, -2.0, 0) * CFrame.Angles(swing, 0, 0)
+		ped.leftArmWeld.C0 = CFrame.new(-1.16 * s, 0.06 * s, 0) * CFrame.Angles(swing, 0, 0)
+		ped.rightArmWeld.C0 = CFrame.new(1.16 * s, 0.06 * s, 0) * CFrame.Angles(-swing, 0, 0)
+		ped.leftLegWeld.C0 = CFrame.new(-0.44 * s, -2.0 * s, 0) * CFrame.Angles(-swing, 0, 0)
+		ped.rightLegWeld.C0 = CFrame.new(0.44 * s, -2.0 * s, 0) * CFrame.Angles(swing, 0, 0)
 
-		local bob = math.abs(math.sin(ped.phase)) * 0.25
+		local bob = math.abs(math.sin(ped.phase)) * 0.25 * s
 		local basePos: Vector3
 		local yaw: number
 		if ped.axis == "NS" then
-			basePos = Vector3.new(ped.roadLine + ped.side * SIDEWALK_OFFSET, 3.35 + bob, ped.posAlong)
+			basePos = Vector3.new(ped.roadLine + ped.side * SIDEWALK_OFFSET, ped.baseGroundY + bob, ped.posAlong)
 			yaw = if ped.dir > 0 then math.pi else 0
 		else
-			basePos = Vector3.new(ped.posAlong, 3.35 + bob, ped.roadLine + ped.side * SIDEWALK_OFFSET)
+			basePos = Vector3.new(ped.posAlong, ped.baseGroundY + bob, ped.roadLine + ped.side * SIDEWALK_OFFSET)
 			yaw = if ped.dir > 0 then -math.pi * 0.5 else math.pi * 0.5
 		end
 
 		ped.root.CFrame = CFrame.new(basePos + ped.leapOffset) * CFrame.Angles(0, yaw, 0)
 	end
+
+	-- Update 24 Concert Dancers & Christmas Partygoers waving glowing neon sticks
+	for _, dancer in ipairs(aiPartyDancers) do
+		dancer.phase += clampedDt * 6.5
+		local bounce = math.abs(math.sin(dancer.phase)) * 0.55
+		local wave = math.sin(dancer.phase * 1.4) * math.rad(38)
+		dancer.leftArmWeld.C0 = CFrame.new(-1.12, 0.55, 0) * CFrame.Angles(math.rad(145) + wave, 0, math.rad(-18))
+		dancer.rightArmWeld.C0 = CFrame.new(1.12, 0.55, 0) * CFrame.Angles(math.rad(145) - wave, 0, math.rad(18))
+		dancer.root.CFrame = CFrame.lookAt(
+			dancer.basePos + Vector3.new(0, bounce, 0),
+			Vector3.new(dancer.lookAtPos.X, dancer.basePos.Y + bounce, dancer.lookAtPos.Z)
+		)
+	end
 end)
 
-print("[TrafficAndNPCAIService] 36 intact AI vehicles and 48 animated NYC pedestrians active.")
+print("[TrafficAndNPCAIService] 60 AI vehicles, 8 harbor boats, 90 multi-generational citizens, and 24 event dancers active.")

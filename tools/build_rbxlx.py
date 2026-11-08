@@ -1299,6 +1299,15 @@ def build_workspace_xml(ref: RefGen) -> str:
 \t\t\t<Properties>
 \t\t\t\t<string name="Name">Terrain</string>
 \t\t\t</Properties>
+\t\t\t<Item class="Clouds" referent="{ref.next()}">
+\t\t\t\t<Properties>
+\t\t\t\t\t<string name="Name">Clouds</string>
+\t\t\t\t\t<float name="Cover">0.65</float>
+\t\t\t\t\t<float name="Density">0.72</float>
+\t\t\t\t\t<Color3 name="Color"><R>0.5804</R><G>0.6235</G><B>0.7059</B></Color3>
+\t\t\t\t\t<bool name="Enabled">true</bool>
+\t\t\t\t</Properties>
+\t\t\t</Item>
 \t\t</Item>
 \t\t<Item class="SpawnLocation" referent="{spawn_ref}">
 \t\t\t<Properties>
@@ -1327,8 +1336,11 @@ def build_lighting_xml(ref: RefGen) -> str:
     return f"""\t<Item class="Lighting" referent="{ref.next()}">
 \t\t<Properties>
 \t\t\t<string name="Name">Lighting</string>
-\t\t\t<float name="Brightness">2.15</float>
-\t\t\t<float name="ClockTime">16.4</float>
+\t\t\t<token name="Technology">4</token>
+\t\t\t<float name="Brightness">2.8</float>
+\t\t\t<float name="ClockTime">16.0</float>
+\t\t\t<float name="EnvironmentDiffuseScale">1.0</float>
+\t\t\t<float name="EnvironmentSpecularScale">1.0</float>
 \t\t\t<float name="GeographicLatitude">40.7</float>
 \t\t\t<bool name="GlobalShadows">true</bool>
 \t\t\t<Color3 name="Ambient"><R>0.3059</R><G>0.3451</G><B>0.4235</B></Color3>

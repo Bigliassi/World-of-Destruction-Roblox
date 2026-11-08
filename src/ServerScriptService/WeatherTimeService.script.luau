@@ -1,10 +1,10 @@
 --!strict
 -- WeatherTimeService.script.luau
--- Crisp Snowy Christmas NYC late-afternoon / twilight weather system for Leo City:
--- Keeps ClockTime around 15.6 (crisp winter twilight where snowy Central Park and tall Manhattan
--- limestone skyscrapers are clearly visible while warm golden Christmas lights & streetlamps glow),
--- BloomEffect.Intensity = 0.14, BloomEffect.Threshold = 2.2 (zero blurry neon blobs),
--- and gentle falling snowflakes (SnowEmitter) across the city.
+-- High-End Snowy Christmas NYC golden-blue twilight weather system for Leo City:
+-- Keeps ClockTime at 16.0 (magical Manhattan winter golden-blue twilight where the sky is rich royal/slate blue,
+-- snow is crisp white, and every building window, Christmas tree, and concert spotlight glows warmly),
+-- 3D Volumetric Clouds under Workspace.Terrain, full PBR diffuse/specular scales (1.0),
+-- BloomEffect (Intensity = 0.18, Size = 20, Threshold = 2.0), and gentle falling snowflakes across the city.
 
 local Lighting = game:GetService("Lighting")
 local Players = game:GetService("Players")
@@ -13,19 +13,35 @@ local TweenService = game:GetService("TweenService")
 local Workspace = game:GetService("Workspace")
 
 --------------------------------------------------------------------------------
--- LIGHTING POST-PROCESSING & ATMOSPHERE SETUP
+-- LIGHTING POST-PROCESSING, VOLUMETRIC CLOUDS & ATMOSPHERE SETUP
 --------------------------------------------------------------------------------
+Lighting.GlobalShadows = true
+Lighting.ShadowSoftness = 0.18
+Lighting.EnvironmentDiffuseScale = 1.0
+Lighting.EnvironmentSpecularScale = 1.0
+
+local clouds = Workspace.Terrain:FindFirstChildOfClass("Clouds")
+if not clouds then
+	clouds = Instance.new("Clouds")
+	clouds.Name = "WoDVolumetricClouds"
+	clouds.Parent = Workspace.Terrain
+end
+clouds.Enabled = true
+clouds.Cover = 0.65
+clouds.Density = 0.72
+clouds.Color = Color3.fromRGB(195, 210, 235)
+
 local atmosphere = Lighting:FindFirstChildOfClass("Atmosphere")
 if not atmosphere then
 	atmosphere = Instance.new("Atmosphere")
 	atmosphere.Parent = Lighting
 end
-atmosphere.Density = 0.15
-atmosphere.Offset = 0.10
-atmosphere.Color = Color3.fromRGB(185, 200, 222)
-atmosphere.Decay = Color3.fromRGB(125, 140, 165)
-atmosphere.Glare = 0.04
-atmosphere.Haze = 0.45
+atmosphere.Density = 0.22
+atmosphere.Offset = 0.15
+atmosphere.Color = Color3.fromRGB(145, 168, 205)
+atmosphere.Decay = Color3.fromRGB(92, 112, 148)
+atmosphere.Glare = 0.12
+atmosphere.Haze = 1.1
 
 local bloom = Lighting:FindFirstChildOfClass("BloomEffect")
 if not bloom then
@@ -33,9 +49,18 @@ if not bloom then
 	bloom.Parent = Lighting
 end
 bloom.Enabled = true
-bloom.Intensity = 0.14
-bloom.Size = 14
-bloom.Threshold = 2.2
+bloom.Intensity = 0.18
+bloom.Size = 20
+bloom.Threshold = 2.0
+
+local sunRays = Lighting:FindFirstChildOfClass("SunRaysEffect")
+if not sunRays then
+	sunRays = Instance.new("SunRaysEffect")
+	sunRays.Parent = Lighting
+end
+sunRays.Enabled = true
+sunRays.Intensity = 0.08
+sunRays.Spread = 0.65
 
 local colorCorrection = Lighting:FindFirstChildOfClass("ColorCorrectionEffect")
 if not colorCorrection then
@@ -44,12 +69,12 @@ if not colorCorrection then
 end
 colorCorrection.Enabled = true
 colorCorrection.Brightness = 0.02
-colorCorrection.Contrast = 0.12
-colorCorrection.Saturation = 0.06
+colorCorrection.Contrast = 0.16
+colorCorrection.Saturation = 0.12
 colorCorrection.TintColor = Color3.fromRGB(246, 249, 255)
 
 --------------------------------------------------------------------------------
--- WEATHER & TIME PRESETS (SNOWY CHRISTMAS MANHATTAN)
+-- WEATHER & TIME PRESETS (SNOWY CHRISTMAS MANHATTAN TWILIGHT)
 --------------------------------------------------------------------------------
 type WeatherPreset = {
 	name: string,
@@ -66,6 +91,9 @@ type WeatherPreset = {
 	atmosphereHaze: number,
 	atmosphereColor: Color3,
 	atmosphereDecay: Color3,
+	cloudCover: number,
+	cloudDensity: number,
+	cloudColor: Color3,
 	roadReflectance: number,
 	roadMaterial: Enum.Material,
 	gripMultiplier: number,
@@ -80,50 +108,56 @@ local PRESETS: { WeatherPreset } = {
 	{
 		name = "Snowstorm",
 		displayName = "Central Park Christmas Snowfall",
-		clockTime = 15.6,
-		brightness = 2.55,
-		ambient = Color3.fromRGB(128, 138, 156),
-		outdoorAmbient = Color3.fromRGB(158, 170, 190),
-		fogColor = Color3.fromRGB(168, 182, 204),
-		colorShiftTop = Color3.fromRGB(215, 226, 245),
-		atmosphereDensity = 0.15,
-		atmosphereOffset = 0.10,
-		atmosphereGlare = 0.04,
-		atmosphereHaze = 0.45,
-		atmosphereColor = Color3.fromRGB(185, 200, 222),
-		atmosphereDecay = Color3.fromRGB(125, 140, 165),
-		roadReflectance = 0.10,
+		clockTime = 16.0,
+		brightness = 2.8,
+		ambient = Color3.fromRGB(98, 110, 132),
+		outdoorAmbient = Color3.fromRGB(135, 150, 175),
+		fogColor = Color3.fromRGB(145, 168, 205),
+		colorShiftTop = Color3.fromRGB(195, 212, 240),
+		atmosphereDensity = 0.22,
+		atmosphereOffset = 0.15,
+		atmosphereGlare = 0.12,
+		atmosphereHaze = 1.1,
+		atmosphereColor = Color3.fromRGB(145, 168, 205),
+		atmosphereDecay = Color3.fromRGB(92, 112, 148),
+		cloudCover = 0.65,
+		cloudDensity = 0.72,
+		cloudColor = Color3.fromRGB(195, 210, 235),
+		roadReflectance = 0.16,
 		roadMaterial = Enum.Material.Asphalt,
 		gripMultiplier = 0.96,
 		isSnowing = true,
 		isRaining = false,
-		snowRate = 280,
+		snowRate = 300,
 		rainRate = 0,
-		bloomIntensity = 0.14,
+		bloomIntensity = 0.18,
 	},
 	{
 		name = "CloudyNYC",
 		displayName = "5th Avenue Holiday Flurries",
-		clockTime = 15.6,
-		brightness = 2.60,
-		ambient = Color3.fromRGB(132, 142, 160),
-		outdoorAmbient = Color3.fromRGB(162, 174, 194),
-		fogColor = Color3.fromRGB(172, 186, 208),
-		colorShiftTop = Color3.fromRGB(220, 230, 248),
-		atmosphereDensity = 0.14,
-		atmosphereOffset = 0.09,
-		atmosphereGlare = 0.04,
-		atmosphereHaze = 0.40,
-		atmosphereColor = Color3.fromRGB(190, 204, 226),
-		atmosphereDecay = Color3.fromRGB(130, 144, 168),
-		roadReflectance = 0.10,
+		clockTime = 16.0,
+		brightness = 2.8,
+		ambient = Color3.fromRGB(98, 110, 132),
+		outdoorAmbient = Color3.fromRGB(135, 150, 175),
+		fogColor = Color3.fromRGB(145, 168, 205),
+		colorShiftTop = Color3.fromRGB(195, 212, 240),
+		atmosphereDensity = 0.22,
+		atmosphereOffset = 0.15,
+		atmosphereGlare = 0.12,
+		atmosphereHaze = 1.1,
+		atmosphereColor = Color3.fromRGB(145, 168, 205),
+		atmosphereDecay = Color3.fromRGB(92, 112, 148),
+		cloudCover = 0.68,
+		cloudDensity = 0.74,
+		cloudColor = Color3.fromRGB(195, 210, 235),
+		roadReflectance = 0.16,
 		roadMaterial = Enum.Material.Asphalt,
 		gripMultiplier = 0.97,
 		isSnowing = true,
 		isRaining = false,
-		snowRate = 220,
+		snowRate = 240,
 		rainRate = 0,
-		bloomIntensity = 0.14,
+		bloomIntensity = 0.18,
 	},
 }
 
@@ -137,8 +171,8 @@ end
 
 local canopyPart = Instance.new("Part")
 canopyPart.Name = "NYCPrecipitationCanopy"
-canopyPart.Size = Vector3.new(360, 2, 360)
-canopyPart.Position = Vector3.new(0, 92, 0)
+canopyPart.Size = Vector3.new(520, 2, 520)
+canopyPart.Position = Vector3.new(0, 96, 0)
 canopyPart.Anchored = true
 canopyPart.CanCollide = false
 canopyPart.CanQuery = false
@@ -150,7 +184,7 @@ canopyPart.Parent = Workspace
 local snowEmitter = Instance.new("ParticleEmitter")
 snowEmitter.Name = "SnowEmitter"
 snowEmitter.Color = ColorSequence.new(Color3.fromRGB(246, 250, 255))
-snowEmitter.LightEmission = 0.30
+snowEmitter.LightEmission = 0.35
 snowEmitter.LightInfluence = 0.45
 snowEmitter.Size = NumberSequence.new({
 	NumberSequenceKeypoint.new(0, 0.38),
@@ -163,7 +197,7 @@ snowEmitter.Transparency = NumberSequence.new({
 	NumberSequenceKeypoint.new(1, 0.90),
 })
 snowEmitter.Lifetime = NumberRange.new(3.5, 5.2)
-snowEmitter.Rate = 280
+snowEmitter.Rate = 300
 snowEmitter.Speed = NumberRange.new(18, 28)
 snowEmitter.SpreadAngle = Vector2.new(16, 16)
 snowEmitter.Acceleration = Vector3.new(-4, -3, 2)
@@ -192,12 +226,12 @@ RunService.Heartbeat:Connect(function()
 	end
 	if count > 0 then
 		local avg = sumPos / count
-		canopyPart.Position = Vector3.new(avg.X, 92, avg.Z)
+		canopyPart.Position = Vector3.new(avg.X, 96, avg.Z)
 	else
 		local cam = Workspace.CurrentCamera
 		if cam then
 			local cPos = cam.CFrame.Position
-			canopyPart.Position = Vector3.new(cPos.X, 92, cPos.Z)
+			canopyPart.Position = Vector3.new(cPos.X, 96, cPos.Z)
 		end
 	end
 end)
@@ -233,6 +267,13 @@ local function applyPreset(preset: WeatherPreset, instant: boolean?)
 	Workspace:SetAttribute("IsRaining", preset.isRaining)
 	Workspace:SetAttribute("ClockTime", preset.clockTime)
 
+	if clouds then
+		clouds.Enabled = true
+		clouds.Cover = preset.cloudCover
+		clouds.Density = preset.cloudDensity
+		clouds.Color = preset.cloudColor
+	end
+
 	if instant then
 		Lighting.ClockTime = preset.clockTime
 		Lighting.Brightness = preset.brightness
@@ -250,8 +291,8 @@ local function applyPreset(preset: WeatherPreset, instant: boolean?)
 		end
 		if bloom then
 			bloom.Intensity = preset.bloomIntensity
-			bloom.Size = 14
-			bloom.Threshold = 2.2
+			bloom.Size = 20
+			bloom.Threshold = 2.0
 		end
 	else
 		local tweenInfo = TweenInfo.new(TRANSITION_DURATION, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
@@ -276,7 +317,8 @@ local function applyPreset(preset: WeatherPreset, instant: boolean?)
 		end
 
 		if bloom then
-			bloom.Threshold = 2.2
+			bloom.Size = 20
+			bloom.Threshold = 2.0
 			TweenService:Create(bloom, tweenInfo, {
 				Intensity = preset.bloomIntensity,
 			}):Play()
@@ -290,7 +332,7 @@ local function applyPreset(preset: WeatherPreset, instant: boolean?)
 	updateRoadWetness(preset.roadReflectance, preset.roadMaterial)
 end
 
--- Initialize immediately with Snowy Christmas Manhattan at ClockTime = 15.6
+-- Initialize immediately with Snowy Christmas Manhattan at ClockTime = 16.0
 applyPreset(PRESETS[1], true)
 
 task.spawn(function()
@@ -301,4 +343,4 @@ task.spawn(function()
 	end
 end)
 
-print("[WeatherTimeService] Snowy Christmas Manhattan weather cycle active at ClockTime 15.6.")
+print("[WeatherTimeService] Snowy Christmas Manhattan twilight weather cycle active at ClockTime 16.0 with 3D volumetric clouds.")

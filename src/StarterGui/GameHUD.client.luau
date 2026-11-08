@@ -171,18 +171,55 @@ local function computeCurrentSmashTier(): number
 	if attrTier and attrTier >= 1 then
 		return math.clamp(math.floor(attrTier), 1, 5)
 	end
-	local eq = tostring(player:GetAttribute("EquippedVehicle") or player:GetAttribute("SelectedVehicle") or "Compact")
+	local eq = tostring(
+		player:GetAttribute("EquippedVehicle")
+			or player:GetAttribute("SelectedVehicle")
+			or player:GetAttribute("CurrentVehicleType")
+			or "Compact"
+	)
 	local baseTier = VEHICLE_BASE_TIER[eq] or 1
 	local plowLvl = tonumber(player:GetAttribute("PlowLevel") or player:GetAttribute("Upgrade_Plow")) or 1
 	local bonusTier = if plowLvl >= 4 then 1 else 0
 	return math.clamp(baseTier + bonusTier, 1, 5)
 end
 
+local function isVehicleOwned(vehicleId: string, unlockedStr: string, equippedStr: string): boolean
+	if vehicleId == "Compact" or equippedStr == vehicleId then
+		return true
+	end
+	if player:GetAttribute("Unlocked_" .. vehicleId) == true then
+		return true
+	end
+	return string.find(unlockedStr, vehicleId, 1, true) ~= nil
+end
+
 local function getNextLockedCarSpec(): NextCarSpec?
 	local unlockedStr = tostring(player:GetAttribute("UnlockedVehicles") or "Compact")
 	local equippedStr = tostring(player:GetAttribute("EquippedVehicle") or player:GetAttribute("SelectedVehicle") or "Compact")
+	local currentVehType = tostring(player:GetAttribute("CurrentVehicleType") or "")
+
+	local highestOwnedTier = math.max(
+		computeCurrentSmashTier(),
+		VEHICLE_BASE_TIER[equippedStr] or 1,
+		VEHICLE_BASE_TIER[currentVehType] or 1
+	)
 	for _, spec in ipairs(CAR_PROGRESSION_LADDER) do
-		local isOwned = (string.find(unlockedStr, spec.id, 1, true) ~= nil) or (equippedStr == spec.id)
+		if isVehicleOwned(spec.id, unlockedStr, equippedStr) and spec.tier > highestOwnedTier then
+			highestOwnedTier = spec.tier
+		end
+	end
+
+	-- 1st Pass: Always target the next higher Smash Tier first (T1 -> T2 Sedan -> T3 SUV -> T4 MonsterTruck -> T5 Bulldozer)
+	for _, spec in ipairs(CAR_PROGRESSION_LADDER) do
+		local isOwned = isVehicleOwned(spec.id, unlockedStr, equippedStr)
+		if not isOwned and spec.tier > highestOwnedTier then
+			return spec
+		end
+	end
+
+	-- 2nd Pass: Only after Tier 5 Bulldozer is owned, suggest any remaining unowned collector cars (Muscle, Pickup, Sports)
+	for _, spec in ipairs(CAR_PROGRESSION_LADDER) do
+		local isOwned = isVehicleOwned(spec.id, unlockedStr, equippedStr)
 		if not isOwned then
 			return spec
 		end
@@ -190,9 +227,50 @@ local function getNextLockedCarSpec(): NextCarSpec?
 	return nil
 end
 
+local function readCashValue(): number
+	local attrCash = player:GetAttribute("Cash")
+	if typeof(attrCash) == "number" then
+		return attrCash
+	end
+	local ls = player:FindFirstChild("leaderstats")
+	local cashObj = ls and ls:FindFirstChild("Cash")
+	if cashObj and cashObj:IsA("ValueBase") then
+		return tonumber(cashObj.Value) or 0
+	end
+	return 500
+end
+
+local lastInstantUnlockAt = 0
+local function tryInstantUnlockAndEquipNextCar(): boolean
+	local nextSpec = getNextLockedCarSpec()
+	local currentCash = readCashValue()
+	if not nextSpec or currentCash < nextSpec.cost then
+		return false
+	end
+	local now = os.clock()
+	if now - lastInstantUnlockAt < 0.5 then
+		return true
+	end
+	lastInstantUnlockAt = now
+
+	local remotes = ReplicatedStorage:FindFirstChild("Remotes")
+	if remotes then
+		local selectRemote = remotes:FindFirstChild("SelectVehicle")
+		if selectRemote and selectRemote:IsA("RemoteEvent") then
+			selectRemote:FireServer(nextSpec.id)
+		end
+		local spawnRemote = remotes:FindFirstChild("SpawnVehicle")
+		if spawnRemote and spawnRemote:IsA("RemoteEvent") then
+			spawnRemote:FireServer(nextSpec.id, true)
+		end
+	end
+	return true
+end
+
 local function triggerQuickAction(actionId: string)
 	local remotes = ReplicatedStorage:FindFirstChild("Remotes")
 	if actionId == "Shop" then
+		tryInstantUnlockAndEquipNextCar()
 		player:SetAttribute("ToggleShopUI", not player:GetAttribute("ToggleShopUI"))
 	elseif actionId == "Avatar" then
 		player:SetAttribute("ToggleAvatarUI", not player:GetAttribute("ToggleAvatarUI"))
@@ -331,7 +409,9 @@ objTextConstraint.MinTextSize = 11
 objTextConstraint.Parent = nextRideBarText
 
 nextRideBtn.MouseButton1Click:Connect(function()
-	triggerQuickAction("Shop")
+	if not tryInstantUnlockAndEquipNextCar() then
+		triggerQuickAction("Shop")
+	end
 end)
 
 -- Row 3: Compact Casino Jackpot Meter (Height = 18px)
@@ -519,7 +599,27 @@ local shopBlip = makeFrame("ShopBlip", UDim2.fromOffset(6, 6), UDim2.fromScale(0
 addCorner(shopBlip, 3)
 local mechBlip = makeFrame("MechanicBlip", UDim2.fromOffset(6, 6), UDim2.fromScale(0.5, 0.5), Vector2.new(0.5, 0.5), Color3.fromRGB(80, 255, 110), 0, radarFrame)
 addCorner(mechBlip, 3)
+
+-- Cyan blips for landmarks inside Workspace.ManhattanMissionZones
+local missionZoneBlipPool: { Frame } = {}
+for i = 1, 12 do
+	local mzBlip = makeFrame("MissionZoneBlip" .. i, UDim2.fromOffset(6, 6), UDim2.fromScale(0.5, 0.5), Vector2.new(0.5, 0.5), Color3.fromRGB(45, 235, 255), 0, radarFrame)
+	mzBlip.Visible = false
+	mzBlip.ZIndex = 3
+	addCorner(mzBlip, 3)
+	addStroke(mzBlip, Color3.fromRGB(205, 250, 255), 1, 0.25)
+	table.insert(missionZoneBlipPool, mzBlip)
+end
+
+-- Pulsing Gold blip at player:GetAttribute("ActiveMissionPos")
+local mainMissionBlip = makeFrame("MainMissionBlip", UDim2.fromOffset(9, 9), UDim2.fromScale(0.5, 0.5), Vector2.new(0.5, 0.5), Color3.fromRGB(255, 215, 45), 0, radarFrame)
+mainMissionBlip.Visible = false
+mainMissionBlip.ZIndex = 4
+addCorner(mainMissionBlip, 5)
+local mainMissionBlipStroke = addStroke(mainMissionBlip, Color3.fromRGB(255, 255, 190), 1.5, 0)
+
 local playerBlip = makeFrame("PlayerBlip", UDim2.fromOffset(8, 8), UDim2.fromScale(0.5, 0.5), Vector2.new(0.5, 0.5), Color3.fromRGB(255, 230, 60), 0, radarFrame)
+playerBlip.ZIndex = 5
 addCorner(playerBlip, 4)
 addStroke(playerBlip, Color3.new(1, 1, 1), 1.2, 0)
 
@@ -527,6 +627,7 @@ local policeBlipPool: { Frame } = {}
 for i = 1, 8 do
 	local pBlip = makeFrame("PoliceBlip" .. i, UDim2.fromOffset(6, 6), UDim2.fromScale(0.5, 0.5), Vector2.new(0.5, 0.5), Color3.fromRGB(255, 60, 60), 0, radarFrame)
 	pBlip.Visible = false
+	pBlip.ZIndex = 4
 	addCorner(pBlip, 3)
 	table.insert(policeBlipPool, pBlip)
 end
@@ -767,19 +868,6 @@ local function showStyleCallout(text: string)
 	end)
 end
 
-local function readCashValue(): number
-	local attrCash = player:GetAttribute("Cash")
-	if typeof(attrCash) == "number" then
-		return attrCash
-	end
-	local ls = player:FindFirstChild("leaderstats")
-	local cashObj = ls and ls:FindFirstChild("Cash")
-	if cashObj and cashObj:IsA("ValueBase") then
-		return tonumber(cashObj.Value) or 0
-	end
-	return 500
-end
-
 local isGarageReadyState = false
 local nextPulseTierIndex: number? = 2
 
@@ -866,7 +954,7 @@ local function refreshHUDStats()
 		nextRideBarFill.BackgroundColor3 = Color3.fromRGB(28, 225, 105)
 		nextRideStroke.Color = Color3.fromRGB(95, 255, 155)
 		nextRideBarText.Text = string.format(
-			"READY! PRESS [B] TO BUY TIER %d %s ($%s)!",
+			"READY! CLICK TO GET TIER %d %s ($%s)!",
 			nextSpec.tier,
 			nextSpec.shortName,
 			formatNumber(nextSpec.cost)
@@ -982,6 +1070,7 @@ task.spawn(function()
 	-- Drain all auxiliary remotes so Roblox never logs "Remote event invocation queue exhausted"
 	for _, rName in ipairs({
 		"MissionUpdate",
+		"MissionStateUpdated",
 		"CampaignUpdate",
 		"BossUpdate",
 		"ComboCompleted",
@@ -1017,8 +1106,40 @@ UserInputService.InputBegan:Connect(function(input: InputObject, processed: bool
 		triggerQuickAction("SpawnCar")
 	elseif input.KeyCode == Enum.KeyCode.R then
 		triggerQuickAction("Repair")
+	elseif input.KeyCode == Enum.KeyCode.B then
+		tryInstantUnlockAndEquipNextCar()
 	end
 end)
+
+local function getLandmarkZoneWorldPos(inst: Instance): Vector3?
+	local attrPos = inst:GetAttribute("ZonePosition") or inst:GetAttribute("MissionPos") or inst:GetAttribute("Position")
+	if typeof(attrPos) == "Vector3" then
+		return attrPos
+	end
+	if inst:IsA("BasePart") then
+		return inst.Position
+	elseif inst:IsA("Model") then
+		if inst.PrimaryPart then
+			return inst.PrimaryPart.Position
+		end
+		local anyPart = inst:FindFirstChildWhichIsA("BasePart", true)
+		if anyPart then
+			return anyPart.Position
+		end
+		local ok, pivot = pcall(function()
+			return inst:GetPivot()
+		end)
+		if ok and typeof(pivot) == "CFrame" then
+			return pivot.Position
+		end
+	elseif inst:IsA("Folder") then
+		local anyPart = inst:FindFirstChildWhichIsA("BasePart", true)
+		if anyPart then
+			return anyPart.Position
+		end
+	end
+	return nil
+end
 
 -- Real-time Vehicle Telemetry + Minimap Radar + Casino Ready Pulse Loop
 local sirenClock = 0
@@ -1108,6 +1229,36 @@ RunService.RenderStepped:Connect(function(dt: number)
 		end
 		shopBlip.Position = mapOffset(Vector3.new(48, 0, -24))
 		mechBlip.Position = mapOffset(Vector3.new(-48, 0, -24))
+
+		-- Pulsing Gold Main Mission Blip at player:GetAttribute("ActiveMissionPos")
+		local activeMissionPos = player:GetAttribute("ActiveMissionPos")
+		if typeof(activeMissionPos) == "Vector3" then
+			mainMissionBlip.Visible = true
+			mainMissionBlip.Position = mapOffset(activeMissionPos)
+			local mPulse = (math.sin(sirenClock * 1.3) + 1) * 0.5
+			local blipSz = math.floor(8 + mPulse * 4)
+			mainMissionBlip.Size = UDim2.fromOffset(blipSz, blipSz)
+			mainMissionBlip.BackgroundColor3 = Color3.fromRGB(255, math.floor(195 + mPulse * 55), math.floor(35 + mPulse * 70))
+			mainMissionBlipStroke.Transparency = 0.05 + (1 - mPulse) * 0.35
+		else
+			mainMissionBlip.Visible = false
+		end
+
+		-- Cyan Blips for landmarks inside Workspace.ManhattanMissionZones
+		local leoCity = Workspace:FindFirstChild("LeoCity")
+		local missionZonesFolder = Workspace:FindFirstChild("ManhattanMissionZones")
+			or (leoCity and leoCity:FindFirstChild("ManhattanMissionZones"))
+		local zoneChildren = missionZonesFolder and missionZonesFolder:GetChildren() or {}
+		for i, mzBlip in ipairs(missionZoneBlipPool) do
+			local zoneInst = zoneChildren[i]
+			local zPos = if zoneInst then getLandmarkZoneWorldPos(zoneInst) else nil
+			if zPos then
+				mzBlip.Visible = true
+				mzBlip.Position = mapOffset(zPos)
+			else
+				mzBlip.Visible = false
+			end
+		end
 
 		local policeFolder = Workspace:FindFirstChild("PoliceUnits") or Workspace:FindFirstChild("ActivePolice")
 		local children = policeFolder and policeFolder:GetChildren() or {}

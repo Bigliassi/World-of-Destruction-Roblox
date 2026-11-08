@@ -5,7 +5,7 @@ Comprehensive Automated QA & Cross-Agent Integration Verifier for
 World of Destruction (Roblox Version 1.0).
 
 Checks:
-1. Presence of all 29 required Version 1.0 Luau scripts across ReplicatedStorage,
+1. Presence of all 33 required Version 1.0 Luau scripts across ReplicatedStorage,
    ServerScriptService, StarterPlayerScripts, and StarterGui, plus v1.0 documentation.
 2. Lexical & Structural Syntax Verification across all .luau files:
    - Balanced block keywords (`function`, `if`, `do`, `repeat` vs `end`/`until`)
@@ -48,6 +48,7 @@ EXPECTED_LUAU_FILES = [
     "src/ServerScriptService/MonetizationService.script.luau",
     "src/ServerScriptService/AvatarCustomizationService.script.luau",
     "src/ServerScriptService/GraphicsAndAtmosphereService.script.luau",
+    "src/ServerScriptService/MissionService.script.luau",
     "src/ServerScriptService/ViralRetentionAndZonesService.script.luau",
     "src/ServerScriptService/AutomatedSelfTest.script.luau",
     "src/StarterPlayer/StarterPlayerScripts/CrossPlatformController.client.luau",
@@ -61,6 +62,7 @@ EXPECTED_LUAU_FILES = [
     "src/StarterGui/CharacterCreatorAndWardrobeUI.client.luau",
     "src/StarterGui/TutorialAndGuideUI.client.luau",
     "src/StarterGui/ViralRewardsAndRebirthUI.client.luau",
+    "src/StarterGui/MissionMapAndVisualGuideUI.client.luau",
 ]
 
 EXPECTED_DOC_FILES = [
@@ -309,6 +311,66 @@ def audit_remote_references(luau_files: List[Path], shared_remotes: Set[str]) ->
     return referenced, warnings
 
 
+VALID_ROBLOX_ENUMS: Dict[str, Set[str]] = {
+    "AutomaticSize": {"None", "X", "Y", "XY"},
+    "ApplyStrokeMode": {"Contextual", "Border"},
+    "CameraType": {"Fixed", "Attach", "Watch", "Track", "Follow", "Custom", "Scriptable", "Orbital"},
+    "ContextActionResult": {"Sink", "Pass"},
+    "CoreGuiType": {"PlayerList", "Health", "Backpack", "Chat", "All", "EmotesMenu", "SelfView", "Captures"},
+    "EasingDirection": {"In", "Out", "InOut"},
+    "EasingStyle": {"Linear", "Sine", "Back", "Quad", "Quart", "Quint", "Bounce", "Elastic", "Exponential", "Circular", "Cubic"},
+    "FillDirection": {"Horizontal", "Vertical"},
+    "Font": {"Legacy", "Arial", "ArialBold", "SourceSans", "SourceSansBold", "SourceSansLight", "SourceSansItalic", "SourceSansSemibold", "Bodoni", "Garamond", "Cartoon", "Code", "Highway", "SciFi", "Arcade", "Fantasy", "Antique", "Gotham", "GothamMedium", "GothamBold", "GothamBlack", "AmaticSC", "Bangers", "Creepster", "DenkOne", "Fondamento", "FredokaOne", "GrenzeGotisch", "IndieFlower", "JosefinSans", "Jura", "Kalam", "LuckiestGuy", "Merriweather", "Michroma", "Nunito", "Oswald", "PatrickHand", "PermanentMarker", "PlayfairDisplay", "Roboto", "RobotoCondensed", "RobotoMono", "Sarpanch", "SpecialElite", "TitilliumWeb", "Ubuntu", "BuilderSans", "BuilderSansMedium", "BuilderSansBold", "BuilderSansExtraBold"},
+    "HorizontalAlignment": {"Center", "Left", "Right"},
+    "HumanoidDisplayDistanceType": {"Viewer", "Subject", "None"},
+    "HumanoidRigType": {"R6", "R15"},
+    "HumanoidStateType": {"FallingDown", "Running", "RunningNoPhysics", "Climbing", "StrafingNoPhysics", "Ragdoll", "GettingUp", "Jumping", "Landed", "Flying", "Freefall", "Seated", "PlatformStanding", "Dead", "Swimming", "Physics", "None"},
+    "KeyCode": {"Unknown", "Backspace", "Tab", "Clear", "Return", "Pause", "Escape", "Space", "LeftShift", "RightShift", "LeftControl", "RightControl", "LeftAlt", "RightAlt", "Up", "Down", "Right", "Left", "Insert", "Home", "End", "PageUp", "PageDown", "F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "F11", "F12", "Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "ButtonX", "ButtonY", "ButtonA", "ButtonB", "ButtonR1", "ButtonL1", "ButtonR2", "ButtonL2", "ButtonR3", "ButtonL3", "ButtonStart", "ButtonSelect", "DPadLeft", "DPadRight", "DPadUp", "DPadDown", "Thumbstick1", "Thumbstick2"},
+    "Material": {"Plastic", "SmoothPlastic", "Neon", "Wood", "WoodPlanks", "Marble", "Slate", "Concrete", "Granite", "Brick", "Pebble", "Cobblestone", "Rock", "Sandstone", "Basalt", "CrackedLava", "Limestone", "Pavement", "CorrodedMetal", "DiamondPlate", "Foil", "Metal", "Grass", "LeafyGrass", "Sand", "Fabric", "Snow", "Mud", "Ground", "Asphalt", "Salt", "Ice", "Glacier", "Glass", "ForceField", "Air", "Water", "Cardboard", "Carpet", "CeramicTiles", "ClayRoofTiles", "RoofShingles", "Leather", "Plaster", "Rubber"},
+    "MeshType": {"Head", "Torso", "Wedge", "Sphere", "Cylinder", "FileMesh", "Brick", "Prism", "Pyramid", "ParallelRamp", "RightAngleRamp", "CornerWedge"},
+    "NormalId": {"Top", "Bottom", "Back", "Front", "Right", "Left"},
+    "PartType": {"Ball", "Block", "Cylinder", "Wedge", "CornerWedge"},
+    "ParticleOrientation": {"FacingCamera", "FacingCameraWorldUp", "VelocityParallel", "VelocityPerpendicular"},
+    "ProductPurchaseDecision": {"NotProcessedYet", "PurchaseGranted"},
+    "ProximityPromptExclusivity": {"OnePerButton", "OneGlobally", "AlwaysShow"},
+    "RaycastFilterType": {"Exclude", "Include", "Blacklist", "Whitelist"},
+    "RenderPriority": {"First", "Input", "Camera", "Character", "Last"},
+    "RollOffMode": {"Inverse", "Linear", "LinearSquare", "InverseTapered"},
+    "ScaleType": {"Stretch", "Slice", "Tile", "Fit", "Crop"},
+    "ScrollingDirection": {"X", "Y", "XY"},
+    "SortOrder": {"LayoutOrder", "Name", "Custom"},
+    "SurfaceGuiSizingMode": {"FixedSize", "PixelsPerStud"},
+    "SurfaceType": {"Smooth", "Glue", "Weld", "Studs", "Inlet", "Universal", "Hinge", "Motor", "SteppingMotor", "SmoothNoOutlines"},
+    "Technology": {"Legacy", "Voxel", "Compatibility", "ShadowMap", "Future"},
+    "TextTruncate": {"None", "AtEnd", "SplitWord"},
+    "TextXAlignment": {"Left", "Right", "Center"},
+    "TextYAlignment": {"Top", "Center", "Bottom"},
+    "UserInputState": {"Begin", "Change", "End", "Cancel", "None"},
+    "UserInputType": {"MouseButton1", "MouseButton2", "MouseButton3", "MouseWheel", "MouseMovement", "Touch", "Keyboard", "Focus", "Accelerometer", "Gyro", "Gamepad1", "Gamepad2", "Gamepad3", "Gamepad4", "TextInput", "InputMethod", "None"},
+    "VerticalAlignment": {"Center", "Top", "Bottom"},
+    "VibrationMotor": {"Large", "Small", "LeftTrigger", "RightTrigger", "LeftHand", "RightHand"},
+    "ZIndexBehavior": {"Global", "Sibling"},
+}
+
+
+def audit_enum_values(luau_files: List[Path]) -> Tuple[int, List[str]]:
+    total_refs = 0
+    invalid: List[str] = []
+    for path in luau_files:
+        raw = path.read_text(encoding="utf-8")
+        cleaned, _ = strip_comments_and_strings(raw)
+        rel = path.relative_to(ROOT_DIR)
+        for m in re.finditer(r"\bEnum\.([A-Za-z0-9_]+)\.([A-Za-z0-9_]+)\b", cleaned):
+            total_refs += 1
+            e_type, e_val = m.group(1), m.group(2)
+            line_no = cleaned[: m.start()].count("\n") + 1
+            if e_type not in VALID_ROBLOX_ENUMS:
+                invalid.append(f"{rel}:{line_no} -> Unknown Enum type 'Enum.{e_type}.{e_val}'")
+            elif e_val not in VALID_ROBLOX_ENUMS[e_type]:
+                invalid.append(f"{rel}:{line_no} -> Invalid Enum value 'Enum.{e_type}.{e_val}'")
+    return total_refs, invalid
+
+
 def main() -> int:
     print("=" * 72)
     print("  WORLD OF DESTRUCTION v1.0 — AUTOMATED QA & INTEGRATION VERIFIER")
@@ -350,12 +412,21 @@ def main() -> int:
     remotes_path = ROOT_DIR / "src/ReplicatedStorage/Shared/Remotes.luau"
     shared_remotes = extract_remotes_from_shared(remotes_path)
     referenced_remotes, remote_warnings = audit_remote_references(all_luau_files, shared_remotes)
+    total_enum_refs, invalid_enums = audit_enum_values(all_luau_files)
 
     print("-" * 72)
     print(f"  Total Luau Scripts Verified : {len(all_luau_files)}")
     print(f"  Total Lines of Luau Code    : {total_lines:,}")
     print(f"  Registered Shared Remotes   : {len(shared_remotes)}")
     print(f"  Cross-Script Remote Calls   : {len(referenced_remotes)}")
+    print(f"  Verified Roblox Enum.* Refs : {total_enum_refs} (Invalid: {len(invalid_enums)})")
+
+    if invalid_enums:
+        for inv in invalid_enums:
+            print(f"  [FAIL] {inv}")
+        return 1
+    else:
+        print("  [PASS] Zero invalid Enum.* values across all Luau scripts!")
 
     if remote_warnings:
         for w in remote_warnings:

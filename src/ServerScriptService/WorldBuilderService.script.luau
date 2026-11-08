@@ -60,7 +60,7 @@ local ServerEvents, RemoteEvents = ensureEvents()
 local BLOCK_SIZE = 180 -- spacious 180-stud NYC blocks so buildings, plazas, and 4-lane avenues never overlap!
 local ROAD_WIDTH = 38 -- 4-lane NYC avenues
 local SIDEWALK_WIDTH = 10 -- bluestone sidewalk
-local GRID_RADIUS = 3 -- -3..3 = 7x7 full city blocks (-630..630 road lines)
+local GRID_RADIUS = 4 -- -4..4 = 9x9 (81) full city blocks (1,800 x 1,800 studs of dense Manhattan + Harbor!)
 
 Workspace:SetAttribute("LeoCityBlockSize", BLOCK_SIZE)
 Workspace:SetAttribute("LeoCityRoadWidth", ROAD_WIDTH)
@@ -494,18 +494,85 @@ local function spawnGasPump(pos: Vector3, yawDeg: number)
 	tagDestructible(m, "GasPump", 150, 110, 20, true)
 end
 
+-- Helper: Builds a tapered 8-sided conical pine tier out of 4 pairs of back-to-back WedgeParts (0, 45, 90, 135 deg)
+local function addConicalPineFoliageTier(
+	parent: Instance,
+	tierPrefix: string,
+	centerPos: Vector3,
+	radius: number,
+	tierHeight: number,
+	pineColor: Color3,
+	snowColor: Color3,
+	anchored: boolean
+)
+	local boughThick = math.max(1.2, radius * 0.62)
+	for a = 0, 3 do
+		local yawRad = math.rad(a * 45)
+		local baseRot = CFrame.new(centerPos) * CFrame.Angles(0, yawRad, 0)
+
+		-- Pair of back-to-back WedgeParts sloping down-and-outward to form a true tapered pine cone!
+		local wFront = makeWedge(
+			parent,
+			tierPrefix .. "_ConeWedgeA_" .. tostring(a),
+			Vector3.new(boughThick, tierHeight, radius),
+			baseRot * CFrame.new(0, 0, -radius * 0.5) * CFrame.Angles(0, math.rad(180), 0),
+			pineColor,
+			Enum.Material.Grass
+		)
+		wFront.Anchored = anchored
+
+		local wBack = makeWedge(
+			parent,
+			tierPrefix .. "_ConeWedgeB_" .. tostring(a),
+			Vector3.new(boughThick, tierHeight, radius),
+			baseRot * CFrame.new(0, 0, radius * 0.5),
+			pineColor,
+			Enum.Material.Grass
+		)
+		wBack.Anchored = anchored
+
+		-- Conical snow-frosted bough tips sloping down along the upper surface
+		local snowH = math.max(0.45, tierHeight * 0.28)
+		local snowR = radius * 0.92
+		local sFront = makeWedge(
+			parent,
+			tierPrefix .. "_SnowConeA_" .. tostring(a),
+			Vector3.new(boughThick * 0.88, snowH, snowR),
+			baseRot * CFrame.new(0, tierHeight * 0.36, -snowR * 0.5) * CFrame.Angles(0, math.rad(180), 0),
+			snowColor,
+			Enum.Material.Snow
+		)
+		sFront.Anchored = anchored
+		sFront.CanCollide = false
+
+		local sBack = makeWedge(
+			parent,
+			tierPrefix .. "_SnowConeB_" .. tostring(a),
+			Vector3.new(boughThick * 0.88, snowH, snowR),
+			baseRot * CFrame.new(0, tierHeight * 0.36, snowR * 0.5),
+			snowColor,
+			Enum.Material.Snow
+		)
+		sBack.Anchored = anchored
+		sBack.CanCollide = false
+	end
+end
+
 local function spawnSnowyChristmasTree(pos: Vector3)
 	local m = Instance.new("Model")
 	m.Name = "SnowyChristmasTree"
 
-	local pineColor = Color3.fromRGB(26, 76, 46)
+	local pineColor = Color3.fromRGB(26, 86, 48)
 	local snowColor = Color3.fromRGB(238, 244, 252)
 	local trunk = makePart(m, "Trunk", Vector3.new(1.8, 5.2, 1.8), CFrame.new(pos + Vector3.new(0, 2.6, 0)), Color3.fromRGB(104, 68, 42), Enum.Material.Wood, true)
+	trunk.Shape = Enum.PartType.Cylinder
+	trunk.CFrame = CFrame.new(pos + Vector3.new(0, 2.6, 0)) * CFrame.Angles(0, 0, math.rad(90))
+	trunk.Size = Vector3.new(5.2, 1.8, 1.8)
 
 	local tiers = {
-		{ y = 6.2, w = 8.2, h = 4.6 },
-		{ y = 10.2, w = 6.0, h = 4.2 },
-		{ y = 13.8, w = 3.8, h = 3.8 },
+		{ y = 6.2, r = 4.4, h = 4.8 },
+		{ y = 10.0, r = 3.3, h = 4.4 },
+		{ y = 13.4, r = 2.1, h = 4.0 },
 	}
 	local ornamentPalette = {
 		Color3.fromRGB(255, 214, 92), -- warm gold
@@ -514,14 +581,21 @@ local function spawnSnowyChristmasTree(pos: Vector3)
 	}
 
 	for idx, t in ipairs(tiers) do
-		makePart(m, "PineTier" .. idx, Vector3.new(t.w, t.h, t.w), CFrame.new(pos + Vector3.new(0, t.y, 0)), pineColor, Enum.Material.Grass, false)
-		local snowCap = makePart(m, "SnowCap" .. idx, Vector3.new(t.w + 0.3, 0.65, t.w + 0.3), CFrame.new(pos + Vector3.new(0, t.y + t.h * 0.5 - 0.15, 0)), snowColor, Enum.Material.Snow, false)
-		snowCap.CanCollide = false
+		addConicalPineFoliageTier(
+			m,
+			"PineConeTier" .. idx,
+			pos + Vector3.new(0, t.y, 0),
+			t.r,
+			t.h,
+			pineColor,
+			snowColor,
+			false
+		)
 
 		for a = 0, 3 do
 			local angle = math.rad(a * 90 + idx * 30)
-			local radius = t.w * 0.52
-			local ornPos = pos + Vector3.new(math.cos(angle) * radius, t.y - 0.4, math.sin(angle) * radius)
+			local radius = t.r * 0.72
+			local ornPos = pos + Vector3.new(math.cos(angle) * radius, t.y - t.h * 0.22, math.sin(angle) * radius)
 			local ornCol = ornamentPalette[((idx + a) % #ornamentPalette) + 1]
 			local orn = makePart(m, "OrnamentLight", Vector3.new(0.65, 0.65, 0.65), CFrame.new(ornPos), ornCol, Enum.Material.Neon, false)
 			orn.Shape = Enum.PartType.Ball
@@ -529,7 +603,7 @@ local function spawnSnowyChristmasTree(pos: Vector3)
 		end
 	end
 
-	local star = makePart(m, "TreeStarTopper", Vector3.new(1.3, 1.3, 0.5), CFrame.new(pos + Vector3.new(0, 16.3, 0)), Color3.fromRGB(255, 218, 82), Enum.Material.Neon, false)
+	local star = makePart(m, "TreeStarTopper", Vector3.new(1.3, 1.3, 0.5), CFrame.new(pos + Vector3.new(0, 16.0, 0)), Color3.fromRGB(255, 218, 82), Enum.Material.Neon, false)
 	star.CanCollide = false
 
 	weldChildrenToPrimary(m, trunk)
@@ -569,17 +643,26 @@ end
 local function buildGiantChristmasTree(pos: Vector3, totalHeight: number, name: string)
 	local m = Instance.new("Model")
 	m.Name = name
-	local pineColor = Color3.fromRGB(24, 72, 44)
+	local pineColor = Color3.fromRGB(24, 82, 46)
 	local snowColor = Color3.fromRGB(238, 244, 252)
 
 	local trunkH = totalHeight * 0.16
-	local trunk = makePart(m, "TreeTrunk", Vector3.new(4.2, trunkH, 4.2), CFrame.new(pos + Vector3.new(0, trunkH * 0.5, 0)), Color3.fromRGB(96, 62, 38), Enum.Material.Wood, true)
+	local trunk = makePart(
+		m,
+		"TreeTrunk",
+		Vector3.new(trunkH, 4.2, 4.2),
+		CFrame.new(pos + Vector3.new(0, trunkH * 0.5, 0)) * CFrame.Angles(0, 0, math.rad(90)),
+		Color3.fromRGB(96, 62, 38),
+		Enum.Material.Wood,
+		true
+	)
+	trunk.Shape = Enum.PartType.Cylinder
 
 	local tierSpecs = {
-		{ yFrac = 0.28, wFrac = 0.46, hFrac = 0.26 },
-		{ yFrac = 0.48, wFrac = 0.36, hFrac = 0.24 },
-		{ yFrac = 0.66, wFrac = 0.26, hFrac = 0.22 },
-		{ yFrac = 0.82, wFrac = 0.16, hFrac = 0.18 },
+		{ yFrac = 0.28, rFrac = 0.25, hFrac = 0.26 },
+		{ yFrac = 0.48, rFrac = 0.19, hFrac = 0.24 },
+		{ yFrac = 0.66, rFrac = 0.14, hFrac = 0.22 },
+		{ yFrac = 0.82, rFrac = 0.09, hFrac = 0.18 },
 	}
 	local ornamentColors = {
 		Color3.fromRGB(255, 216, 88),
@@ -588,17 +671,24 @@ local function buildGiantChristmasTree(pos: Vector3, totalHeight: number, name: 
 	}
 
 	for idx, spec in ipairs(tierSpecs) do
-		local tierW = totalHeight * spec.wFrac
+		local tierR = totalHeight * spec.rFrac
 		local tierH = totalHeight * spec.hFrac
 		local tierY = totalHeight * spec.yFrac
-		makePart(m, "EvergreenTier" .. idx, Vector3.new(tierW, tierH, tierW), CFrame.new(pos + Vector3.new(0, tierY, 0)), pineColor, Enum.Material.Grass, true)
-		local snowCap = makePart(m, "SnowBranchCap" .. idx, Vector3.new(tierW + 0.6, 1.1, tierW + 0.6), CFrame.new(pos + Vector3.new(0, tierY + tierH * 0.5 - 0.25, 0)), snowColor, Enum.Material.Snow, true)
-		snowCap.CanCollide = false
+		addConicalPineFoliageTier(
+			m,
+			"EvergreenConeTier" .. idx,
+			pos + Vector3.new(0, tierY, 0),
+			tierR,
+			tierH,
+			pineColor,
+			snowColor,
+			true
+		)
 
 		for a = 0, 5 do
 			local ang = math.rad(a * 60 + idx * 25)
-			local r = tierW * 0.52
-			local oPos = pos + Vector3.new(math.cos(ang) * r, tierY - tierH * 0.15, math.sin(ang) * r)
+			local r = tierR * 0.78
+			local oPos = pos + Vector3.new(math.cos(ang) * r, tierY - tierH * 0.22, math.sin(ang) * r)
 			local oCol = ornamentColors[((idx + a) % #ornamentColors) + 1]
 			local bulb = makePart(m, "HolidayOrnament", Vector3.new(1.2, 1.2, 1.2), CFrame.new(oPos), oCol, Enum.Material.Neon, true)
 			bulb.Shape = Enum.PartType.Ball
@@ -831,116 +921,8 @@ end
 -- INTERACTIVE ZONES: SPEED SHOP, MECHANIC BAYS, 3-STAGE CURVED STUNT RAMPS
 --------------------------------------------------------------------------------
 
-local function buildStuntRamp(pos: Vector3, yawDeg: number, width: number, height: number, length: number, labelText: string)
-	local m = Instance.new("Model")
-	m.Name = labelText
-	local rot = CFrame.new(pos) * CFrame.Angles(0, math.rad(yawDeg), 0)
-
-	-- Seamless 1-piece low-angle steel ramp (NO stepped grey blocks, NO giant yellow walls!)
-	local rampWidth = math.max(width, 26)
-	local totalLen = math.max(length, 38)
-	local rampHeight = math.clamp(height, 5.2, 6.8)
-	local y0 = -0.22 -- Sunk slightly below road surface so approach is 100% flush
-
-	local rampPhysProps = PhysicalProperties.new(0.7, 0.3, 0.0, 1.0, 1.0)
-	local steelDeckColor = Color3.fromRGB(42, 48, 58)
-	local trimGlowColor = Color3.fromRGB(85, 220, 255)
-
-	-- Single continuous 1-piece steel WedgePart deck
-	local wedge1 = makeWedge(
-		m,
-		"RampWedge",
-		Vector3.new(rampWidth, rampHeight, totalLen),
-		rot * CFrame.new(0, y0 + rampHeight * 0.5, 0),
-		steelDeckColor,
-		Enum.Material.Metal
-	)
-	wedge1.CustomPhysicalProperties = rampPhysProps
-	CollectionService:AddTag(wedge1, "StuntRampSurface")
-	CollectionService:AddTag(wedge1, "StuntRamp")
-
-	-- Flush steel approach transition plate at the toe of the ramp
-	local approachPlate = makePart(
-		m,
-		"ApproachTransitionPlate",
-		Vector3.new(rampWidth, 0.24, 4.5),
-		rot * CFrame.new(0, 0.04, totalLen * 0.5 + 1.8),
-		Color3.fromRGB(54, 60, 72),
-		Enum.Material.DiamondPlate,
-		true
-	)
-	approachPlate.CustomPhysicalProperties = rampPhysProps
-	CollectionService:AddTag(approachPlate, "StuntRampSurface")
-
-	-- Slope-aligned low-profile side guide strips (CanCollide = false, no giant walls!)
-	local slopePitchRad = math.atan2(rampHeight, totalLen)
-	local slopeHyp = math.sqrt(totalLen * totalLen + rampHeight * rampHeight)
-	for _, sx in ipairs({ -1, 1 }) do
-		local rail = makePart(
-			m,
-			if sx < 0 then "LeftEdgeTrim" else "RightEdgeTrim",
-			Vector3.new(0.45, 0.32, slopeHyp),
-			rot * CFrame.new(sx * (rampWidth * 0.5 - 0.25), y0 + rampHeight * 0.5 + 0.12, 0) * CFrame.Angles(slopePitchRad, 0, 0),
-			trimGlowColor,
-			Enum.Material.Neon,
-			true
-		)
-		rail.CanCollide = false
-		rail.CanTouch = false
-		rail.CanQuery = false
-	end
-
-	-- Invisible launch trigger at the top lip (Transparency = 1, no giant yellow wall!)
-	local lipTrigger = makePart(
-		m,
-		"JumpTrigger",
-		Vector3.new(rampWidth, 5, 4),
-		rot * CFrame.new(0, rampHeight + 2.0, -totalLen * 0.5 + 1.5),
-		trimGlowColor,
-		Enum.Material.SmoothPlastic,
-		true
-	)
-	lipTrigger.Transparency = 1.0
-	lipTrigger.CanCollide = false
-	CollectionService:AddTag(lipTrigger, "StuntRamp")
-	CollectionService:AddTag(m, "StuntRamp")
-
-	local cooldowns: { [Player]: number } = {}
-	lipTrigger.Touched:Connect(function(hit: BasePart)
-		local model = hit:FindFirstAncestorOfClass("Model")
-		if not model then return end
-		local hum = model:FindFirstChildOfClass("Humanoid")
-		local player = if hum then game:GetService("Players"):GetPlayerFromCharacter(model) else nil
-		if not player then
-			local seat = model:FindFirstChildWhichIsA("VehicleSeat", true)
-			if seat and seat.Occupant then
-				player = game:GetService("Players"):GetPlayerFromCharacter(seat.Occupant.Parent)
-			end
-		end
-		if player and (os.clock() - (cooldowns[player] or 0) > 2.5) then
-			if hit.AssemblyLinearVelocity.Magnitude > 22 then
-				cooldowns[player] = os.clock()
-				local re = RemoteEvents:FindFirstChild("StuntJumpTriggered") :: RemoteEvent?
-				if re then
-					re:FireClient(player, labelText, pos)
-				end
-				local de = ServerEvents:FindFirstChild("DestructionOccurred") :: BindableEvent?
-				if de then
-					de:Fire({
-						player = player,
-						propType = "MegaStuntJump",
-						cashEarned = 120,
-						chaosPoints = 75,
-						position = pos,
-						isExplosion = false,
-					})
-				end
-			end
-		end
-	end)
-
-	m.PrimaryPart = wedge1
-	m.Parent = localZonesFolder
+local function buildStuntRamp(_pos: Vector3, _yawDeg: number, _width: number, _height: number, _length: number, _labelText: string)
+	-- Standalone wedge ramps removed so plazas, parks, and waterfronts stay realistic and unobstructed!
 end
 
 local function buildSpeedShop(pos: Vector3, yawDeg: number)
@@ -1384,25 +1366,392 @@ local function buildSuburbanParkBlock(origin: Vector3)
 	spawnJackpotCrate(origin + Vector3.new(28, 0.36, -4))
 	spawnJackpotCrate(origin + Vector3.new(18, 0.36, -18))
 	spawnFoodVendorCart(origin + Vector3.new(38, 0.36, 14), -90, 2)
-
-	-- Park seamless steel stunt jump over Wollman Ice Skating Rink
-	buildStuntRamp(origin + Vector3.new(-14, 0.36, -24), 180, 26, 6.2, 38, "ParkLakeMegaJump")
 end
 
-local function buildBeachfrontBoardwalk(origin: Vector3)
-	-- Frosty Hudson River Pier (top Y = 0.36) & Winter Boardwalk on East edge (top Y = 0.46)
-	local usable = BLOCK_SIZE - ROAD_WIDTH
-	makePart(CityRoot, "BeachSand", Vector3.new(usable, 0.24, usable), CFrame.new(origin + Vector3.new(0, 0.24, 0)), Color3.fromRGB(82, 88, 100), Enum.Material.Concrete, true)
-	makePart(CityRoot, "BoardwalkDeck", Vector3.new(24, 0.24, usable), CFrame.new(origin + Vector3.new(-26, 0.34, 0)), Color3.fromRGB(102, 74, 52), Enum.Material.WoodPlanks, true)
+-- 1. Holiday Market Chalet & Golden Prometheus Monument for Rockefeller Christmas Party
+local function buildHolidayChalet(pos: Vector3, yawDeg: number, boothTitle: string)
+	local m = Instance.new("Model")
+	m.Name = "HolidayMarketChalet"
+	local rot = CFrame.new(pos) * CFrame.Angles(0, math.rad(yawDeg), 0)
 
-	for _, zOff in ipairs({ -30, 0, 30 }) do
-		spawnSnowyChristmasTree(origin + Vector3.new(-12, 0.36, zOff))
-		spawnSnowyChristmasTree(origin + Vector3.new(18, 0.36, zOff))
-		spawnBench(origin + Vector3.new(-22, 0.46, zOff + 8), 90)
+	local body = makePart(m, "ChaletCabin", Vector3.new(9.5, 6.2, 7.2), rot * CFrame.new(0, 3.1, 0), Color3.fromRGB(118, 72, 42), Enum.Material.WoodPlanks, true)
+	makeWedge(m, "RoofLeft", Vector3.new(10.5, 3.0, 4.4), rot * CFrame.new(0, 7.6, -2.2) * CFrame.Angles(0, math.rad(180), 0), Color3.fromRGB(238, 244, 252), Enum.Material.Snow)
+	makeWedge(m, "RoofRight", Vector3.new(10.5, 3.0, 4.4), rot * CFrame.new(0, 7.6, 2.2), Color3.fromRGB(238, 244, 252), Enum.Material.Snow)
+	local garland = makePart(m, "FairyLightGarland", Vector3.new(10.2, 0.45, 7.8), rot * CFrame.new(0, 6.2, 0), Color3.fromRGB(255, 220, 85), Enum.Material.Neon, false)
+	garland.CanCollide = false
+	addSurfaceSign(body, boothTitle, Color3.fromRGB(255, 232, 145), Enum.NormalId.Front)
+	weldChildrenToPrimary(m, body)
+	m.Parent = PropsFolder
+	tagDestructible(m, "Crate", 120, 85, 10, false, 1)
+end
+
+local function buildPrometheusMonument(pos: Vector3)
+	local m = Instance.new("Model")
+	m.Name = "GoldenPrometheusMonument"
+	local ped = makePart(m, "GranitePedestal", Vector3.new(8.5, 4.8, 8.5), CFrame.new(pos + Vector3.new(0, 2.4, 0)), Color3.fromRGB(64, 70, 82), Enum.Material.Marble, true)
+	local ring = makePart(m, "GoldenZodiacRing", Vector3.new(1.2, 9.5, 9.5), CFrame.new(pos + Vector3.new(0, 9.6, 0)) * CFrame.Angles(0, math.rad(25), 0), Color3.fromRGB(245, 198, 48), Enum.Material.Metal, true)
+	ring.Shape = Enum.PartType.Cylinder
+	ring.Reflectance = 0.45
+	local figure = makePart(m, "GoldenStatueCore", Vector3.new(2.6, 7.2, 2.2), CFrame.new(pos + Vector3.new(0, 9.4, 0)) * CFrame.Angles(math.rad(-18), 0, math.rad(12)), Color3.fromRGB(255, 212, 55), Enum.Material.Neon, true)
+	figure.CanCollide = false
+	addSurfaceSign(ped, "ROCKEFELLER PROMETHEUS MONUMENT", Color3.fromRGB(255, 220, 95), Enum.NormalId.Front)
+	m.PrimaryPart = ped
+	m.Parent = LandmarksFolder
+end
+
+-- 2. Times Square Live Outdoor Concert Stage & Block Party (`buildConcertStage`)
+local function buildConcertStage(pos: Vector3, yawDeg: number)
+	local m = Instance.new("Model")
+	m.Name = "TimesSquareConcertStage"
+	local rot = CFrame.new(pos) * CFrame.Angles(0, math.rad(yawDeg), 0)
+
+	local deck = makePart(m, "ConcertStageDeck", Vector3.new(42, 2.8, 24), rot * CFrame.new(0, 1.4, 0), Color3.fromRGB(24, 28, 40), Enum.Material.Metal, true)
+	makePart(m, "NeonStageTrim", Vector3.new(42.6, 0.5, 24.6), rot * CFrame.new(0, 2.75, 0), Color3.fromRGB(255, 65, 215), Enum.Material.Neon, true)
+
+	-- Giant LED Backdrop Screen + Steel Truss Arch with Colored Stage SpotLights
+	local screen = makePart(m, "GiantLEDBackdrop", Vector3.new(36, 18, 1.8), rot * CFrame.new(0, 11.8, 10.5), Color3.fromRGB(16, 20, 34), Enum.Material.Metal, true)
+	local screenGlow = makePart(m, "LEDScreenBorder", Vector3.new(37.2, 19.2, 1.4), rot * CFrame.new(0, 11.8, 10.6), Color3.fromRGB(55, 235, 255), Enum.Material.Neon, true)
+	screenGlow.CanCollide = false
+	addSurfaceSign(screen, "LIVE IN MANHATTAN • NEW YEAR CONCERT", Color3.fromRGB(255, 235, 85), Enum.NormalId.Front)
+	addSurfaceSign(screen, "LIVE IN MANHATTAN • NEW YEAR CONCERT", Color3.fromRGB(255, 235, 85), Enum.NormalId.Back)
+
+	for _, sx in ipairs({ -19, 19 }) do
+		makePart(m, "SteelTrussPillar", Vector3.new(2.2, 24, 2.2), rot * CFrame.new(sx, 12, -2), Color3.fromRGB(48, 56, 70), Enum.Material.DiamondPlate, true)
+		-- Giant Stacked Concert Subwoofers
+		local sub = makePart(m, "ConcertSubwooferStack", Vector3.new(6.2, 11.5, 5.6), rot * CFrame.new(sx, 7.2, 3), Color3.fromRGB(20, 22, 28), Enum.Material.Metal, true)
+		makePart(m, "SubwooferNeonCone", Vector3.new(4.2, 4.2, 0.4), rot * CFrame.new(sx, 9.2, 0.1), Color3.fromRGB(55, 235, 255), Enum.Material.Neon, true)
+		addSurfaceSign(sub, "BASS 10,000W", Color3.fromRGB(255, 95, 225), Enum.NormalId.Front)
 	end
-	spawnCrateCluster(origin + Vector3.new(-26, 0.46, -16), 2)
-	spawnJackpotCrate(origin + Vector3.new(-20, 0.46, 16))
-	buildStuntRamp(origin + Vector3.new(8, 0.36, 0), 0, 26, 6.2, 38, "BoardwalkStuntJump")
+	local topTruss = makePart(m, "OverheadLightTruss", Vector3.new(42, 2.0, 2.2), rot * CFrame.new(0, 23.5, -2), Color3.fromRGB(48, 56, 70), Enum.Material.DiamondPlate, true)
+
+	local beamColors = {
+		Color3.fromRGB(255, 65, 220),
+		Color3.fromRGB(55, 235, 255),
+		Color3.fromRGB(255, 225, 55),
+		Color3.fromRGB(85, 255, 130),
+	}
+	for i = 1, 4 do
+		local lx = -15 + (i - 1) * 10
+		local lamp = makePart(m, "StageSpotLamp_" .. i, Vector3.new(2.0, 1.6, 2.0), rot * CFrame.new(lx, 22.0, -2), beamColors[i], Enum.Material.Neon, true)
+		local spot = Instance.new("SpotLight")
+		spot.Color = beamColors[i]
+		spot.Brightness = 4.5
+		spot.Range = 48
+		spot.Angle = 55
+		spot.Face = Enum.NormalId.Bottom
+		spot.Parent = lamp
+	end
+
+	-- Illuminated DJ Booth & Neon Dance Floor in front of stage
+	local djBooth = makePart(m, "DJBooth", Vector3.new(11.0, 3.8, 4.2), rot * CFrame.new(0, 4.7, 2.0), Color3.fromRGB(255, 75, 215), Enum.Material.Neon, true)
+	addSurfaceSign(djBooth, "DJ LEO LIVE", Color3.fromRGB(255, 255, 255), Enum.NormalId.Front)
+	local danceFloor = makePart(m, "NeonDanceFloor", Vector3.new(34, 0.22, 22), rot * CFrame.new(0, 0.34, -24), Color3.fromRGB(45, 195, 255), Enum.Material.Neon, true)
+	danceFloor.Transparency = 0.25
+
+	-- Smashable VIP Party Tables around the dance floor
+	for _, tx in ipairs({ -14, 0, 14 }) do
+		spawnJackpotCrate((rot * CFrame.new(tx, 0.3, -18)).Position)
+		spawnCafePatio((rot * CFrame.new(tx, 0.3, -30)).Position, yawDeg)
+	end
+
+	m.PrimaryPart = deck
+	m.Parent = LandmarksFolder
+end
+
+-- 3. Wall Street Federal Reserve Gold Bank & Charging Bull Monument (`buildGrandBankBlock`)
+local function buildGrandBankBlock(origin: Vector3)
+	local m = Instance.new("Model")
+	m.Name = "ManhattanFederalGoldReserve"
+	local bankCenter = origin + Vector3.new(0, 0.3, 24)
+
+	-- Neoclassical Marble & Granite Bank Hall + Soaring Wall Street Financial Skyscraper behind it
+	local hall = makePart(m, "NeoclassicalBankHall", Vector3.new(78, 46, 52), CFrame.new(bankCenter + Vector3.new(0, 23, 0)), Color3.fromRGB(224, 220, 210), Enum.Material.Marble, true)
+	makePart(m, "GraniteSteps", Vector3.new(84, 2.4, 62), CFrame.new(bankCenter + Vector3.new(0, 1.2, -4)), Color3.fromRGB(168, 164, 156), Enum.Material.Limestone, true)
+
+	-- 8 Tall Fluted Marble Columns along the front portico
+	for i = 1, 8 do
+		local cx = -31.5 + (i - 1) * 9.0
+		local col = makePart(
+			m,
+			"FlutedMarbleColumn_" .. i,
+			Vector3.new(38, 3.4, 3.4),
+			CFrame.new(bankCenter + Vector3.new(cx, 21.4, -28.5)) * CFrame.Angles(0, 0, math.rad(90)),
+			Color3.fromRGB(238, 235, 226),
+			Enum.Material.Marble,
+			true
+		)
+		col.Shape = Enum.PartType.Cylinder
+	end
+
+	local pediment = makePart(m, "BankPedimentFrieze", Vector3.new(80, 6.5, 8.0), CFrame.new(bankCenter + Vector3.new(0, 43.5, -26.5)), Color3.fromRGB(214, 182, 96), Enum.Material.Metal, true)
+	addSurfaceSign(pediment, "MANHATTAN FEDERAL GOLD RESERVE", Color3.fromRGB(28, 24, 14), Enum.NormalId.Front)
+	addSurfaceSign(pediment, "MANHATTAN FEDERAL GOLD RESERVE", Color3.fromRGB(28, 24, 14), Enum.NormalId.Back)
+
+	-- Charging Bull / Golden Bullion Monument in the forecourt
+	local bullPed = makePart(m, "BullMonumentPedestal", Vector3.new(9.0, 3.2, 14.0), CFrame.new(origin + Vector3.new(-32, 1.9, -22)), Color3.fromRGB(58, 62, 72), Enum.Material.Marble, true)
+	local bullBody = makePart(m, "BronzeChargingBull", Vector3.new(4.8, 4.6, 9.5), CFrame.new(origin + Vector3.new(-32, 5.6, -22)), Color3.fromRGB(205, 152, 54), Enum.Material.Metal, true)
+	bullBody.Reflectance = 0.38
+	addSurfaceSign(bullPed, "WALL ST CHARGING BULL", Color3.fromRGB(255, 215, 85), Enum.NormalId.Front)
+
+	m.PrimaryPart = hall
+	m.Parent = BuildingsFolder
+
+	-- Towering Financial Center Skyscrapers flanking the Reserve
+	buildSkyscraper(origin + Vector3.new(-42, 0.3, 38), 32, 32, 225, Color3.fromRGB(68, 76, 90), "WallStreetTowerWest", false)
+	buildSkyscraper(origin + Vector3.new(42, 0.3, 38), 32, 32, 255, Color3.fromRGB(84, 76, 68), "WallStreetTowerEast", false)
+	buildSpeedShop(origin + Vector3.new(26, 0, -28), -90)
+
+	-- Smashable Gold ATMs, Armored Cash Trucks & Golden Bank Vaults out front!
+	for _, gx in ipairs({ -22, -8, 8, 22 }) do
+		spawnGoldATM(origin + Vector3.new(gx, 0.3, -6), 0)
+	end
+	spawnArmoredCashTruck(origin + Vector3.new(-18, 0.3, -38), 90)
+	spawnMegaCorpBankVault(origin + Vector3.new(0, 0.3, -18), 0)
+	spawnJackpotCrate(origin + Vector3.new(-14, 0.3, -18))
+	spawnJackpotCrate(origin + Vector3.new(14, 0.3, -18))
+end
+
+-- 4. Manhattan General Hospital Complex (`buildHospitalBlock`)
+local function spawnParkedAmbulanceProp(pos: Vector3, yawDeg: number)
+	local m = Instance.new("Model")
+	m.Name = "NYC_EMS_Ambulance"
+	local rot = CFrame.new(pos) * CFrame.Angles(0, math.rad(yawDeg), 0)
+	local body = makePart(m, "AmbulanceBody", Vector3.new(6.4, 5.2, 14.4), rot * CFrame.new(0, 2.8, 0), Color3.fromRGB(246, 248, 252), Enum.Material.SmoothPlastic, true)
+	makePart(m, "RedCrossStripe", Vector3.new(6.55, 0.85, 14.5), rot * CFrame.new(0, 2.6, 0), Color3.fromRGB(235, 38, 45), Enum.Material.SmoothPlastic, false)
+	local bar = makePart(m, "EmergencyLightbar", Vector3.new(4.8, 0.55, 1.1), rot * CFrame.new(0, 5.65, -4.5), Color3.fromRGB(255, 45, 55), Enum.Material.Neon, false)
+	bar.CanCollide = false
+	addSurfaceSign(body, "+ NYC EMS AMBULANCE +", Color3.fromRGB(225, 32, 38), Enum.NormalId.Left)
+	addSurfaceSign(body, "+ NYC EMS AMBULANCE +", Color3.fromRGB(225, 32, 38), Enum.NormalId.Right)
+	weldChildrenToPrimary(m, body)
+	m.Parent = PropsFolder
+	tagDestructible(m, "TrafficVehicle", 300, 200, 12, false, 1)
+end
+
+local function buildHospitalBlock(origin: Vector3)
+	local m = Instance.new("Model")
+	m.Name = "ManhattanGeneralHospital"
+
+	local mainTowerPos = origin + Vector3.new(-24, 0.3, 20)
+	local eastWingPos = origin + Vector3.new(28, 0.3, 20)
+
+	-- Crisp White & Sky-Blue Glass Medical Towers (165 studs tall)
+	local towerA = makePart(m, "MedicalTowerMain", Vector3.new(44, 165, 42), CFrame.new(mainTowerPos + Vector3.new(0, 82.5, 0)), Color3.fromRGB(238, 244, 252), Enum.Material.SmoothPlastic, true)
+	local glassA = makePart(m, "MedicalGlassCurtain", Vector3.new(40, 150, 42.6), CFrame.new(mainTowerPos + Vector3.new(0, 82, 0)), Color3.fromRGB(115, 195, 245), Enum.Material.Glass, true)
+	glassA.Reflectance = 0.28
+
+	makePart(m, "MedicalTowerEastWing", Vector3.new(38, 125, 38), CFrame.new(eastWingPos + Vector3.new(0, 62.5, 0)), Color3.fromRGB(232, 238, 248), Enum.Material.SmoothPlastic, true)
+	makePart(m, "Skybridge", Vector3.new(24, 10, 14), CFrame.new(origin + Vector3.new(4, 58, 20)), Color3.fromRGB(135, 205, 250), Enum.Material.Glass, true)
+
+	-- Glowing Red Cross Emblems on Rooftop & Facade
+	makePart(m, "RedCrossVert", Vector3.new(4.5, 18, 1.4), CFrame.new(mainTowerPos + Vector3.new(0, 138, -21.6)), Color3.fromRGB(255, 42, 52), Enum.Material.Neon, true)
+	makePart(m, "RedCrossHoriz", Vector3.new(18, 4.5, 1.4), CFrame.new(mainTowerPos + Vector3.new(0, 138, -21.6)), Color3.fromRGB(255, 42, 52), Enum.Material.Neon, true)
+
+	-- Emergency Ambulance Canopy
+	local canopy = makePart(m, "EmergencyBayCanopy", Vector3.new(48, 2.2, 22), CFrame.new(origin + Vector3.new(-16, 16, -18)), Color3.fromRGB(225, 38, 48), Enum.Material.Metal, true)
+	addSurfaceSign(canopy, "MANHATTAN GENERAL HOSPITAL • EMERGENCY", Color3.fromRGB(255, 255, 255), Enum.NormalId.Front)
+	addSurfaceSign(canopy, "MANHATTAN GENERAL HOSPITAL • EMERGENCY", Color3.fromRGB(255, 255, 255), Enum.NormalId.Back)
+
+	m.PrimaryPart = towerA
+	m.Parent = BuildingsFolder
+
+	-- 2 Parked NYC EMS Ambulances + Drive-Through Instant Medical Triage & Repair Bay!
+	spawnParkedAmbulanceProp(origin + Vector3.new(-28, 0.3, -24), 0)
+	spawnParkedAmbulanceProp(origin + Vector3.new(-6, 0.3, -24), 0)
+	buildMechanicRepairBay(origin + Vector3.new(34, 0, -24), 0)
+	spawnCrateCluster(origin + Vector3.new(-18, 0.3, -44), 3)
+	spawnJackpotCrate(origin + Vector3.new(0, 0.3, -44))
+end
+
+-- 5. Manhattan University & Public School District (`buildUniversityBlock` & `buildSchoolBlock`)
+local function buildUniversityBlock(origin: Vector3)
+	local m = Instance.new("Model")
+	m.Name = "ManhattanUniversityCampus"
+
+	local hallCenter = origin + Vector3.new(0, 0.3, 28)
+	local mainHall = makePart(m, "CollegiateMainHall", Vector3.new(82, 44, 38), CFrame.new(hallCenter + Vector3.new(0, 22, 0)), Color3.fromRGB(148, 56, 48), Enum.Material.Concrete, true)
+	makePart(m, "LimestoneColonnade", Vector3.new(74, 36, 4.0), CFrame.new(hallCenter + Vector3.new(0, 18, -19.5)), Color3.fromRGB(218, 212, 198), Enum.Material.Limestone, true)
+
+	-- Classical Rotunda Dome & 150-Stud Collegiate Clock Tower
+	local dome = makePart(m, "ClassicalDome", Vector3.new(32, 24, 32), CFrame.new(hallCenter + Vector3.new(0, 50, 0)), Color3.fromRGB(72, 145, 118), Enum.Material.Metal, true)
+	dome.Shape = Enum.PartType.Ball
+	local clockTower = makePart(m, "UniversityClockTower", Vector3.new(22, 150, 22), CFrame.new(origin + Vector3.new(-44, 75.3, 28)), Color3.fromRGB(212, 204, 188), Enum.Material.Limestone, true)
+	local clockFace = makePart(m, "ClockFaceNeon", Vector3.new(12, 12, 1.4), CFrame.new(origin + Vector3.new(-44, 126, 16.8)), Color3.fromRGB(255, 232, 145), Enum.Material.Neon, true)
+	addSurfaceSign(clockFace, "XII", Color3.fromRGB(24, 28, 38), Enum.NormalId.Front)
+
+	local gateSign = makePart(m, "UniversityGateArch", Vector3.new(44, 4.2, 2.4), CFrame.new(origin + Vector3.new(0, 18, -42)), Color3.fromRGB(36, 58, 108), Enum.Material.Metal, true)
+	addSurfaceSign(gateSign, "MANHATTAN UNIVERSITY • EST. 1754", Color3.fromRGB(255, 220, 85), Enum.NormalId.Front)
+	addSurfaceSign(gateSign, "MANHATTAN UNIVERSITY • EST. 1754", Color3.fromRGB(255, 220, 85), Enum.NormalId.Back)
+
+	-- Bronze Founder Statue in Campus Quad
+	local statuePed = makePart(m, "FounderStatuePedestal", Vector3.new(7, 4.5, 7), CFrame.new(origin + Vector3.new(0, 2.5, -12)), Color3.fromRGB(185, 180, 170), Enum.Material.Marble, true)
+	makePart(m, "BronzeFounderStatue", Vector3.new(3.2, 7.5, 3.2), CFrame.new(origin + Vector3.new(0, 8.5, -12)), Color3.fromRGB(168, 128, 64), Enum.Material.Metal, true)
+	addSurfaceSign(statuePed, "ALMA MATER MONUMENT", Color3.fromRGB(255, 225, 120), Enum.NormalId.Front)
+
+	m.PrimaryPart = mainHall
+	m.Parent = BuildingsFolder
+
+	spawnCafePatio(origin + Vector3.new(-22, 0.3, -18), 0)
+	spawnCafePatio(origin + Vector3.new(22, 0.3, -18), 0)
+	spawnJackpotCrate(origin + Vector3.new(-14, 0.3, -32))
+	spawnJackpotCrate(origin + Vector3.new(14, 0.3, -32))
+	spawnSnowyChristmasTree(origin + Vector3.new(-36, 0.3, -24))
+	spawnSnowyChristmasTree(origin + Vector3.new(36, 0.3, -24))
+end
+
+local function spawnParkedSchoolBusProp(pos: Vector3, yawDeg: number)
+	local m = Instance.new("Model")
+	m.Name = "NYC_SchoolBus"
+	local rot = CFrame.new(pos) * CFrame.Angles(0, math.rad(yawDeg), 0)
+	local body = makePart(m, "BusBody", Vector3.new(6.8, 5.6, 18.2), rot * CFrame.new(0, 3.0, 0), Color3.fromRGB(252, 185, 22), Enum.Material.SmoothPlastic, true)
+	makePart(m, "BlackSafetyStripe", Vector3.new(6.95, 0.65, 18.3), rot * CFrame.new(0, 2.6, 0), Color3.fromRGB(22, 24, 28), Enum.Material.SmoothPlastic, false)
+	addSurfaceSign(body, "NYC SCHOOL BUS • P.S. 101", Color3.fromRGB(18, 20, 24), Enum.NormalId.Left)
+	addSurfaceSign(body, "NYC SCHOOL BUS • P.S. 101", Color3.fromRGB(18, 20, 24), Enum.NormalId.Right)
+	weldChildrenToPrimary(m, body)
+	m.Parent = PropsFolder
+	tagDestructible(m, "CityBus", 420, 260, 14, false, 1)
+end
+
+local function buildSchoolBlock(origin: Vector3)
+	local m = Instance.new("Model")
+	m.Name = "ManhattanPublicSchoolPS101"
+
+	local schoolBuilding = makePart(m, "SchoolRedBrickMain", Vector3.new(76, 42, 38), CFrame.new(origin + Vector3.new(0, 21.3, 24)), Color3.fromRGB(162, 58, 46), Enum.Material.Concrete, true)
+	local signHeader = makePart(m, "SchoolBannerSign", Vector3.new(58, 4.5, 1.8), CFrame.new(origin + Vector3.new(0, 38, 4.2)), Color3.fromRGB(252, 192, 32), Enum.Material.Metal, true)
+	addSurfaceSign(signHeader, "MANHATTAN PUBLIC SCHOOL P.S. 101", Color3.fromRGB(20, 24, 34), Enum.NormalId.Front)
+	addSurfaceSign(signHeader, "MANHATTAN PUBLIC SCHOOL P.S. 101", Color3.fromRGB(20, 24, 34), Enum.NormalId.Back)
+
+	-- Schoolyard Basketball Court & Hoops
+	makePart(m, "SchoolyardCourt", Vector3.new(54, 0.22, 36), CFrame.new(origin + Vector3.new(0, 0.34, -22)), Color3.fromRGB(58, 86, 128), Enum.Material.Asphalt, true)
+	for _, sx in ipairs({ -24, 24 }) do
+		makePart(m, "HoopPost", Vector3.new(0.8, 11, 0.8), CFrame.new(origin + Vector3.new(sx, 5.8, -22)), Color3.fromRGB(220, 225, 235), Enum.Material.Metal, true)
+		makePart(m, "Backboard", Vector3.new(0.4, 3.6, 5.2), CFrame.new(origin + Vector3.new(sx, 10.5, -22)), Color3.fromRGB(245, 248, 255), Enum.Material.SmoothPlastic, true)
+	end
+
+	m.PrimaryPart = schoolBuilding
+	m.Parent = BuildingsFolder
+
+	spawnParkedSchoolBusProp(origin + Vector3.new(-38, 0.3, -46), 90)
+	spawnParkedSchoolBusProp(origin + Vector3.new(38, 0.3, -46), 90)
+	spawnFenceRun(origin + Vector3.new(0, 0.3, -42), 0, 4, Color3.fromRGB(252, 195, 38))
+	spawnSnowman(origin + Vector3.new(-18, 0.3, -18), 45)
+	spawnSnowman(origin + Vector3.new(18, 0.3, -18), -45)
+	spawnJackpotCrate(origin + Vector3.new(0, 0.3, -22))
+end
+
+-- 6. Washington Square & Central Park Grand Marble Triumphal Arch (`buildMonumentArch`)
+local function buildMonumentArch(pos: Vector3, yawDeg: number)
+	local m = Instance.new("Model")
+	m.Name = "WashingtonSquareTriumphalArch"
+	local rot = CFrame.new(pos) * CFrame.Angles(0, math.rad(yawDeg), 0)
+	local marbleCol = Color3.fromRGB(236, 234, 226)
+
+	local leftPillar = makePart(m, "ArchPillarLeft", Vector3.new(11, 34, 12), rot * CFrame.new(-15, 17, 0), marbleCol, Enum.Material.Marble, true)
+	makePart(m, "ArchPillarRight", Vector3.new(11, 34, 12), rot * CFrame.new(15, 17, 0), marbleCol, Enum.Material.Marble, true)
+	local attic = makePart(m, "ArchAtticEntablature", Vector3.new(44, 14, 13.5), rot * CFrame.new(0, 41, 0), marbleCol, Enum.Material.Marble, true)
+	makePart(m, "ArchSnowCornice", Vector3.new(45.5, 0.8, 14.5), rot * CFrame.new(0, 48.4, 0), Color3.fromRGB(240, 246, 255), Enum.Material.Snow, true)
+	addSurfaceSign(attic, "MANHATTAN CENTENNIAL TRIUMPHAL ARCH", Color3.fromRGB(95, 86, 68), Enum.NormalId.Front)
+	addSurfaceSign(attic, "MANHATTAN CENTENNIAL TRIUMPHAL ARCH", Color3.fromRGB(95, 86, 68), Enum.NormalId.Back)
+
+	m.PrimaryPart = leftPillar
+	m.Parent = LandmarksFolder
+end
+
+-- 7. Hudson & East River Maritime Port, Piers & 3D Boats (`buildBoatModel` & `buildHarborPortAndBoats`)
+local function buildBoatModel(pos: Vector3, yawDeg: number, boatStyle: string)
+	local m = Instance.new("Model")
+	m.Name = "HarborBoat_" .. boatStyle
+	local rot = CFrame.new(pos) * CFrame.Angles(0, math.rad(yawDeg), 0)
+
+	if boatStyle == "HolidayYacht" then
+		local hull = makePart(m, "YachtHull", Vector3.new(16, 5.5, 68), rot * CFrame.new(0, 1.2, 0), Color3.fromRGB(244, 248, 255), Enum.Material.Metal, true)
+		makeWedge(m, "YachtBow", Vector3.new(16, 5.5, 16), rot * CFrame.new(0, 1.2, -42) * CFrame.Angles(0, 0, 0), Color3.fromRGB(244, 248, 255), Enum.Material.Metal)
+		makePart(m, "DeckTier1", Vector3.new(13.5, 5.2, 46), rot * CFrame.new(0, 6.5, 4), Color3.fromRGB(238, 244, 252), Enum.Material.SmoothPlastic, true)
+		makePart(m, "BridgeDeck", Vector3.new(11.5, 4.4, 28), rot * CFrame.new(0, 11.2, 8), Color3.fromRGB(85, 205, 255), Enum.Material.Glass, true)
+		makePart(m, "FestiveStringLights", Vector3.new(14.2, 0.5, 48), rot * CFrame.new(0, 9.2, 4), Color3.fromRGB(255, 215, 65), Enum.Material.Neon, true)
+		addSurfaceSign(hull, "MANHATTAN HOLIDAY CRUISE YACHT", Color3.fromRGB(24, 48, 92), Enum.NormalId.Left)
+		addSurfaceSign(hull, "MANHATTAN HOLIDAY CRUISE YACHT", Color3.fromRGB(24, 48, 92), Enum.NormalId.Right)
+		m.PrimaryPart = hull
+	elseif boatStyle == "StatenIslandFerry" then
+		local hull = makePart(m, "FerryHull", Vector3.new(18, 6.0, 62), rot * CFrame.new(0, 1.4, 0), Color3.fromRGB(235, 112, 24), Enum.Material.Metal, true)
+		local upper = makePart(m, "PassengerDeck", Vector3.new(16.5, 7.5, 52), rot * CFrame.new(0, 8.0, 0), Color3.fromRGB(242, 124, 32), Enum.Material.SmoothPlastic, true)
+		makePart(m, "Wheelhouse", Vector3.new(10, 5.0, 14), rot * CFrame.new(0, 14.2, 0), Color3.fromRGB(244, 248, 252), Enum.Material.Metal, true)
+		addSurfaceSign(upper, "MANHATTAN FERRY", Color3.fromRGB(255, 255, 255), Enum.NormalId.Left)
+		addSurfaceSign(upper, "MANHATTAN FERRY", Color3.fromRGB(255, 255, 255), Enum.NormalId.Right)
+		m.PrimaryPart = hull
+	else
+		-- Red & Black NYC Harbor Tugboat & Cargo Barge loaded with smashable cargo!
+		local hull = makePart(m, "TugBargeHull", Vector3.new(15, 4.2, 48), rot * CFrame.new(0, 0.8, 0), Color3.fromRGB(188, 34, 38), Enum.Material.Metal, true)
+		makePart(m, "TugWheelhouse", Vector3.new(9.5, 7.2, 12), rot * CFrame.new(0, 6.4, -12), Color3.fromRGB(32, 36, 44), Enum.Material.Metal, true)
+		makePart(m, "TugSmokestack", Vector3.new(2.8, 6.5, 2.8), rot * CFrame.new(0, 12.2, -10), Color3.fromRGB(235, 185, 38), Enum.Material.Metal, true)
+		spawnJackpotCrate((rot * CFrame.new(0, 2.9, 6)).Position)
+		spawnCrateCluster((rot * CFrame.new(0, 2.9, 15)).Position, 3)
+		m.PrimaryPart = hull
+	end
+
+	m.Parent = LandmarksFolder
+end
+
+local function buildHarborPortAndBoats(origin: Vector3, isEastSide: boolean, bz: number)
+	local usable = BLOCK_SIZE - ROAD_WIDTH
+	local outDir = if isEastSide then 1 else -1
+
+	-- Inland Half of Block: Tall Port Terminal Warehouse & Maritime Authority Skyscraper so the horizon is never empty!
+	local inlandX = -outDir * 32
+	local towerH = 125 + (math.abs(bz) * 22)
+	buildSkyscraper(
+		origin + Vector3.new(inlandX, 0.3, -28),
+		34,
+		34,
+		towerH,
+		Color3.fromRGB(64, 76, 94),
+		if isEastSide then "EastRiverPortTower" else "HudsonPortTower",
+		false
+	)
+
+	local terminal = makePart(
+		BuildingsFolder,
+		"MaritimeCruiseTerminal",
+		Vector3.new(42, 28, 56),
+		CFrame.new(origin + Vector3.new(inlandX, 14.3, 28)),
+		Color3.fromRGB(48, 58, 74),
+		Enum.Material.Metal,
+		true
+	)
+	local termSign = makePart(
+		BuildingsFolder,
+		"TerminalRoofSign",
+		Vector3.new(2.2, 5.5, 48),
+		CFrame.new(origin + Vector3.new(inlandX + outDir * 21.5, 31, 28)),
+		Color3.fromRGB(22, 28, 40),
+		Enum.Material.Metal,
+		true
+	)
+	addSurfaceSign(
+		termSign,
+		if isEastSide then "EAST RIVER CRUISE & CARGO PORT" else "HUDSON RIVER MARITIME PIER",
+		Color3.fromRGB(65, 225, 255),
+		if isEastSide then Enum.NormalId.Right else Enum.NormalId.Left
+	)
+	local _ = terminal
+
+	-- Waterfront Half + Heavy Wooden & Concrete Harbor Pier extending 95 studs out over the river water!
+	makePart(CityRoot, "WaterfrontQuayWall", Vector3.new(usable, 0.24, usable), CFrame.new(origin + Vector3.new(0, 0.24, 0)), Color3.fromRGB(82, 88, 100), Enum.Material.Concrete, true)
+	local pierCenter = origin + Vector3.new(outDir * 68, 0.36, 0)
+	makePart(CityRoot, "HarborWoodenPierDeck", Vector3.new(98, 0.8, 48), CFrame.new(pierCenter), Color3.fromRGB(108, 78, 52), Enum.Material.WoodPlanks, true)
+
+	-- Shipping containers, festive trees, and smashable cargo crates right on the pier deck
+	buildShippingContainerStack(origin, Vector3.new(outDir * 22, 0.3, -34), 0)
+	spawnJackpotCrate(pierCenter + Vector3.new(outDir * 18, 0.4, -10))
+	spawnJackpotCrate(pierCenter + Vector3.new(outDir * 18, 0.4, 10))
+	spawnCrateCluster(pierCenter + Vector3.new(0, 0.4, -14), 3)
+	spawnCrateCluster(pierCenter + Vector3.new(0, 0.4, 14), 3)
+	spawnExplosiveBarrel(pierCenter + Vector3.new(outDir * 28, 0.4, 0))
+	spawnSnowyChristmasTree(origin + Vector3.new(outDir * 18, 0.36, 36))
+
+	-- Docked 3D Boats floating beside the pier in the river water!
+	local boatStyles = { "HolidayYacht", "StatenIslandFerry", "TugBarge" }
+	local chosenStyle = boatStyles[((math.abs(bz)) % #boatStyles) + 1]
+	buildBoatModel(origin + Vector3.new(outDir * 128, -0.4, 0), if isEastSide then 0 else 180, chosenStyle)
 end
 
 --------------------------------------------------------------------------------
@@ -1414,10 +1763,21 @@ local function buildLeoCity()
 	-- CityBaseplate at Y = -2.2, Size Y = 4.0 -> top Y = -0.20 (strictly below Road top Y = 0.16!)
 	makePart(CityRoot, "CityBaseplate", Vector3.new(totalSpan, 4, totalSpan), CFrame.new(0, -2.2, 0), Color3.fromRGB(34, 38, 46), Enum.Material.Concrete, true)
 
-	-- Hudson River dark icy water along the East waterfront
-	local oceanX = (GRID_RADIUS + 1.2) * BLOCK_SIZE
-	local river = makePart(CityRoot, "OceanWater", Vector3.new(360, 3.6, totalSpan), CFrame.new(oceanX, -1.8, 0), Color3.fromRGB(24, 48, 72), Enum.Material.Glass, true)
-	river.Reflectance = 0.22
+	-- Expose Landmark Coordinates on Workspace.LeoCity for the Map & Mission System
+	CityRoot:SetAttribute("ChristmasPartyPos", Vector3.new(-36, 0, 18))
+	CityRoot:SetAttribute("ConcertStagePos", Vector3.new(0, 0, -180))
+	CityRoot:SetAttribute("WallStreetBankPos", Vector3.new(180, 0, 0))
+	CityRoot:SetAttribute("UniversityPos", Vector3.new(-360, 0, 0))
+	CityRoot:SetAttribute("HospitalPos", Vector3.new(-180, 0, -180))
+	CityRoot:SetAttribute("HarborPortPos", Vector3.new(720, 0, 0))
+	CityRoot:SetAttribute("CentralParkMonumentPos", Vector3.new(-180, 0, 180))
+
+	-- East River & Hudson River dark icy water along BOTH East and West waterfronts!
+	local oceanX = (GRID_RADIUS + 1.1) * BLOCK_SIZE
+	local eastRiver = makePart(CityRoot, "OceanWater", Vector3.new(380, 3.6, totalSpan), CFrame.new(oceanX, -1.8, 0), Color3.fromRGB(24, 48, 72), Enum.Material.Glass, true)
+	eastRiver.Reflectance = 0.22
+	local westRiver = makePart(CityRoot, "HudsonRiverWater", Vector3.new(380, 3.6, totalSpan), CFrame.new(-oceanX, -1.8, 0), Color3.fromRGB(24, 48, 72), Enum.Material.Glass, true)
+	westRiver.Reflectance = 0.22
 
 	-- SpawnLocation at Leo Plaza (0, 0, 0) — flush and invisible so there is no grey studded pad or curb step!
 	local spawnLoc = Instance.new("SpawnLocation")
@@ -1532,8 +1892,11 @@ local function buildLeoCity()
 				spawnFireHydrant(origin + Vector3.new(-21, 0.3, -24))
 				spawnFireHydrant(origin + Vector3.new(21, 0.3, -24))
 
-				-- 52-stud Rockefeller / Plaza Christmas Tree at (-46, 0.3, 18) surrounded by smashable Holiday Gift Stacks and Snowmen!
+				-- 52-stud Rockefeller / Plaza Christmas Tree at (-46, 0.3, 18) surrounded by Holiday Market Chalet Booths, Golden Prometheus Statue, and Gift Stacks!
 				buildGiantChristmasTree(origin + Vector3.new(-46, 0.3, 18), 52, "RockefellerPlazaChristmasTree")
+				buildPrometheusMonument(origin + Vector3.new(-46, 0.3, -4))
+				buildHolidayChalet(origin + Vector3.new(-58, 0.3, 28), 90, "HOLIDAY HOT COCOA")
+				buildHolidayChalet(origin + Vector3.new(-32, 0.3, 32), -45, "NYC TOYS & GIFTS")
 				spawnJackpotCrate(origin + Vector3.new(-36, 0.3, 18))
 				spawnJackpotCrate(origin + Vector3.new(-46, 0.3, 8))
 				spawnSnowman(origin + Vector3.new(-36, 0.3, 26), 135)
@@ -1561,28 +1924,34 @@ local function buildLeoCity()
 				spawnArmoredCashTruck(origin + Vector3.new(26, 0.3, 44), 0)
 				spawnMegaCorpBankVault(origin + Vector3.new(48, 0.3, 44), -25)
 
-				-- Stunt Ramp on the side plaza at (-30, 0.3, -52) so 5th Avenue center lane stays 100% unobstructed!
-				buildStuntRamp(origin + Vector3.new(-30, 0.3, -52), 0, 24, 5.8, 34, "LeoPlazaRamp")
 				buildSpeedShop(origin + Vector3.new(52, 0, -22), -90)
 				buildMechanicRepairBay(origin + Vector3.new(-52, 0, -22), 90)
 			elseif bx == 1 and bz == 0 then
-				buildSpeedShop(origin + Vector3.new(0, 0, -24), -90)
-				buildSkyscraper(origin + Vector3.new(-36, 0.3, 34), 34, 34, 195, Color3.fromRGB(68, 76, 90), "FifthAveEastTowerA", false)
-				buildSkyscraper(origin + Vector3.new(36, 0.3, 34), 34, 34, 235, Color3.fromRGB(84, 76, 68), "FifthAveEastTowerB", false)
-				spawnSnowyChristmasTree(origin + Vector3.new(-56, 0.3, -18))
-				spawnSnowyChristmasTree(origin + Vector3.new(56, 0.3, -18))
-				spawnBusStop(origin + Vector3.new(0, 0.3, -edge + 2), 0)
-				spawnGoldATM(origin + Vector3.new(-28, 0.3, 24), 90)
-				spawnFoodVendorCart(origin + Vector3.new(-32, 0.3, -12), 0, 3)
+				-- Wall Street Grand Federal Gold Reserve Bank & Charging Bull Monument
+				buildGrandBankBlock(origin)
 			elseif bx == -1 and bz == 0 then
-				-- Central Park South Entrance + West Plaza Mechanic Bay
+				-- Central Park South Entrance + Holiday Market Chalets + West Plaza Mechanic Bay
 				buildSuburbanParkBlock(origin)
+				buildHolidayChalet(origin + Vector3.new(-32, 0.36, -18), 0, "CENTRAL PARK WAFFLES")
 				buildMechanicRepairBay(origin + Vector3.new(38, 0, -36), 90)
 				spawnBusStop(origin + Vector3.new(0, 0.3, edge - 2), 180)
 				spawnGoldATM(origin + Vector3.new(28, 0.3, 24), -90)
 				spawnFoodVendorCart(origin + Vector3.new(32, 0.3, 32), 180, 1)
+			elseif bx == -1 and bz == -1 then
+				-- Mount Sinai / Bellevue Manhattan General Hospital Complex
+				buildHospitalBlock(origin)
+			elseif bx == -2 and bz == 0 then
+				-- Columbia / NYU Manhattan University Campus + Clock Tower
+				buildUniversityBlock(origin)
+			elseif bx == -2 and bz == 1 then
+				-- P.S. 101 Manhattan Public School + School Buses & Basketball Court
+				buildSchoolBlock(origin)
+			elseif bx == -1 and bz == 1 then
+				-- Washington Square Triumphal Arch & Central Park Monuments
+				buildSuburbanParkBlock(origin)
+				buildMonumentArch(origin + Vector3.new(0, 0.36, -34), 0)
 			elseif bx == 0 and bz ~= 0 then
-				-- 5TH AVENUE SKYSCRAPER CANYON: 4 tall Manhattan skyscrapers (160 to 310 studs tall) flanking both sides of 5th Avenue (X = -44 and X = +44, Z = -32 and Z = +32)
+				-- 5TH AVENUE SKYSCRAPER CANYON & TIMES SQUARE CONCERT STAGE (bz == -1)
 				local isLeoBlock = (bz == -1)
 				local seed = math.abs(bz * 19)
 				local hNW = if isLeoBlock then 310 else 185 + (seed % 95)
@@ -1590,7 +1959,7 @@ local function buildLeoCity()
 				local hSW = if isLeoBlock then 240 else 160 + ((seed + 61) % 110)
 				local hSE = if isLeoBlock then 280 else 195 + ((seed + 83) % 95)
 
-				buildSkyscraper(origin + Vector3.new(-44, 0.3, -32), 36, 36, hNW, Color3.fromRGB(58, 68, 86), if isLeoBlock then "LeoTower" else "FifthAveTowerNW", isLeoBlock)
+				buildSkyscraper(origin + Vector3.new(-44, 0.3, -32), 36, 36, hNW, Color3.fromRGB(58, 68, 86), if isLeoBlock then "LeoTower" else "FifthAveTowerNW", false)
 				buildSkyscraper(origin + Vector3.new(44, 0.3, -32), 36, 36, hNE, Color3.fromRGB(76, 82, 96), "FifthAveTowerNE", false)
 				buildSkyscraper(origin + Vector3.new(-44, 0.3, 32), 36, 36, hSW, Color3.fromRGB(88, 78, 70), "FifthAveTowerSW", false)
 				buildSkyscraper(origin + Vector3.new(44, 0.3, 32), 36, 36, hSE, Color3.fromRGB(64, 72, 86), "FifthAveTowerSE", false)
@@ -1602,33 +1971,44 @@ local function buildLeoCity()
 				spawnGoldATM(origin + Vector3.new(-24, 0.3, 14), 90)
 				spawnFoodVendorCart(origin + Vector3.new(24, 0.3, 18), -90, bz)
 				if isLeoBlock then
+					-- Times Square Live Concert Stage & Neon Dance Floor at (0, 0, -180)!
+					buildConcertStage(origin + Vector3.new(0, 0.3, 0), 0)
+					spawnBillboard(origin + Vector3.new(-26, 0.3, -48), 25, "TIMES SQUARE NEW YEAR LIVE!", Color3.fromRGB(255, 85, 220))
+					spawnBillboard(origin + Vector3.new(26, 0.3, -48), -25, "BROADWAY & 5TH AVE CONCERT", Color3.fromRGB(55, 235, 255))
 					spawnMegaCorpBankVault(origin + Vector3.new(44, 0.3, 0), -90)
 					spawnArmoredCashTruck(origin + Vector3.new(26, 0.3, 48), 0)
 				elseif bz == -2 then
 					buildMechanicRepairBay(origin + Vector3.new(-44, 0, 0), 90)
 					buildGasStation(origin + Vector3.new(44, 0, 0))
 				end
+			elseif bx == GRID_RADIUS or bx == -GRID_RADIUS then
+				-- East & West Waterfronts: Maritime Port Terminals, Wooden Piers & Docked 3D Boats (zero empty slabs!)
+				buildHarborPortAndBoats(origin, bx == GRID_RADIUS, bz)
 			elseif bx == 2 and bz == 2 then
-				buildSpeedShop(origin, 180)
+				buildMidRiseCommercialBlock(origin, bx * 5 + bz * 11)
+				buildSpeedShop(origin + Vector3.new(0, 0, -32), 180)
 			elseif bx == -2 and bz == 2 then
-				buildGasStation(origin)
-			elseif bx == GRID_RADIUS then
-				-- East Coastline: Frosty Hudson / East River Boardwalk
-				buildBeachfrontBoardwalk(origin)
+				buildSuburbanParkBlock(origin)
+				buildMonumentArch(origin + Vector3.new(0, 0.36, 0), 45)
+				buildGasStation(origin + Vector3.new(32, 0, -34))
 			elseif bx == -3 and bz == -3 then
-				-- Compact Container Dock at far NW corner (without stick cranes cluttering the skyline!)
+				-- Hudson Cargo Terminal + Backdrop Towers so no block is ever a flat empty slab!
+				buildMidRiseCommercialBlock(origin, bx * 5 + bz * 11)
 				buildIndustrialYardBlock(origin + Vector3.new(0, 0.3, 0), bx * 7 + bz * 13)
 			elseif bx <= -1 and bz >= 1 then
-				-- Snowy Christmas Central Park (expanded across the West/Southwest sector facing Central Park South & 5th Ave!)
+				-- Snowy Christmas Central Park (expanded across the Southwest sector facing Central Park South & 5th Ave!)
 				buildSuburbanParkBlock(origin)
 			elseif math.abs(bx) <= 1 and math.abs(bz) <= 1 then
 				-- Dense 4-Tower Downtown Manhattan Skyscraper Core (165 to 285 studs tall)
 				local isEastCrown = (bx == 1 and bz == -1)
 				local baseH = if isEastCrown then 235 else 175
-				buildSkyscraper(origin + Vector3.new(-34, 0.3, -34), 36, 36, baseH + 45, Color3.fromRGB(58, 68, 86), "DowntownTowerNW", isEastCrown)
+				buildSkyscraper(origin + Vector3.new(-34, 0.3, -34), 36, 36, baseH + 45, Color3.fromRGB(58, 68, 86), "DowntownTowerNW", false)
 				buildSkyscraper(origin + Vector3.new(34, 0.3, -34), 36, 36, baseH + 15, Color3.fromRGB(74, 82, 96), "DowntownTowerNE", false)
 				buildSkyscraper(origin + Vector3.new(-34, 0.3, 34), 36, 36, baseH, Color3.fromRGB(86, 78, 72), "DowntownTowerSW", false)
 				buildSkyscraper(origin + Vector3.new(34, 0.3, 34), 36, 36, baseH + 30, Color3.fromRGB(64, 72, 84), "DowntownTowerSE", false)
+				if isEastCrown then
+					buildConcertStage(origin + Vector3.new(0, 0.3, -12), 180)
+				end
 
 				spawnSnowyChristmasTree(origin + Vector3.new(-58, 0.3, 0))
 				spawnSnowyChristmasTree(origin + Vector3.new(58, 0.3, 0))
